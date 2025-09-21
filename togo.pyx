@@ -316,6 +316,8 @@ cdef class Point:
         return self.pt.y
     def as_tuple(self):
         return (self.pt.x, self.pt.y)
+    cdef tg_point _get_c_point(self):
+        return self.pt
 
 
 cdef class Rect:
@@ -332,27 +334,30 @@ cdef class Rect:
     def center(self):
         cdef tg_point c = tg_rect_center(self.rect)
         return Point(c.x, c.y)
+    cdef tg_rect _get_c_rect(self):
+        return self.rect
     def expand(self, other):
         cdef tg_rect r
         if isinstance(other, Rect):
-            r = tg_rect_expand(self.rect, other.rect)
+            r = tg_rect_expand(self.rect, (<Rect>other)._get_c_rect())
             return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
         elif isinstance(other, Point):
-            r = tg_rect_expand_point(self.rect, other.pt)
+            r = tg_rect_expand_point(self.rect, (<Point>other)._get_c_point())
             return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
         else:
             raise TypeError("expand expects Rect or Point")
     def intersects(self, other):
         if isinstance(other, Rect):
-            return tg_rect_intersects_rect(self.rect, other.rect)
+            return tg_rect_intersects_rect(self.rect, (<Rect>other)._get_c_rect())
         elif isinstance(other, Point):
-            return tg_rect_intersects_point(self.rect, other.pt)
+            return tg_rect_intersects_point(self.rect, (<Point>other)._get_c_point())
         else:
             raise TypeError("intersects expects Rect or Point")
 
 
 cdef class Ring:
     cdef tg_ring *ring
+    cdef bint owns_pointer
     def __init__(self, points):
         cdef int n = len(points)
         cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
@@ -365,13 +370,17 @@ cdef class Ring:
         free(pts)
         if not self.ring:
             raise ValueError("Failed to create Ring")
+        self.owns_pointer = True
     @staticmethod
     cdef Ring from_ptr(tg_ring *ptr):
         cdef Ring r = Ring.__new__(Ring)
         r.ring = ptr
+        r.owns_pointer = False  # Don't free this pointer
         return r
+    cdef tg_ring *_get_c_ring(self):
+        return self.ring
     def __dealloc__(self):
-        if self.ring:
+        if self.ring and self.owns_pointer:
             tg_ring_free(self.ring)
     def num_points(self):
         return tg_ring_num_points(self.ring)
@@ -430,9 +439,17 @@ cdef class Poly:
         cdef int nholes = 0
         cdef tg_ring **hole_ptrs = NULL
         cdef tg_ring **holes_arr = NULL
+        cdef tg_ring *ext_ring
         if not isinstance(exterior, Ring):
             raise TypeError("exterior must be a Ring")
-        if holes:
+        ext_ring = (<Ring>exterior)._get_c_ring()
+        if ext_ring == NULL:
+            raise ValueError("exterior Ring is not initialized")
+        # Handle holes
+        if holes is None or len(holes) == 0:
+            nholes = 0
+            holes_arr = NULL
+        else:
             nholes = len(holes)
             hole_ptrs = <tg_ring **>malloc(nholes * sizeof(tg_ring *))
             if not hole_ptrs:
@@ -441,10 +458,14 @@ cdef class Poly:
                 if not isinstance(holes[i], Ring):
                     free(hole_ptrs)
                     raise TypeError("holes must be a list of Ring")
-                hole_ptrs[i] = <tg_ring *>holes[i].ring
+                hole_ptr = (<Ring>holes[i])._get_c_ring()
+                if hole_ptr == NULL:
+                    free(hole_ptrs)
+                    raise ValueError(f"hole {i} Ring is not initialized")
+                hole_ptrs[i] = hole_ptr
             holes_arr = hole_ptrs
-        self.poly = tg_poly_new(<tg_ring *>exterior.ring, <const tg_ring * const *>holes_arr, nholes)
-        if holes and hole_ptrs != NULL:
+        self.poly = tg_poly_new(ext_ring, <const tg_ring * const *>holes_arr, nholes)
+        if hole_ptrs != NULL:
             free(hole_ptrs)
         if not self.poly:
             raise ValueError("Failed to create Poly")
