@@ -160,6 +160,15 @@ cdef extern from "tg.h":
 
     tg_geom *tg_geom_new_point(tg_point point)
     tg_geom *tg_geom_new_polygon(const tg_poly *poly)
+    # New multi-geometry constructors
+    tg_geom *tg_geom_new_multipoint(const tg_point *points, int npoints)
+    tg_geom *tg_geom_new_multilinestring(const tg_line *const lines[], int nlines)
+    tg_geom *tg_geom_new_multipolygon(const tg_poly *const polys[], int npolys)
+    tg_geom *tg_geom_new_geometrycollection(const tg_geom *const geoms[], int ngeoms)
+    tg_geom *tg_geom_new_multipoint_empty()
+    tg_geom *tg_geom_new_multilinestring_empty()
+    tg_geom *tg_geom_new_multipolygon_empty()
+    tg_geom *tg_geom_new_geometrycollection_empty()
 
 from libc.stdlib cimport malloc, free
 from libc.string cimport memset
@@ -312,6 +321,187 @@ cdef class Geometry:
         if self.geom:
             tg_geom_free(self.geom)
 
+    # internal accessor for C pointer
+    cdef tg_geom *_get_c_geom(self):
+        return self.geom
+
+    # --- Factory methods ---
+    @staticmethod
+    def from_multipoint(points):
+        """Create a MultiPoint geometry from an iterable of Point or (x, y) tuples."""
+        cdef int n = len(points)
+        cdef tg_geom *gptr
+        if n == 0:
+            gptr = tg_geom_new_multipoint_empty()
+            if not gptr:
+                raise ValueError("Failed to create empty MultiPoint")
+            return _geometry_from_ptr(gptr)
+        cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
+        if not pts:
+            raise MemoryError("Failed to allocate points for MultiPoint")
+        cdef int i
+        for i in range(n):
+            obj = points[i]
+            if isinstance(obj, Point):
+                pts[i] = (<Point>obj)._get_c_point()
+            else:
+                # assume (x, y)
+                pts[i].x = float(obj[0])
+                pts[i].y = float(obj[1])
+        gptr = tg_geom_new_multipoint(pts, n)
+        free(pts)
+        if not gptr:
+            raise ValueError("Failed to create MultiPoint")
+        return _geometry_from_ptr(gptr)
+
+    @staticmethod
+    def from_multilinestring(lines):
+        """Create a MultiLineString from an iterable of Line or sequences of (x,y)."""
+        cdef int n = len(lines)
+        cdef tg_geom *gptr
+        if n == 0:
+            gptr = tg_geom_new_multilinestring_empty()
+            if not gptr:
+                raise ValueError("Failed to create empty MultiLineString")
+            return _geometry_from_ptr(gptr)
+        cdef const tg_line **arr = <const tg_line **>malloc(n * sizeof(tg_line *))
+        if not arr:
+            raise MemoryError("Failed to allocate lines array for MultiLineString")
+        cdef int i
+        temp_created = []  # keep refs to any temporary Line we create
+        for i in range(n):
+            obj = lines[i]
+            if isinstance(obj, Line):
+                arr[i] = (<Line>obj)._get_c_line()
+            else:
+                # assume it's an iterable of (x, y) tuples
+                tmp = Line(obj)
+                temp_created.append(tmp)
+                arr[i] = tmp._get_c_line()
+        gptr = tg_geom_new_multilinestring(arr, n)
+        free(arr)
+        if not gptr:
+            raise ValueError("Failed to create MultiLineString")
+        return _geometry_from_ptr(gptr)
+
+    @staticmethod
+    def from_multipolygon(polys):
+        """Create a MultiPolygon from an iterable of Poly objects."""
+        cdef int n = len(polys)
+        cdef tg_geom *gptr
+        if n == 0:
+            gptr = tg_geom_new_multipolygon_empty()
+            if not gptr:
+                raise ValueError("Failed to create empty MultiPolygon")
+            return _geometry_from_ptr(gptr)
+        cdef const tg_poly **arr = <const tg_poly **>malloc(n * sizeof(tg_poly *))
+        if not arr:
+            raise MemoryError("Failed to allocate polys array for MultiPolygon")
+        cdef int i
+        for i in range(n):
+            obj = polys[i]
+            if not isinstance(obj, Poly):
+                free(arr)
+                raise TypeError("multipolygon expects a sequence of Poly")
+            arr[i] = (<Poly>obj)._get_c_poly()
+        gptr = tg_geom_new_multipolygon(arr, n)
+        free(arr)
+        if not gptr:
+            raise ValueError("Failed to create MultiPolygon")
+        return _geometry_from_ptr(gptr)
+
+    @staticmethod
+    def from_geometrycollection(geoms):
+        """Create a GeometryCollection from an iterable of Geometry, Point, Line, Ring, or Poly.
+        For Point or (x,y) input, temporary tg_geom objects are created and freed after cloning.
+        """
+        cdef int n = len(geoms)
+        cdef tg_geom *gptr
+        if n == 0:
+            gptr = tg_geom_new_geometrycollection_empty()
+            if not gptr:
+                raise ValueError("Failed to create empty GeometryCollection")
+            return _geometry_from_ptr(gptr)
+        cdef const tg_geom **arr = <const tg_geom **>malloc(n * sizeof(tg_geom *))
+        if not arr:
+            raise MemoryError("Failed to allocate geoms array for GeometryCollection")
+        cdef tg_geom **temp_to_free = NULL
+        cdef int temp_count = 0
+        cdef int i
+        # two-pass allocation for temporary geoms created from Points/tuples
+        # first pass: count how many temps we need
+        for i in range(n):
+            obj = geoms[i]
+            if isinstance(obj, Geometry):
+                continue
+            elif isinstance(obj, Point):
+                temp_count += 1
+            elif isinstance(obj, Line) or isinstance(obj, Ring) or isinstance(obj, Poly):
+                continue
+            else:
+                # try tuple-like point
+                try:
+                    _x = float(obj[0]); _y = float(obj[1])
+                    temp_count += 1
+                except Exception:
+                    free(arr)
+                    raise TypeError("geometrycollection expects Geometry, Point/(x,y), Line, Ring, or Poly")
+        if temp_count > 0:
+            temp_to_free = <tg_geom **>malloc(temp_count * sizeof(tg_geom *))
+            if not temp_to_free:
+                free(arr)
+                raise MemoryError("Failed to allocate temporary geoms for GeometryCollection")
+        temp_count = 0
+        for i in range(n):
+            obj = geoms[i]
+            if isinstance(obj, Geometry):
+                arr[i] = (<Geometry>obj)._get_c_geom()
+            elif isinstance(obj, Point):
+                tmpg = tg_geom_new_point((<Point>obj)._get_c_point())
+                if not tmpg:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary Point geometry")
+                temp_to_free[temp_count] = tmpg
+                temp_count += 1
+                arr[i] = tmpg
+            elif isinstance(obj, Line):
+                arr[i] = <const tg_geom *>(<Line>obj)._get_c_line()
+            elif isinstance(obj, Ring):
+                arr[i] = <const tg_geom *>(<Ring>obj)._get_c_ring()
+            elif isinstance(obj, Poly):
+                arr[i] = <const tg_geom *>(<Poly>obj)._get_c_poly()
+            else:
+                # assume tuple-like point already validated
+                tmppt = tg_point(x=float(obj[0]), y=float(obj[1]))
+                tmpg2 = tg_geom_new_point(tmppt)
+                if not tmpg2:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary Point geometry")
+                temp_to_free[temp_count] = tmpg2
+                temp_count += 1
+                arr[i] = tmpg2
+        gptr = tg_geom_new_geometrycollection(arr, n)
+        # free temporaries
+        if temp_to_free != NULL:
+            for i in range(temp_count):
+                if temp_to_free[i] != NULL:
+                    tg_geom_free(temp_to_free[i])
+            free(temp_to_free)
+        free(arr)
+        if not gptr:
+            raise ValueError("Failed to create GeometryCollection")
+        return _geometry_from_ptr(gptr)
+
 
 cdef class Point:
     cdef tg_point pt
@@ -460,6 +650,8 @@ cdef class Line:
         return tg_line_clockwise(self.line)
     def as_geometry(self):
         return _geometry_from_ptr(<tg_geom *>self.line)
+    cdef tg_line *_get_c_line(self):
+        return self.line
 
 
 cdef class Poly:
@@ -516,3 +708,5 @@ cdef class Poly:
         return tg_poly_clockwise(self.poly)
     def as_geometry(self):
         return _geometry_from_ptr(<tg_geom *>self.poly)
+    cdef tg_poly *_get_c_poly(self):
+        return self.poly
