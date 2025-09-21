@@ -7,7 +7,7 @@ def test_ring_triangle():
     ring = Ring(points)
     assert ring.num_points() == 4
     assert ring.points() == points
-    assert ring.area() > 0
+    assert ring.area() == 0.5
     assert ring.perimeter() > 0
     rect = ring.rect()
     assert isinstance(rect, Rect)

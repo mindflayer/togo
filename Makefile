@@ -6,7 +6,7 @@ build: clean
 	${VENV_DIR}/bin/python setup.py build_ext --inplace
 
 clean:
-	rm -rf tg.h tg.c togo.c* build/ ${VENV_DIR} dist/ *.egg-info/
+	rm -rf tg.h tg.c togo.c* build/ ${VENV_DIR} .dist-deps dist/ *.egg-info/
 
 # Build sdist and wheel into dist/
 .dist-deps:
@@ -24,4 +24,8 @@ upload: dist
 test: build
 	pytest
 
-.PHONY: build clean test dist upload
+bench: build
+	${VENV_DIR}/bin/pip install shapely
+	${VENV_DIR}/bin/python benchmarks/bench_shapely_vs_togo.py
+
+.PHONY: build clean test dist upload bench
