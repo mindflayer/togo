@@ -1,2 +1,3 @@
-# togo
-ToGo - Python bindings for TG: a geometry library for C - Fast point-in-polygon 
+# ToGo
+ToGo - Python bindings for TG
+(Geometry library for C - Fast point-in-polygon)
