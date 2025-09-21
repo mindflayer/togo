@@ -8,6 +8,16 @@ cdef extern from "tg.h":
     cdef struct tg_rect:
         tg_point min
         tg_point max
+    cdef struct tg_ring:
+        pass
+    cdef struct tg_poly:
+        pass
+    cdef struct tg_segment:
+        pass
+    cdef struct tg_line:
+        pass
+    ctypedef unsigned int tg_index
+    ctypedef int bool
 
     # Constructors
     tg_geom *tg_geom_clone(const tg_geom *geom)
@@ -54,6 +64,100 @@ cdef extern from "tg.h":
     size_t tg_geom_hex(const tg_geom *geom, char *dst, size_t n)
     size_t tg_geom_geobin(const tg_geom *geom, unsigned char *dst, size_t n)
 
+    # --- Point functions ---
+    tg_rect tg_point_rect(tg_point point)
+    bint tg_point_intersects_rect(tg_point a, tg_rect b)
+
+    # --- Segment functions ---
+    tg_rect tg_segment_rect(tg_segment s)
+    bint tg_segment_intersects_segment(tg_segment a, tg_segment b)
+
+    # --- Rect functions ---
+    tg_rect tg_rect_expand(tg_rect rect, tg_rect other)
+    tg_rect tg_rect_expand_point(tg_rect rect, tg_point point)
+    tg_point tg_rect_center(tg_rect rect)
+    bint tg_rect_intersects_rect(tg_rect a, tg_rect b)
+    bint tg_rect_intersects_point(tg_rect a, tg_point b)
+
+    # --- Ring functions ---
+    tg_ring *tg_ring_new(const tg_point *points, int npoints)
+    tg_ring *tg_ring_new_ix(const tg_point *points, int npoints, tg_index ix)
+    void tg_ring_free(tg_ring *ring)
+    tg_ring *tg_ring_clone(const tg_ring *ring)
+    tg_ring *tg_ring_copy(const tg_ring *ring)
+    size_t tg_ring_memsize(const tg_ring *ring)
+    tg_rect tg_ring_rect(const tg_ring *ring)
+    int tg_ring_num_points(const tg_ring *ring)
+    tg_point tg_ring_point_at(const tg_ring *ring, int index)
+    const tg_point *tg_ring_points(const tg_ring *ring)
+    int tg_ring_num_segments(const tg_ring *ring)
+    tg_segment tg_ring_segment_at(const tg_ring *ring, int index)
+    bint tg_ring_convex(const tg_ring *ring)
+    bint tg_ring_clockwise(const tg_ring *ring)
+    int tg_ring_index_spread(const tg_ring *ring)
+    int tg_ring_index_num_levels(const tg_ring *ring)
+    int tg_ring_index_level_num_rects(const tg_ring *ring, int levelidx)
+    tg_rect tg_ring_index_level_rect(const tg_ring *ring, int levelidx, int rectidx)
+    bint tg_ring_nearest_segment(const tg_ring *ring,
+        double (*rect_dist)(tg_rect rect, int *more, void *udata),
+        double (*seg_dist)(tg_segment seg, int *more, void *udata),
+        bint (*iter)(tg_segment seg, double dist, int index, void *udata),
+        void *udata)
+    void tg_ring_line_search(const tg_ring *a, const tg_line *b,
+        bint (*iter)(tg_segment aseg, int aidx, tg_segment bseg, int bidx, void *udata),
+        void *udata)
+    void tg_ring_ring_search(const tg_ring *a, const tg_ring *b,
+        bint (*iter)(tg_segment aseg, int aidx, tg_segment bseg, int bidx, void *udata),
+        void *udata)
+    double tg_ring_area(const tg_ring *ring)
+    double tg_ring_perimeter(const tg_ring *ring)
+
+    # --- Line functions ---
+    tg_line *tg_line_new(const tg_point *points, int npoints)
+    tg_line *tg_line_new_ix(const tg_point *points, int npoints, tg_index ix)
+    void tg_line_free(tg_line *line)
+    tg_line *tg_line_clone(const tg_line *line)
+    tg_line *tg_line_copy(const tg_line *line)
+    size_t tg_line_memsize(const tg_line *line)
+    tg_rect tg_line_rect(const tg_line *line)
+    int tg_line_num_points(const tg_line *line)
+    const tg_point *tg_line_points(const tg_line *line)
+    tg_point tg_line_point_at(const tg_line *line, int index)
+    int tg_line_num_segments(const tg_line *line)
+    tg_segment tg_line_segment_at(const tg_line *line, int index)
+    bint tg_line_clockwise(const tg_line *line)
+    int tg_line_index_spread(const tg_line *line)
+    int tg_line_index_num_levels(const tg_line *line)
+    int tg_line_index_level_num_rects(const tg_line *line, int levelidx)
+    tg_rect tg_line_index_level_rect(const tg_line *line, int levelidx, int rectidx)
+    bint tg_line_nearest_segment(const tg_line *line,
+        double (*rect_dist)(tg_rect rect, int *more, void *udata),
+        double (*seg_dist)(tg_segment seg, int *more, void *udata),
+        bint (*iter)(tg_segment seg, double dist, int index, void *udata),
+        void *udata)
+    void tg_line_line_search(const tg_line *a, const tg_line *b,
+        bint (*iter)(tg_segment aseg, int aidx, tg_segment bseg, int bidx, void *udata),
+        void *udata)
+    double tg_line_length(const tg_line *line)
+
+    # --- Poly functions ---
+    tg_poly *tg_poly_new(const tg_ring *exterior, const tg_ring *const holes[], int nholes)
+    void tg_poly_free(tg_poly *poly)
+    tg_poly *tg_poly_clone(const tg_poly *poly)
+    tg_poly *tg_poly_copy(const tg_poly *poly)
+    size_t tg_poly_memsize(const tg_poly *poly)
+    const tg_ring *tg_poly_exterior(const tg_poly *poly)
+    int tg_poly_num_holes(const tg_poly *poly)
+    const tg_ring *tg_poly_hole_at(const tg_poly *poly, int index)
+    tg_rect tg_poly_rect(const tg_poly *poly)
+    bint tg_poly_clockwise(const tg_poly *poly)
+
+    # --- Global environment functions ---
+    void tg_env_set_allocator(void *(*malloc)(size_t), void *(*realloc)(void*, size_t), void (*free)(void*))
+    void tg_env_set_index(tg_index ix)
+    void tg_env_set_index_spread(int spread)
+    void tg_env_set_print_fixed_floats(bint print)
+
 from libc.stdlib cimport malloc, free
 from libc.string cimport memset
 
@@ -96,67 +200,48 @@ cdef class Geometry:
         return ((r.min.x, r.min.y), (r.max.x, r.max.y))
 
     def is_feature(self):
-        return bool(tg_geom_is_feature(self.geom))
-
+        return tg_geom_is_feature(self.geom) != 0
     def is_featurecollection(self):
-        return bool(tg_geom_is_featurecollection(self.geom))
-
+        return tg_geom_is_featurecollection(self.geom) != 0
     def is_empty(self):
-        return bool(tg_geom_is_empty(self.geom))
-
+        return tg_geom_is_empty(self.geom) != 0
     def dims(self):
         return tg_geom_dims(self.geom)
-
     def has_z(self):
-        return bool(tg_geom_has_z(self.geom))
-
+        return tg_geom_has_z(self.geom) != 0
     def has_m(self):
-        return bool(tg_geom_has_m(self.geom))
-
+        return tg_geom_has_m(self.geom) != 0
     def z(self):
         return tg_geom_z(self.geom)
-
     def m(self):
         return tg_geom_m(self.geom)
-
     def memsize(self):
         return tg_geom_memsize(self.geom)
-
     def num_points(self):
         return tg_geom_num_points(self.geom)
-
     def num_lines(self):
         return tg_geom_num_lines(self.geom)
-
     def num_polys(self):
         return tg_geom_num_polys(self.geom)
-
     def num_geometries(self):
         return tg_geom_num_geometries(self.geom)
 
     def equals(self, other: Geometry):
-        return bool(tg_geom_equals(self.geom, other.geom))
-
+        return tg_geom_equals(self.geom, other.geom) != 0
     def disjoint(self, other: Geometry):
-        return bool(tg_geom_disjoint(self.geom, other.geom))
-
+        return tg_geom_disjoint(self.geom, other.geom) != 0
     def contains(self, other: Geometry):
-        return bool(tg_geom_contains(self.geom, other.geom))
-
+        return tg_geom_contains(self.geom, other.geom) != 0
     def within(self, other: Geometry):
-        return bool(tg_geom_within(self.geom, other.geom))
-
+        return tg_geom_within(self.geom, other.geom) != 0
     def covers(self, other: Geometry):
-        return bool(tg_geom_covers(self.geom, other.geom))
-
+        return tg_geom_covers(self.geom, other.geom) != 0
     def coveredby(self, other: Geometry):
-        return bool(tg_geom_coveredby(self.geom, other.geom))
-
+        return tg_geom_coveredby(self.geom, other.geom) != 0
     def touches(self, other: Geometry):
-        return bool(tg_geom_touches(self.geom, other.geom))
-
+        return tg_geom_touches(self.geom, other.geom) != 0
     def intersects(self, other: Geometry):
-        return bool(tg_geom_intersects(self.geom, other.geom))
+        return tg_geom_intersects(self.geom, other.geom) != 0
 
     def to_wkt(self):
         cdef size_t bufsize = 4096
@@ -216,3 +301,166 @@ cdef class Geometry:
     def __dealloc__(self):
         if self.geom:
             tg_geom_free(self.geom)
+
+
+cdef class Point:
+    cdef tg_point pt
+    def __init__(self, x: float, y: float):
+        self.pt.x = x
+        self.pt.y = y
+    @property
+    def x(self):
+        return self.pt.x
+    @property
+    def y(self):
+        return self.pt.y
+    def as_tuple(self):
+        return (self.pt.x, self.pt.y)
+
+
+cdef class Rect:
+    cdef tg_rect rect
+    def __init__(self, min_pt: Point, max_pt: Point):
+        self.rect.min = min_pt.pt
+        self.rect.max = max_pt.pt
+    @property
+    def min(self):
+        return Point(self.rect.min.x, self.rect.min.y)
+    @property
+    def max(self):
+        return Point(self.rect.max.x, self.rect.max.y)
+    def center(self):
+        cdef tg_point c = tg_rect_center(self.rect)
+        return Point(c.x, c.y)
+    def expand(self, other):
+        cdef tg_rect r
+        if isinstance(other, Rect):
+            r = tg_rect_expand(self.rect, other.rect)
+            return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
+        elif isinstance(other, Point):
+            r = tg_rect_expand_point(self.rect, other.pt)
+            return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
+        else:
+            raise TypeError("expand expects Rect or Point")
+    def intersects(self, other):
+        if isinstance(other, Rect):
+            return tg_rect_intersects_rect(self.rect, other.rect)
+        elif isinstance(other, Point):
+            return tg_rect_intersects_point(self.rect, other.pt)
+        else:
+            raise TypeError("intersects expects Rect or Point")
+
+
+cdef class Ring:
+    cdef tg_ring *ring
+    def __init__(self, points):
+        cdef int n = len(points)
+        cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
+        if not pts:
+            raise MemoryError("Failed to allocate points for Ring")
+        for i in range(n):
+            pts[i].x = points[i][0]
+            pts[i].y = points[i][1]
+        self.ring = tg_ring_new(pts, n)
+        free(pts)
+        if not self.ring:
+            raise ValueError("Failed to create Ring")
+    @staticmethod
+    cdef Ring from_ptr(tg_ring *ptr):
+        cdef Ring r = Ring.__new__(Ring)
+        r.ring = ptr
+        return r
+    def __dealloc__(self):
+        if self.ring:
+            tg_ring_free(self.ring)
+    def num_points(self):
+        return tg_ring_num_points(self.ring)
+    def points(self):
+        n = tg_ring_num_points(self.ring)
+        pts = tg_ring_points(self.ring)
+        return [(pts[i].x, pts[i].y) for i in range(n)]
+    def area(self):
+        return tg_ring_area(self.ring)
+    def perimeter(self):
+        return tg_ring_perimeter(self.ring)
+    def rect(self):
+        r = tg_ring_rect(self.ring)
+        return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
+    def is_convex(self):
+        return tg_ring_convex(self.ring)
+    def is_clockwise(self):
+        return tg_ring_clockwise(self.ring)
+
+
+cdef class Line:
+    cdef tg_line *line
+    def __init__(self, points):
+        cdef int n = len(points)
+        cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
+        if not pts:
+            raise MemoryError("Failed to allocate points for Line")
+        for i in range(n):
+            pts[i].x = points[i][0]
+            pts[i].y = points[i][1]
+        self.line = tg_line_new(pts, n)
+        free(pts)
+        if not self.line:
+            raise ValueError("Failed to create Line")
+    def __dealloc__(self):
+        if self.line:
+            tg_line_free(self.line)
+    def num_points(self):
+        return tg_line_num_points(self.line)
+    def points(self):
+        n = tg_line_num_points(self.line)
+        pts = tg_line_points(self.line)
+        return [(pts[i].x, pts[i].y) for i in range(n)]
+    def length(self):
+        return tg_line_length(self.line)
+    def rect(self):
+        r = tg_line_rect(self.line)
+        return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
+    def is_clockwise(self):
+        return tg_line_clockwise(self.line)
+
+
+cdef class Poly:
+    cdef tg_poly *poly
+    def __init__(self, exterior, holes=None):
+        cdef int nholes = 0
+        cdef tg_ring **hole_ptrs = NULL
+        cdef tg_ring **holes_arr = NULL
+        if not isinstance(exterior, Ring):
+            raise TypeError("exterior must be a Ring")
+        if holes:
+            nholes = len(holes)
+            hole_ptrs = <tg_ring **>malloc(nholes * sizeof(tg_ring *))
+            if not hole_ptrs:
+                raise MemoryError("Failed to allocate holes array")
+            for i in range(nholes):
+                if not isinstance(holes[i], Ring):
+                    free(hole_ptrs)
+                    raise TypeError("holes must be a list of Ring")
+                hole_ptrs[i] = <tg_ring *>holes[i].ring
+            holes_arr = hole_ptrs
+        self.poly = tg_poly_new(<tg_ring *>exterior.ring, <const tg_ring * const *>holes_arr, nholes)
+        if holes and hole_ptrs != NULL:
+            free(hole_ptrs)
+        if not self.poly:
+            raise ValueError("Failed to create Poly")
+    def __dealloc__(self):
+        if self.poly:
+            tg_poly_free(self.poly)
+    def exterior(self):
+        ext = tg_poly_exterior(self.poly)
+        return Ring.from_ptr(<tg_ring *>ext)
+    def num_holes(self):
+        return tg_poly_num_holes(self.poly)
+    def hole(self, idx):
+        h = tg_poly_hole_at(self.poly, idx)
+        return Ring.from_ptr(<tg_ring *>h)
+    def rect(self):
+        r = tg_poly_rect(self.poly)
+        return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
+    def is_clockwise(self):
+        return tg_poly_clockwise(self.poly)
