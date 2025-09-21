@@ -8,4 +8,7 @@ build: clean
 clean:
 	rm -rf tg.h tg.c togo.c* build/ ${VENV_DIR}
 
-.PHONY: build clean
+test: build
+	pytest
+
+.PHONY: build clean test
