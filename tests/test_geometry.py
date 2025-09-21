@@ -1,3 +1,4 @@
+import pytest
 from togo import Geometry
 
 
@@ -124,3 +125,34 @@ def test_geometry_to_wkb_and_geobin():
     assert isinstance(geobin, bytes)
     assert len(wkb) > 0
     assert len(geobin) > 0
+
+
+def test_geometry_constructor_wkt():
+    g = Geometry("POINT(1 2)", fmt="wkt")
+    assert g.type_string() == "Point"
+    assert g.rect() == ((1.0, 2.0), (1.0, 2.0))
+
+
+def test_geometry_constructor_geojson():
+    geojson = '{"type":"Point","coordinates":[1,2]}'
+    g = Geometry(geojson, fmt="geojson")
+    assert g.type_string() == "Point"
+    assert g.rect() == ((1.0, 2.0), (1.0, 2.0))
+
+
+def test_geometry_constructor_hex():
+    hexstr = "0101000000000000000000F03F0000000000000040"
+    g = Geometry(hexstr, fmt="hex")
+    assert g.type_string() == "Point"
+    assert g.rect() == ((1.0, 2.0), (1.0, 2.0))
+
+
+def test_geometry_constructor_invalid():
+    # Note: The Geometry constructor only supports 'wkt', 'geojson', and 'hex' formats.
+    # 'wkb' is not a supported input format for the constructor.
+    with pytest.raises(ValueError):
+        Geometry("not a geometry", fmt="wkt")
+    with pytest.raises(ValueError):
+        Geometry("not a geometry", fmt="geojson")
+    with pytest.raises(ValueError):
+        Geometry("not a geometry", fmt="hex")

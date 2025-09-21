@@ -164,16 +164,16 @@ from libc.string cimport memset
 cdef class Geometry:
     cdef tg_geom *geom
 
-    def __cinit__(self, data: str = None, fmt: str = "wkt", geom_ptr = None):
+    def __cinit__(self, data: str = None, fmt: str = "geojson", geom_ptr = None):
         cdef tg_geom *ptr
         if geom_ptr is not None:
             ptr = <tg_geom *>geom_ptr
             self.geom = ptr
             return
-        if fmt == "wkt":
-            self.geom = tg_parse_wkt(data.encode("utf-8"))
-        elif fmt == "geojson":
+        if fmt == "geojson":
             self.geom = tg_parse_geojson(data.encode("utf-8"))
+        elif fmt == "wkt":
+            self.geom = tg_parse_wkt(data.encode("utf-8"))
         elif fmt == "hex":
             self.geom = tg_parse_hex(data.encode("utf-8"))
         else:
