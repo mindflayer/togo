@@ -80,3 +80,47 @@ def test_equals():
     g3 = Geometry("POINT(2 3)", fmt="wkt")
     assert g1.equals(g2)
     assert not g1.equals(g3)
+
+
+def test_geometry_num_lines_polys_geometries():
+    g_lines = Geometry("MULTILINESTRING((0 0,1 1),(2 2,3 3))", fmt="wkt")
+    assert g_lines.num_lines() == 2
+    g_polys = Geometry(
+        "MULTIPOLYGON(((0 0,1 0,1 1,0 1,0 0)),((2 2,3 2,3 3,2 3,2 2)))", fmt="wkt"
+    )
+    assert g_polys.num_polys() == 2
+    g_collection = Geometry(
+        "GEOMETRYCOLLECTION(POINT(1 2),LINESTRING(0 0,1 1))", fmt="wkt"
+    )
+    assert g_collection.num_geometries() == 2
+
+
+def test_geometry_z_m():
+    g = Geometry("POINT ZM (1 2 3 4)", fmt="wkt")
+    assert g.has_z() is True
+    assert g.has_m() is True
+    assert g.z() == 3.0
+    assert g.m() == 4.0
+
+
+def test_geometry_spatial_predicates():
+    g1 = Geometry("POLYGON((0 0,2 0,2 2,0 2,0 0))", fmt="wkt")
+    g2 = Geometry("POINT(1 1)", fmt="wkt")
+    g3 = Geometry("POINT(3 3)", fmt="wkt")
+    assert g1.covers(g2)
+    assert g2.coveredby(g1)
+    assert not g1.covers(g3)
+    assert not g3.coveredby(g1)
+    assert g1.touches(Geometry("LINESTRING(0 0,2 0)", fmt="wkt"))
+    assert g1.intersects(g2)
+    assert not g1.intersects(g3)
+
+
+def test_geometry_to_wkb_and_geobin():
+    g = Geometry("POINT(1 2)", fmt="wkt")
+    wkb = g.to_wkb()
+    geobin = g.to_geobin()
+    assert isinstance(wkb, bytes)
+    assert isinstance(geobin, bytes)
+    assert len(wkb) > 0
+    assert len(geobin) > 0
