@@ -1,5 +1,5 @@
 import pytest
-from togo import Poly, Ring, Rect
+from togo import Poly, Ring, Rect, Geometry
 
 
 def test_poly_square_no_holes():
@@ -49,3 +49,13 @@ def test_poly_degenerate():
     rect = poly.rect()
     assert rect.min.as_tuple() == (0, 0)
     assert rect.max.as_tuple() == (0, 0)
+
+
+def test_poly_as_geometry():
+    exterior = Ring([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+    poly = Poly(exterior)
+    g = poly.as_geometry()
+    assert isinstance(g, Geometry)
+    assert g.type_string() == "Polygon"
+    rect = g.rect()
+    assert rect == ((0.0, 0.0), (1.0, 1.0))

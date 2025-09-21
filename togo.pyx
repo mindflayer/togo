@@ -158,29 +158,39 @@ cdef extern from "tg.h":
     void tg_env_set_index_spread(int spread)
     void tg_env_set_print_fixed_floats(bint print)
 
+    tg_geom *tg_geom_new_point(tg_point point)
+    tg_geom *tg_geom_new_polygon(const tg_poly *poly)
+
 from libc.stdlib cimport malloc, free
 from libc.string cimport memset
+
+cdef Geometry _geometry_from_ptr(tg_geom *ptr):
+    cdef Geometry g = Geometry.__new__(Geometry)
+    g.geom = ptr
+    return g
 
 cdef class Geometry:
     cdef tg_geom *geom
 
-    def __cinit__(self, data: str = None, fmt: str = "geojson", geom_ptr = None):
-        cdef tg_geom *ptr
-        if geom_ptr is not None:
-            ptr = <tg_geom *>geom_ptr
-            self.geom = ptr
+    def __cinit__(self, data: str = None, fmt: str = "geojson"):
+        if self.geom is not NULL:
             return
-        if fmt == "geojson":
-            self.geom = tg_parse_geojson(data.encode("utf-8"))
-        elif fmt == "wkt":
-            self.geom = tg_parse_wkt(data.encode("utf-8"))
-        elif fmt == "hex":
-            self.geom = tg_parse_hex(data.encode("utf-8"))
-        else:
-            raise ValueError("Unknown format")
-        err = tg_geom_error(self.geom)
-        if err != NULL:
-            raise ValueError(err.decode("utf-8"))
+        if data is not None:
+            if fmt == "geojson":
+                self.geom = tg_parse_geojson(data.encode("utf-8"))
+            elif fmt == "wkt":
+                self.geom = tg_parse_wkt(data.encode("utf-8"))
+            elif fmt == "hex":
+                self.geom = tg_parse_hex(data.encode("utf-8"))
+            else:
+                raise ValueError("Unknown format")
+            err = tg_geom_error(self.geom)
+            if err != NULL:
+                raise ValueError(err.decode("utf-8"))
+            return
+        # If data is None, this might be an object created from a C pointer
+        # The pointer will be set after __cinit__ in _geometry_from_ptr
+        # So we just leave geom as NULL for now
 
     def clone(self):
         raise NotImplementedError("Cloning is not supported in this Python wrapper.")
@@ -318,6 +328,8 @@ cdef class Point:
         return (self.pt.x, self.pt.y)
     cdef tg_point _get_c_point(self):
         return self.pt
+    def as_geometry(self):
+        return _geometry_from_ptr(tg_geom_new_point(self.pt))
 
 
 cdef class Rect:
@@ -353,6 +365,19 @@ cdef class Rect:
             return tg_rect_intersects_point(self.rect, (<Point>other)._get_c_point())
         else:
             raise TypeError("intersects expects Rect or Point")
+    def as_geometry(self):
+        minx, miny = self.rect.min.x, self.rect.min.y
+        maxx, maxy = self.rect.max.x, self.rect.max.y
+        corners = [
+            (minx, miny),
+            (maxx, miny),
+            (maxx, maxy),
+            (minx, maxy),
+            (minx, miny)
+        ]
+        ring = Ring(corners)
+        poly = Poly(ring)
+        return _geometry_from_ptr(tg_geom_new_polygon(poly.poly))
 
 
 cdef class Ring:
@@ -399,6 +424,8 @@ cdef class Ring:
         return tg_ring_convex(self.ring)
     def is_clockwise(self):
         return tg_ring_clockwise(self.ring)
+    def as_geometry(self):
+        return _geometry_from_ptr(<tg_geom *>self.ring)
 
 
 cdef class Line:
@@ -431,6 +458,8 @@ cdef class Line:
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
     def is_clockwise(self):
         return tg_line_clockwise(self.line)
+    def as_geometry(self):
+        return _geometry_from_ptr(<tg_geom *>self.line)
 
 
 cdef class Poly:
@@ -485,3 +514,5 @@ cdef class Poly:
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
     def is_clockwise(self):
         return tg_poly_clockwise(self.poly)
+    def as_geometry(self):
+        return _geometry_from_ptr(<tg_geom *>self.poly)

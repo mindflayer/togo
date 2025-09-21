@@ -1,5 +1,5 @@
 import pytest
-from togo import Ring, Rect
+from togo import Ring, Rect, Geometry
 
 
 def test_ring_triangle():
@@ -49,3 +49,13 @@ def test_ring_nonconvex():
     assert ring.is_convex() is False
     assert ring.area() > 0
     assert ring.perimeter() > 0
+
+
+def test_ring_as_geometry():
+    points = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
+    ring = Ring(points)
+    g = ring.as_geometry()
+    assert isinstance(g, Geometry)
+    assert g.type_string() == "Polygon"
+    rect = g.rect()
+    assert rect == ((0.0, 0.0), (1.0, 1.0))

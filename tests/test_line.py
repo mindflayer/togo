@@ -1,5 +1,5 @@
 import pytest
-from togo import Line, Rect
+from togo import Line, Rect, Geometry
 
 
 def test_line_basic():
@@ -38,3 +38,13 @@ def test_line_closed():
     assert line.points() == points
     # Perimeter of a square
     assert line.length() == pytest.approx(4.0)
+
+
+def test_line_as_geometry():
+    points = [(0, 0), (1, 1), (2, 2)]
+    line = Line(points)
+    g = line.as_geometry()
+    assert isinstance(g, Geometry)
+    assert g.type_string() == "LineString"
+    rect = g.rect()
+    assert rect == ((0.0, 0.0), (2.0, 2.0))

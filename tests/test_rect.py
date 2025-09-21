@@ -1,4 +1,4 @@
-from togo import Rect, Point
+from togo import Rect, Point, Geometry
 
 
 def test_rect_basic():
@@ -54,3 +54,11 @@ def test_rect_zero_area():
     assert rect.min.as_tuple() == (5, 5)
     assert rect.max.as_tuple() == (5, 5)
     assert rect.center().as_tuple() == (5, 5)
+
+
+def test_rect_as_geometry():
+    rect = Rect(Point(0, 0), Point(2, 3))
+    g = rect.as_geometry()
+    assert isinstance(g, Geometry)
+    assert g.type_string() == "Polygon"
+    assert g.rect() == ((0.0, 0.0), (2.0, 3.0))
