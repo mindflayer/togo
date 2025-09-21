@@ -5,8 +5,10 @@ from tests.geometries import TOGO, BENIN, GRAN_BUENOS_AIRES_AREA
 
 def test_togo():
     togo = Geometry(TOGO)
+    assert togo.memsize() == 6080
     assert not togo.is_empty()
     assert not togo.has_z()
+    assert togo.dims() == 2
     assert togo.type_string() == "Polygon"
     bbox = togo.rect()
     assert bbox == ((-0.149762, 6.100546), (1.799327, 11.13854))
@@ -21,8 +23,10 @@ def test_togo():
 
 def test_benin():
     benin = Geometry(BENIN, fmt="geojson")
+    assert benin.memsize() == 6688
     assert not benin.is_empty()
     assert not benin.has_z()
+    assert benin.dims() == 2
     assert benin.type_string() == "Polygon"
     bbox = benin.rect()
     assert bbox == ((0.776667, 6.218721), (3.855, 12.396658))
@@ -37,8 +41,10 @@ def test_benin():
 
 def test_buenos_aires():
     b_aires = Geometry(GRAN_BUENOS_AIRES_AREA, fmt="wkt")
+    assert b_aires.memsize() == 456
     assert not b_aires.is_empty()
     assert b_aires.has_z()
+    assert b_aires.dims() == 3
     assert b_aires.type_string() == "Polygon"
     bbox = b_aires.rect()
     assert bbox == (

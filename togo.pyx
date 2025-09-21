@@ -201,12 +201,6 @@ cdef class Geometry:
         # The pointer will be set after __cinit__ in _geometry_from_ptr
         # So we just leave geom as NULL for now
 
-    def clone(self):
-        raise NotImplementedError("Cloning is not supported in this Python wrapper.")
-
-    def copy(self):
-        raise NotImplementedError("Copying is not supported in this Python wrapper.")
-
     def type(self):
         return tg_geom_typeof(self.geom)
 
