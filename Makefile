@@ -6,9 +6,22 @@ build: clean
 	${VENV_DIR}/bin/python setup.py build_ext --inplace
 
 clean:
-	rm -rf tg.h tg.c togo.c* build/ ${VENV_DIR}
+	rm -rf tg.h tg.c togo.c* build/ ${VENV_DIR} dist/ *.egg-info/
+
+# Build sdist and wheel into dist/
+.dist-deps:
+	${VENV_DIR}/bin/pip install wheel twine
+	touch .dist-deps
+
+dist: build .dist-deps
+	${VENV_DIR}/bin/python setup.py sdist bdist_wheel
+	${VENV_DIR}/bin/twine check dist/*
+
+# Upload to PyPI: requires credentials configured (e.g., in ~/.pypirc or env vars)
+upload: dist
+	${VENV_DIR}/bin/twine upload dist/*
 
 test: build
 	pytest
 
-.PHONY: build clean test
+.PHONY: build clean test dist upload
