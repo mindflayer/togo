@@ -1,48 +1,3 @@
-"""
-What I ran and observed
-Environment used: Python 3.13.3, Shapely 2.1.1, project venv.
-The script prints ops/s (higher is better) for each operation. Here are the results from my run (your numbers may vary slightly):
-parse WKT point:
-togo: 1,682,758 ops/s
-shapely: 161,775 ops/s
-parse WKT linestring:
-togo: 674,921 ops/s
-shapely: 115,787 ops/s
-parse GeoJSON polygon (country-scale):
-togo: 13,715 ops/s
-shapely: 5,661 ops/s
-to WKT (point):
-togo: 2,025,979 ops/s
-shapely: 137,521 ops/s
-to GeoJSON (point):
-togo: 1,344,500 ops/s
-shapely: 154,495 ops/s
-bounds/rect (big polygon):
-togo: 8,563,257 ops/s
-shapely: 422,145 ops/s
-intersects (big polygons):
-togo: 4,876,740 ops/s
-shapely: 250,548 ops/s
-contains (polygon contains point):
-togo: 2,653,702 ops/s
-shapely: 103,248 ops/s
-covers (polygon covers point):
-togo: 2,538,245 ops/s
-shapely: 98,774 ops/s
-line length (200 vertices):
-togo: 2,760,616 ops/s
-shapely: 449,979 ops/s
-polygon area (square):
-togo: 13,189,480 ops/s
-shapely: 536,084 ops/s
-polygon perimeter (square):
-togo: 12,230,022 ops/s
-shapely: 237,397 ops/s
-equals (point):
-togo: 1,367,555 ops/s
-shapely: 87,806 ops/s
-"""
-
 import sys
 import json
 import time
@@ -58,6 +13,10 @@ if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
 # Import togo
+
+# import togo
+# togo.set_index(togo.TGIndex.YSTRIPES)
+
 try:
     from togo import Geometry, Line, Ring, Poly
 except Exception as e:
