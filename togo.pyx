@@ -16,8 +16,14 @@ cdef extern from "tg.h":
         pass
     cdef struct tg_line:
         pass
-    ctypedef unsigned int tg_index
     ctypedef int bool
+
+    # Enum for tg_index
+    cdef enum tg_index:
+        TG_DEFAULT
+        TG_NONE
+        TG_NATURAL
+        TG_YSTRIPES
 
     # Constructors
     tg_geom *tg_geom_clone(const tg_geom *geom)
@@ -704,3 +710,29 @@ cdef class Poly:
         return _geometry_from_ptr(<tg_geom *>self.poly)
     cdef tg_poly *_get_c_poly(self):
         return self.poly
+
+
+import enum
+from typing import Union
+
+
+class TGIndex(enum.IntEnum):
+    """
+    Used for setting the geometry indexing default.
+    DEFAULT: Use the library default indexing strategy. Currently NATURAL.
+    NONE: No indexing.
+    NATURAL: see https://github.com/tidwall/tg/blob/main/docs/POLYGON_INDEXING.md#natural
+    YSTRIPES: see https://github.com/tidwall/tg/blob/main/docs/POLYGON_INDEXING.md#ystripes
+    """
+
+    DEFAULT = TG_DEFAULT
+    NONE = TG_NONE
+    NATURAL = TG_NATURAL
+    YSTRIPES = TG_YSTRIPES
+
+
+def set_index(ix: TGIndex):
+    """Set the global tg_index. Accepts TGIndex enum."""
+    if not isinstance(ix, TGIndex):
+        raise TypeError("set_index expects a togo.TGIndex enum value")
+    tg_env_set_index(ix)
