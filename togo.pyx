@@ -184,6 +184,13 @@ cdef Geometry _geometry_from_ptr(tg_geom *ptr):
     g.geom = ptr
     return g
 
+
+cdef Poly _poly_from_ptr(tg_poly *ptr):
+    cdef Poly p = Poly.__new__(Poly)
+    p.poly = ptr
+    return p
+
+
 cdef class Geometry:
     cdef tg_geom *geom
 
@@ -220,45 +227,64 @@ cdef class Geometry:
 
     def is_feature(self):
         return tg_geom_is_feature(self.geom) != 0
+
     def is_featurecollection(self):
         return tg_geom_is_featurecollection(self.geom) != 0
+
     def is_empty(self):
         return tg_geom_is_empty(self.geom) != 0
+
     def dims(self):
         return tg_geom_dims(self.geom)
+
     def has_z(self):
         return tg_geom_has_z(self.geom) != 0
+
     def has_m(self):
         return tg_geom_has_m(self.geom) != 0
+
     def z(self):
         return tg_geom_z(self.geom)
+
     def m(self):
         return tg_geom_m(self.geom)
+
     def memsize(self):
         return tg_geom_memsize(self.geom)
+
     def num_points(self):
         return tg_geom_num_points(self.geom)
+
     def num_lines(self):
         return tg_geom_num_lines(self.geom)
+
     def num_polys(self):
         return tg_geom_num_polys(self.geom)
+
     def num_geometries(self):
         return tg_geom_num_geometries(self.geom)
 
     def equals(self, other: Geometry):
         return tg_geom_equals(self.geom, other.geom) != 0
+
     def disjoint(self, other: Geometry):
         return tg_geom_disjoint(self.geom, other.geom) != 0
+
     def contains(self, other: Geometry):
         return tg_geom_contains(self.geom, other.geom) != 0
+
     def within(self, other: Geometry):
         return tg_geom_within(self.geom, other.geom) != 0
+
     def covers(self, other: Geometry):
         return tg_geom_covers(self.geom, other.geom) != 0
+
     def coveredby(self, other: Geometry):
         return tg_geom_coveredby(self.geom, other.geom) != 0
+
     def touches(self, other: Geometry):
         return tg_geom_touches(self.geom, other.geom) != 0
+
     def intersects(self, other: Geometry):
         return tg_geom_intersects(self.geom, other.geom) != 0
 
@@ -441,7 +467,7 @@ cdef class Geometry:
             else:
                 # try tuple-like point
                 try:
-                    _x = float(obj[0]); _y = float(obj[1])
+                    _x, _y = float(obj[0]), float(obj[1])
                     temp_count += 1
                 except Exception:
                     free(arr)
@@ -508,16 +534,21 @@ cdef class Point:
     def __init__(self, x: float, y: float):
         self.pt.x = x
         self.pt.y = y
+
     @property
     def x(self):
         return self.pt.x
+
     @property
     def y(self):
         return self.pt.y
+
     def as_tuple(self):
         return (self.pt.x, self.pt.y)
+
     cdef tg_point _get_c_point(self):
         return self.pt
+
     def as_geometry(self):
         return _geometry_from_ptr(tg_geom_new_point(self.pt))
 
@@ -527,17 +558,22 @@ cdef class Rect:
     def __init__(self, min_pt: Point, max_pt: Point):
         self.rect.min = min_pt.pt
         self.rect.max = max_pt.pt
+
     @property
     def min(self):
         return Point(self.rect.min.x, self.rect.min.y)
+
     @property
     def max(self):
         return Point(self.rect.max.x, self.rect.max.y)
+
     def center(self):
         cdef tg_point c = tg_rect_center(self.rect)
         return Point(c.x, c.y)
+
     cdef tg_rect _get_c_rect(self):
         return self.rect
+
     def expand(self, other):
         cdef tg_rect r
         if isinstance(other, Rect):
@@ -548,6 +584,7 @@ cdef class Rect:
             return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
         else:
             raise TypeError("expand expects Rect or Point")
+
     def intersects(self, other):
         if isinstance(other, Rect):
             return tg_rect_intersects_rect(self.rect, (<Rect>other)._get_c_rect())
@@ -555,6 +592,7 @@ cdef class Rect:
             return tg_rect_intersects_point(self.rect, (<Point>other)._get_c_point())
         else:
             raise TypeError("intersects expects Rect or Point")
+
     def as_geometry(self):
         minx, miny = self.rect.min.x, self.rect.min.y
         maxx, maxy = self.rect.max.x, self.rect.max.y
@@ -586,36 +624,50 @@ cdef class Ring:
         if not self.ring:
             raise ValueError("Failed to create Ring")
         self.owns_pointer = True
+
     @staticmethod
     cdef Ring from_ptr(tg_ring *ptr):
         cdef Ring r = Ring.__new__(Ring)
         r.ring = ptr
         r.owns_pointer = False  # Don't free this pointer
         return r
+
     cdef tg_ring *_get_c_ring(self):
         return self.ring
+
     def __dealloc__(self):
         if self.ring and self.owns_pointer:
             tg_ring_free(self.ring)
+
     def num_points(self):
         return tg_ring_num_points(self.ring)
+
     def points(self):
         n = tg_ring_num_points(self.ring)
         pts = tg_ring_points(self.ring)
         return [(pts[i].x, pts[i].y) for i in range(n)]
+
     def area(self):
         return tg_ring_area(self.ring)
+
     def perimeter(self):
         return tg_ring_perimeter(self.ring)
+
     def rect(self):
         r = tg_ring_rect(self.ring)
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
+
     def is_convex(self):
         return tg_ring_convex(self.ring)
+
     def is_clockwise(self):
         return tg_ring_clockwise(self.ring)
+
     def as_geometry(self):
         return _geometry_from_ptr(<tg_geom *>self.ring)
+
+    def as_poly(self):
+        return _poly_from_ptr(<tg_poly *>self.ring)
 
 
 cdef class Line:
@@ -632,24 +684,32 @@ cdef class Line:
         free(pts)
         if not self.line:
             raise ValueError("Failed to create Line")
+
     def __dealloc__(self):
         if self.line:
             tg_line_free(self.line)
+
     def num_points(self):
         return tg_line_num_points(self.line)
+
     def points(self):
         n = tg_line_num_points(self.line)
         pts = tg_line_points(self.line)
         return [(pts[i].x, pts[i].y) for i in range(n)]
+
     def length(self):
         return tg_line_length(self.line)
+
     def rect(self):
         r = tg_line_rect(self.line)
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
+
     def is_clockwise(self):
         return tg_line_clockwise(self.line)
+
     def as_geometry(self):
         return _geometry_from_ptr(<tg_geom *>self.line)
+
     cdef tg_line *_get_c_line(self):
         return self.line
 
@@ -690,30 +750,37 @@ cdef class Poly:
             free(hole_ptrs)
         if not self.poly:
             raise ValueError("Failed to create Poly")
+
     def __dealloc__(self):
         if self.poly:
             tg_poly_free(self.poly)
+
     def exterior(self):
         ext = tg_poly_exterior(self.poly)
         return Ring.from_ptr(<tg_ring *>ext)
+
     def num_holes(self):
         return tg_poly_num_holes(self.poly)
+
     def hole(self, idx):
         h = tg_poly_hole_at(self.poly, idx)
         return Ring.from_ptr(<tg_ring *>h)
+
     def rect(self):
         r = tg_poly_rect(self.poly)
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
+
     def is_clockwise(self):
         return tg_poly_clockwise(self.poly)
+
     def as_geometry(self):
         return _geometry_from_ptr(<tg_geom *>self.poly)
+
     cdef tg_poly *_get_c_poly(self):
         return self.poly
 
 
 import enum
-from typing import Union
 
 
 class TGIndex(enum.IntEnum):
@@ -721,8 +788,10 @@ class TGIndex(enum.IntEnum):
     Used for setting the polygon indexing default mode.
     DEFAULT: Use the library default indexing strategy. Currently NATURAL.
     NONE: No indexing.
-    NATURAL: see https://github.com/tidwall/tg/blob/main/docs/POLYGON_INDEXING.md#natural
-    YSTRIPES: see https://github.com/tidwall/tg/blob/main/docs/POLYGON_INDEXING.md#ystripes
+    NATURAL: see
+        https://github.com/tidwall/tg/blob/main/docs/POLYGON_INDEXING.md#natural
+    YSTRIPES: see
+        https://github.com/tidwall/tg/blob/main/docs/POLYGON_INDEXING.md#ystripes
     """
 
     DEFAULT = TG_DEFAULT
