@@ -718,7 +718,7 @@ from typing import Union
 
 class TGIndex(enum.IntEnum):
     """
-    Used for setting the geometry indexing default.
+    Used for setting the polygon indexing default mode.
     DEFAULT: Use the library default indexing strategy. Currently NATURAL.
     NONE: No indexing.
     NATURAL: see https://github.com/tidwall/tg/blob/main/docs/POLYGON_INDEXING.md#natural
@@ -731,8 +731,11 @@ class TGIndex(enum.IntEnum):
     YSTRIPES = TG_YSTRIPES
 
 
-def set_index(ix: TGIndex):
-    """Set the global tg_index. Accepts TGIndex enum."""
+def set_polygon_indexing_mode(ix: TGIndex):
+    """
+    Set the polygon indexing mode. Accepts values from TGIndex enum.
+    Internally it changes the global tg_index.
+    """
     if not isinstance(ix, TGIndex):
         raise TypeError("set_index expects a togo.TGIndex enum value")
     tg_env_set_index(ix)

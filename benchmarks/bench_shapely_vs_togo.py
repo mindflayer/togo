@@ -1,10 +1,9 @@
+import os
 import sys
 import json
 import time
 
 # Ensure repo root and tests are importable
-import os
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -12,11 +11,7 @@ TESTS_DIR = os.path.join(ROOT, "tests")
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
-# Import togo
-
-# import togo
-# togo.set_index(togo.TGIndex.YSTRIPES)
-
+# Import togo classes
 try:
     from togo import Geometry, Line, Ring, Poly
 except Exception as e:

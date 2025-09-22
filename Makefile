@@ -21,10 +21,10 @@ dist: build .dist-deps
 upload: dist
 	${VENV_DIR}/bin/twine upload dist/*
 
-test: build
+test:
 	pytest
 
-bench: build
+bench:
 	${VENV_DIR}/bin/pip install shapely
 	${VENV_DIR}/bin/python benchmarks/bench_shapely_vs_togo.py
 
