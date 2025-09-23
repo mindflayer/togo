@@ -8,10 +8,7 @@ on:
 
 jobs:
   build_wheels:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write  # This enables OIDC token creation
