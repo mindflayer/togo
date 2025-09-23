@@ -36,16 +36,15 @@ jobs:
           make build-c
 
       - name: Build wheel
-        if: matrix.python-version != '3.13'
         run: |
           make dist-wheel
           make dist-check
 
-      - name: Build sdist only once
-        if: matrix.python-version == '3.13'
-        run: |
-          make dist-sdist
-          make dist-check
+#      - name: Build sdist only once
+#        if: matrix.python-version == '3.13'
+#        run: |
+#          make dist-sdist
+#          make dist-check
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

@@ -17,7 +17,7 @@ dist-sdist:
 	${VENV_DIR}/bin/python setup.py sdist
 
 dist-wheel:
-	${VENV_DIR}/bin/python setup.py bdist_wheel
+	${VENV_DIR}/bin/python -m cibuildwheel --output-dir ${DIST_DIR}
 
 dist-check:
 	${VENV_DIR}/bin/twine check ${DIST_DIR}/*
