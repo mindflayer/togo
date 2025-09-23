@@ -13,6 +13,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+    permissions:
+      contents: read
+      id-token: write  # This enables OIDC token creation
 
     steps:
       - uses: actions/checkout@v3
@@ -32,16 +35,19 @@ jobs:
         run: |
           make build-c
 
-      - name: Build and publish wheel
+      - name: Build wheel
         if: matrix.python-version != '3.13'
         run: |
           make dist-wheel
           make dist-check
-          make publish-wheel
 
-      - name: Build and publish sdist only once
+      - name: Build sdist only once
         if: matrix.python-version == '3.13'
         run: |
           make dist-sdist
           make dist-check
-          make publish-sdist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
