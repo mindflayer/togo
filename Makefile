@@ -26,7 +26,7 @@ upload: dist
 	${VENV_DIR}/bin/twine upload dist/*
 
 test:
-	pytest
+	${VENV_DIR}/bin/pytest
 
 bench:
 	${VENV_DIR}/bin/pip install shapely
