@@ -1,0 +1,47 @@
+name: Build Wheels
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+jobs:
+  build_wheels:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          make install-deps
+
+      - name: Build extension
+        run: |
+          make build-c
+
+      - name: Build and publish wheel
+        if: matrix.python-version != '3.13'
+        run: |
+          make dist-wheel
+          make dist-check
+          make publish-wheel
+
+      - name: Build and publish sdist only once
+        if: matrix.python-version == '3.13'
+        run: |
+          make dist-sdist
+          make dist-check
+          make publish-sdist

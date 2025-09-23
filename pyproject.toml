@@ -22,6 +22,7 @@ classifiers = [
   "Intended Audience :: Developers",
   "Topic :: Scientific/Engineering :: GIS"
 ]
+dynamic = ["license"]
 
 [project.urls]
 Homepage = "https://github.com/mindflayer/togo"
