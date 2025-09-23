@@ -1,9 +1,13 @@
 VENV_DIR = .venv
 
-build: clean
+install-deps: clean
 	python3 -m venv ${VENV_DIR}
 	${VENV_DIR}/bin/pip install -r requirements.txt
+
+build-c:
 	${VENV_DIR}/bin/python setup.py build_ext --inplace
+
+build: install-deps build-c
 
 clean:
 	rm -rf tg.h tg.c togo.c* build/ ${VENV_DIR} .dist-deps dist/ *.egg-info/
@@ -28,4 +32,4 @@ bench:
 	${VENV_DIR}/bin/pip install shapely
 	${VENV_DIR}/bin/python benchmarks/bench_shapely_vs_togo.py
 
-.PHONY: build clean test dist upload bench
+.PHONY: build install-deps build-c clean test dist upload bench
