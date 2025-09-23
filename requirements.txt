@@ -1,3 +1,5 @@
 Cython
 setuptools
 pytest
+wheel
+twine
