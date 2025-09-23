@@ -8,11 +8,10 @@ on:
 
 jobs:
   build_wheels:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15-intel, macos-latest]
     permissions:
       contents: read
       id-token: write  # This enables OIDC token creation
@@ -40,8 +39,8 @@ jobs:
           make dist-wheel
           make dist-check
 
-#      - name: Build sdist only once
-#        if: matrix.python-version == '3.13'
+#      - name: Build sdist
+#        if: matrix.os == 'ubuntu-latest'
 #        run: |
 #          make dist-sdist
 #          make dist-check
