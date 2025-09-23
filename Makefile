@@ -18,7 +18,7 @@ dist-sdist:
 dist-wheel:
 	${VENV_DIR}/bin/python setup.py bdist_wheel
 
-dist:
+dist-check:
 	${VENV_DIR}/bin/twine check dist/*
 
 # Upload to PyPI: requires credentials configured (e.g., in ~/.pypirc or env vars)
@@ -35,4 +35,4 @@ bench:
 	${VENV_DIR}/bin/pip install shapely
 	${VENV_DIR}/bin/python benchmarks/bench_shapely_vs_togo.py
 
-.PHONY: build install-deps build-c clean test dist dist-sdist dist-wheel upload-wheel upload-sdist bench
+.PHONY: build install-deps build-c clean test dist-check dist-sdist dist-wheel upload-wheel upload-sdist bench
