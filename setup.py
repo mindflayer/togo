@@ -17,23 +17,7 @@ TG_HEADER_FILENAME = os.path.basename(urlparse(TG_HEADER_URL).path)
 if not os.path.exists(TG_HEADER_FILENAME):
     urllib.request.urlretrieve(TG_HEADER_URL, TG_HEADER_FILENAME)
 
-# Package metadata
-NAME = "togo"
-VERSION = "0.1.0"
-DESCRIPTION = "Lightweight Python bindings for the TG geometry library"
-LONG_DESCRIPTION = ""
-LONG_DESCRIPTION_CONTENT_TYPE = "text/markdown"
-if os.path.exists("README.md"):
-    with open("README.md", "r", encoding="utf-8") as f:
-        LONG_DESCRIPTION = f.read()
-
 setup(
-    name=NAME,
-    version=VERSION,
-    description=DESCRIPTION,
-    long_description=LONG_DESCRIPTION,
-    long_description_content_type=LONG_DESCRIPTION_CONTENT_TYPE,
-    license="MIT",
     ext_modules=cythonize(
         [
             Extension(
@@ -43,5 +27,4 @@ setup(
             )
         ]
     ),
-    python_requires=">=3.8",
 )

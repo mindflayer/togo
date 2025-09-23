@@ -6,6 +6,29 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "togo"
+version = "0.1.1"
+description = "Lightweight Python bindings for the TG geometry library"
+readme = "README.md"
+license = "MIT"
+authors = [
+  {name = "Giorgio Salluzzo", email = "giorgio.salluzzo@gmail.com"}
+]
+requires-python = ">=3.8"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: C",
+  "Operating System :: POSIX :: Linux",
+  "Intended Audience :: Developers",
+  "Topic :: Scientific/Engineering :: GIS"
+]
+
+[project.urls]
+Homepage = "https://github.com/mindflayer/togo"
+Source = "https://github.com/mindflayer/togo"
+Tracker = "https://github.com/mindflayer/togo/issues"
+
 [tool.pytest.ini_options]
 addopts = "-v -x -q"
 testpaths = ["tests"]
