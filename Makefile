@@ -1,5 +1,5 @@
 VENV_DIR = .venv
-DIST_DIR = .dist
+DIST_DIR = dist
 
 install-deps: clean
 	python3 -m venv ${VENV_DIR}
