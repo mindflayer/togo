@@ -13,7 +13,7 @@ clean:
 	${VENV_DIR}/bin/pip install wheel twine
 	touch .dist-deps
 
-dist: build .dist-deps
+dist: .dist-deps
 	${VENV_DIR}/bin/python setup.py sdist bdist_wheel
 	${VENV_DIR}/bin/twine check dist/*
 

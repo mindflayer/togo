@@ -1,10 +1,12 @@
 # ToGo
-ToGo - Python bindings for TG
+Python bindings for TG
 (Geometry library for C - Fast point-in-polygon)
 
-# How ToGo Works
+ToGo is a high-performance Python library for computational geometry, providing a Cython wrapper around the [TG](https://github.com/tidwall/tg) C library.
 
-Togo is a high-performance Python library for computational geometry, providing a Cython wrapper around the [TG](https://github.com/tidwall/tg) C library.
+The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient library for geometric operations, including spatial predicates, format conversions, and spatial indexing.
+
+While ToGo's API interfaces are still a work in progress, the underling C library is stable and well-tested.
 
 ## Installation
 
