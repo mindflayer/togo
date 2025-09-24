@@ -66,6 +66,12 @@ g1.within(g2)
 # Format conversion
 g1.to_wkt()
 g1.to_geojson()
+
+# Access sub-geometries by index (e.g., for GeometryCollection, MultiPoint, etc.)
+gc = Geometry('GEOMETRYCOLLECTION(POINT(1 2),POINT(3 4))', fmt='wkt')
+first = gc[0]  # Bound to TG function call tg_geom_geometry_at(idx)
+second = gc[1]
+print(first.type_string())  # 'Point'
 ```
 
 ### Point, Line, Ring, Poly
@@ -106,6 +112,31 @@ multi_line = Geometry.from_multilinestring([
 poly1 = Poly(Ring([(0,0), (1,0), (1,1), (0,1), (0,0)]))
 poly2 = Poly(Ring([(2,2), (3,2), (3,3), (2,3), (2,2)]))
 multi_poly = Geometry.from_multipolygon([poly1, poly2])
+```
+
+### Segment
+
+Represents a line segment between two points:
+
+```python
+from togo import Segment, Point
+
+# Create a segment from two points (or tuples)
+seg = Segment(Point(0, 0), Point(1, 1))
+# Or using tuples
+tuple_seg = Segment((0, 0), (1, 1))
+
+# Access endpoints
+print(seg.a)  # Point(0, 0)
+print(seg.b)  # Point(1, 1)
+
+# Get the bounding rectangle
+rect = seg.rect()
+print(rect)  # ((0.0, 0.0), (1.0, 1.0))
+
+# Check intersection with another segment
+other = Segment((1, 1), (2, 2))
+print(seg.intersects(other))  # True or False
 ```
 
 ## Polygon Indexing

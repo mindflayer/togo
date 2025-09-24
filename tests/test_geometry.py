@@ -94,6 +94,9 @@ def test_geometry_num_lines_polys_geometries():
         "GEOMETRYCOLLECTION(POINT(1 2),LINESTRING(0 0,1 1))", fmt="wkt"
     )
     assert g_collection.num_geometries() == 2
+    # Use Geometry.__getitem__ to access sub-geometries of MultiLineString
+    first_line = g_lines[0]
+    assert first_line.type_string() == "LineString"
 
 
 def test_geometry_z_m():
@@ -156,3 +159,37 @@ def test_geometry_constructor_invalid():
         Geometry("not a geometry", fmt="geojson")
     with pytest.raises(ValueError):
         Geometry("not a geometry", fmt="hex")
+
+
+def test_geometry_point_accessor():
+    g = Geometry("POINT(3 4)", fmt="wkt")
+    pt = g.point()
+    assert pt.x == 3.0 and pt.y == 4.0
+
+
+def test_geometry_line_accessor_and_from_linestring():
+    points = [(0, 0), (1, 1), (2, 2)]
+    g = Geometry.from_linestring(points)
+    line = g.line()
+    pts = line.points()
+    assert pts == points
+
+
+def test_geometry_poly_accessor():
+    # Polygon with one ring
+    wkt = "POLYGON((0 0,1 0,1 1,0 1,0 0))"
+    g = Geometry(wkt, fmt="wkt")
+    poly = g.poly()
+    ext = poly.exterior()
+    assert ext.num_points() == 5
+
+
+def test_geometry_geom_at():
+    # GeometryCollection with two points
+    g = Geometry("GEOMETRYCOLLECTION(POINT(1 2),POINT(3 4))", fmt="wkt")
+    g0 = g[0]
+    g1 = g[1]
+    assert g0.type_string() == "Point"
+    assert g1.type_string() == "Point"
+    assert g0.point().x == 1.0 and g0.point().y == 2.0
+    assert g1.point().x == 3.0 and g1.point().y == 4.0

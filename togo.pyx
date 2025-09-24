@@ -13,7 +13,8 @@ cdef extern from "tg.h":
     cdef struct tg_poly:
         pass
     cdef struct tg_segment:
-        pass
+        tg_point a
+        tg_point b
     cdef struct tg_line:
         pass
     ctypedef int bool
@@ -175,6 +176,13 @@ cdef extern from "tg.h":
     tg_geom *tg_geom_new_multilinestring_empty()
     tg_geom *tg_geom_new_multipolygon_empty()
     tg_geom *tg_geom_new_geometrycollection_empty()
+    tg_geom *tg_geom_new_linestring(const tg_line *line)
+    tg_point tg_geom_point(const tg_geom *geom)
+    const tg_line *tg_geom_line(const tg_geom *geom)
+    const tg_poly *tg_geom_poly(const tg_geom *geom)
+    const tg_geom *tg_geom_geometry_at(const tg_geom *geom, int index)
+    const tg_line *tg_geom_line_at(const tg_geom *geom, int index)
+    const tg_poly *tg_geom_poly_at(const tg_geom *geom, int index)
 
 from libc.stdlib cimport malloc, free
 from libc.string cimport memset
@@ -189,6 +197,12 @@ cdef Poly _poly_from_ptr(tg_poly *ptr):
     cdef Poly p = Poly.__new__(Poly)
     p.poly = ptr
     return p
+
+cdef Line _line_from_ptr(tg_line *ptr):
+    cdef Line l = Line.__new__(Line)
+    l.line = ptr
+    l.owns_pointer = False
+    return l
 
 
 cdef class Geometry:
@@ -342,6 +356,53 @@ cdef class Geometry:
         result = bytes(buf[:n])
         free(buf)
         return result
+
+    cpdef point(self):
+        """Get point from Point geometry"""
+        cdef tg_point pt = tg_geom_point(self.geom)
+        return Point(pt.x, pt.y)
+
+    cpdef line(self):
+        """Get line from LineString geometry"""
+        cdef const tg_line *ln = tg_geom_line(self.geom)
+        return _line_from_ptr(<tg_line *>ln)
+
+    cpdef poly(self):
+        """Get polygon from Polygon geometry"""
+        cdef const tg_poly *p = tg_geom_poly(self.geom)
+        return Poly._from_c_poly(<tg_poly *>p)  # Cast away const for Cython compatibility
+
+    def __getitem__(self, idx):
+        cdef const tg_geom *g
+        t = tg_geom_typeof(self.geom)
+        # 1: Point, 2: LineString, 3: Polygon, 4: MultiPoint, 5: MultiLineString, 6: MultiPolygon, 7: GeometryCollection
+        if t == 5:  # MultiLineString
+            n = tg_geom_num_lines(self.geom)
+            if not (0 <= idx < n):
+                raise IndexError("MultiLineString index out of range")
+            ln = tg_geom_line_at(self.geom, idx)
+            from_ptr = _line_from_ptr(<tg_line *>ln)
+            return from_ptr.as_geometry()
+        elif t == 6:  # MultiPolygon
+            n = tg_geom_num_polys(self.geom)
+            if not (0 <= idx < n):
+                raise IndexError("MultiPolygon index out of range")
+            poly = tg_geom_poly_at(self.geom, idx)
+            from_ptr = Poly._from_c_poly(<tg_poly *>poly)
+            return from_ptr.as_geometry()
+        elif t == 7:  # GeometryCollection
+            g = tg_geom_geometry_at(self.geom, idx)
+            if g == NULL:
+                raise IndexError("GeometryCollection index out of range")
+            return _geometry_from_ptr(<tg_geom *>g)
+        else:
+            raise IndexError("Indexing not supported for this geometry type")
+
+    @staticmethod
+    def from_linestring(points):
+        """Create LineString geometry from points"""
+        line = Line(points)
+        return _geometry_from_ptr(tg_geom_new_linestring(line._get_c_line()))
 
     def __dealloc__(self):
         if self.geom:
@@ -531,6 +592,7 @@ cdef class Geometry:
 
 cdef class Point:
     cdef tg_point pt
+
     def __init__(self, x: float, y: float):
         self.pt.x = x
         self.pt.y = y
@@ -555,6 +617,7 @@ cdef class Point:
 
 cdef class Rect:
     cdef tg_rect rect
+
     def __init__(self, min_pt: Point, max_pt: Point):
         self.rect.min = min_pt.pt
         self.rect.max = max_pt.pt
@@ -611,6 +674,7 @@ cdef class Rect:
 cdef class Ring:
     cdef tg_ring *ring
     cdef bint owns_pointer
+
     def __init__(self, points):
         cdef int n = len(points)
         cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
@@ -672,6 +736,8 @@ cdef class Ring:
 
 cdef class Line:
     cdef tg_line *line
+    cdef bint owns_pointer
+
     def __init__(self, points):
         cdef int n = len(points)
         cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
@@ -684,9 +750,10 @@ cdef class Line:
         free(pts)
         if not self.line:
             raise ValueError("Failed to create Line")
+        self.owns_pointer = True
 
     def __dealloc__(self):
-        if self.line:
+        if self.line and self.owns_pointer:
             tg_line_free(self.line)
 
     def num_points(self):
@@ -713,9 +780,18 @@ cdef class Line:
     cdef tg_line *_get_c_line(self):
         return self.line
 
+    def __getitem__(self, idx):
+        n = self.num_points()
+        if not (0 <= idx < n):
+            raise IndexError("Line index out of range")
+        cdef tg_point pt = tg_line_point_at(self.line, idx)
+        return Point(pt.x, pt.y)
+
 
 cdef class Poly:
     cdef tg_poly *poly
+    cdef bint owns_pointer
+
     def __init__(self, exterior, holes=None):
         cdef int nholes = 0
         cdef tg_ring **hole_ptrs = NULL
@@ -750,9 +826,10 @@ cdef class Poly:
             free(hole_ptrs)
         if not self.poly:
             raise ValueError("Failed to create Poly")
+        self.owns_pointer = True
 
     def __dealloc__(self):
-        if self.poly:
+        if self.poly and self.owns_pointer:
             tg_poly_free(self.poly)
 
     def exterior(self):
@@ -761,6 +838,13 @@ cdef class Poly:
 
     def num_holes(self):
         return tg_poly_num_holes(self.poly)
+
+    @staticmethod
+    cdef _from_c_poly(tg_poly *ptr):
+        cdef Poly poly = Poly.__new__(Poly)
+        poly.poly = ptr
+        poly.owns_pointer = False
+        return poly
 
     def hole(self, idx):
         h = tg_poly_hole_at(self.poly, idx)
@@ -778,6 +862,41 @@ cdef class Poly:
 
     cdef tg_poly *_get_c_poly(self):
         return self.poly
+
+
+cdef class Segment:
+    cdef public tg_segment seg
+
+    def __init__(self, a, b):
+        if isinstance(a, Point):
+            self.seg.a.x = a.x
+            self.seg.a.y = a.y
+        else:
+            self.seg.a.x = a[0]
+            self.seg.a.y = a[1]
+        if isinstance(b, Point):
+            self.seg.b.x = b.x
+            self.seg.b.y = b.y
+        else:
+            self.seg.b.x = b[0]
+            self.seg.b.y = b[1]
+
+    def rect(self):
+        cdef tg_rect r = tg_segment_rect(self.seg)
+        return ((r.min.x, r.min.y), (r.max.x, r.max.y))
+
+    def intersects(self, other):
+        if isinstance(other, Segment):
+            return tg_segment_intersects_segment(self.seg, other.seg)
+        raise TypeError("Expected Segment")
+
+    @property
+    def a(self):
+        return Point(self.seg.a.x, self.seg.a.y)
+
+    @property
+    def b(self):
+        return Point(self.seg.b.x, self.seg.b.y)
 
 
 import enum
@@ -808,3 +927,9 @@ def set_polygon_indexing_mode(ix: TGIndex):
     if not isinstance(ix, TGIndex):
         raise TypeError("set_index expects a togo.TGIndex enum value")
     tg_env_set_index(ix)
+
+
+__all__ = [
+    "Geometry", "Point", "Rect", "Ring", "Line", "Poly", "Segment",
+    "set_polygon_indexing_mode", "TGIndex"
+]
