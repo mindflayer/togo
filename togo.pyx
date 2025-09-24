@@ -105,17 +105,23 @@ cdef extern from "tg.h":
     int tg_ring_index_num_levels(const tg_ring *ring)
     int tg_ring_index_level_num_rects(const tg_ring *ring, int levelidx)
     tg_rect tg_ring_index_level_rect(const tg_ring *ring, int levelidx, int rectidx)
-    bint tg_ring_nearest_segment(const tg_ring *ring,
+    bint tg_ring_nearest_segment(
+        const tg_ring *ring,
         double (*rect_dist)(tg_rect rect, int *more, void *udata),
         double (*seg_dist)(tg_segment seg, int *more, void *udata),
         bint (*iter)(tg_segment seg, double dist, int index, void *udata),
-        void *udata)
-    void tg_ring_line_search(const tg_ring *a, const tg_line *b,
+        void *udata
+    )
+    void tg_ring_line_search(
+        const tg_ring *a, const tg_line *b,
         bint (*iter)(tg_segment aseg, int aidx, tg_segment bseg, int bidx, void *udata),
-        void *udata)
-    void tg_ring_ring_search(const tg_ring *a, const tg_ring *b,
+        void *udata
+    )
+    void tg_ring_ring_search(
+        const tg_ring *a, const tg_ring *b,
         bint (*iter)(tg_segment aseg, int aidx, tg_segment bseg, int bidx, void *udata),
-        void *udata)
+        void *udata
+    )
     double tg_ring_area(const tg_ring *ring)
     double tg_ring_perimeter(const tg_ring *ring)
 
@@ -137,18 +143,24 @@ cdef extern from "tg.h":
     int tg_line_index_num_levels(const tg_line *line)
     int tg_line_index_level_num_rects(const tg_line *line, int levelidx)
     tg_rect tg_line_index_level_rect(const tg_line *line, int levelidx, int rectidx)
-    bint tg_line_nearest_segment(const tg_line *line,
+    bint tg_line_nearest_segment(
+        const tg_line *line,
         double (*rect_dist)(tg_rect rect, int *more, void *udata),
         double (*seg_dist)(tg_segment seg, int *more, void *udata),
         bint (*iter)(tg_segment seg, double dist, int index, void *udata),
-        void *udata)
-    void tg_line_line_search(const tg_line *a, const tg_line *b,
+        void *udata
+    )
+    void tg_line_line_search(
+        const tg_line *a, const tg_line *b,
         bint (*iter)(tg_segment aseg, int aidx, tg_segment bseg, int bidx, void *udata),
-        void *udata)
+        void *udata
+    )
     double tg_line_length(const tg_line *line)
 
     # --- Poly functions ---
-    tg_poly *tg_poly_new(const tg_ring *exterior, const tg_ring *const holes[], int nholes)
+    tg_poly *tg_poly_new(
+        const tg_ring *exterior, const tg_ring *const holes[], int nholes
+    )
     void tg_poly_free(tg_poly *poly)
     tg_poly *tg_poly_clone(const tg_poly *poly)
     tg_poly *tg_poly_copy(const tg_poly *poly)
@@ -160,7 +172,9 @@ cdef extern from "tg.h":
     bint tg_poly_clockwise(const tg_poly *poly)
 
     # --- Global environment functions ---
-    void tg_env_set_allocator(void *(*malloc)(size_t), void *(*realloc)(void*, size_t), void (*free)(void*))
+    void tg_env_set_allocator(
+        void *(*malloc)(size_t), void *(*realloc)(void*, size_t), void (*free)(void*)
+    )
     void tg_env_set_index(tg_index ix)
     void tg_env_set_index_spread(int spread)
     void tg_env_set_print_fixed_floats(bint print)
@@ -193,16 +207,11 @@ cdef Geometry _geometry_from_ptr(tg_geom *ptr):
     return g
 
 
-cdef Poly _poly_from_ptr(tg_poly *ptr):
-    cdef Poly p = Poly.__new__(Poly)
-    p.poly = ptr
-    return p
-
 cdef Line _line_from_ptr(tg_line *ptr):
-    cdef Line l = Line.__new__(Line)
-    l.line = ptr
-    l.owns_pointer = False
-    return l
+    cdef Line line_obj = Line.__new__(Line)
+    line_obj.line = ptr
+    line_obj.owns_pointer = False
+    return line_obj
 
 
 cdef class Geometry:
@@ -370,12 +379,13 @@ cdef class Geometry:
     cpdef poly(self):
         """Get polygon from Polygon geometry"""
         cdef const tg_poly *p = tg_geom_poly(self.geom)
-        return Poly._from_c_poly(<tg_poly *>p)  # Cast away const for Cython compatibility
+        return Poly._from_c_poly(<tg_poly *>p)  # Cast away const
 
     def __getitem__(self, idx):
         cdef const tg_geom *g
         t = tg_geom_typeof(self.geom)
-        # 1: Point, 2: LineString, 3: Polygon, 4: MultiPoint, 5: MultiLineString, 6: MultiPolygon, 7: GeometryCollection
+        # 1: Point, 2: LineString, 3: Polygon, 4: MultiPoint,
+        # 5: MultiLineString, 6: MultiPolygon, 7: GeometryCollection
         if t == 5:  # MultiLineString
             n = tg_geom_num_lines(self.geom)
             if not (0 <= idx < n):
@@ -392,7 +402,7 @@ cdef class Geometry:
             g = tg_geom_geometry_at(self.geom, idx)
             if g == NULL:
                 raise IndexError("GeometryCollection index out of range")
-            return _geometry_from_ptr(<tg_geom *>g)
+            return _geometry_from_ptr(tg_geom_clone(g))
         else:
             raise IndexError("Indexing not supported for this geometry type")
 
@@ -413,7 +423,9 @@ cdef class Geometry:
     # --- Factory methods ---
     @staticmethod
     def from_multipoint(points):
-        """Create a MultiPoint geometry from an iterable of Point or (x, y) tuples."""
+        """
+        Create a MultiPoint geometry from an iterable of Point or (x, y) tuples.
+        """
         cdef int n = len(points)
         cdef tg_geom *gptr
         if n == 0:
@@ -441,7 +453,9 @@ cdef class Geometry:
 
     @staticmethod
     def from_multilinestring(lines):
-        """Create a MultiLineString from an iterable of Line or sequences of (x,y)."""
+        """
+        Create a MultiLineString from an iterable of Line or sequences of (x,y).
+        """
         cdef int n = len(lines)
         cdef tg_geom *gptr
         if n == 0:
@@ -497,8 +511,10 @@ cdef class Geometry:
 
     @staticmethod
     def from_geometrycollection(geoms):
-        """Create a GeometryCollection from an iterable of Geometry, Point, Line, Ring, or Poly.
-        For Point or (x,y) input, temporary tg_geom objects are created and freed after cloning.
+        """
+        Create a GeometryCollection from an iterable of Geometry, Point, Line,
+        Ring, or Poly. For Point or (x,y) input, temporary tg_geom objects are
+        created and freed after cloning.
         """
         cdef int n = len(geoms)
         cdef tg_geom *gptr
@@ -513,16 +529,18 @@ cdef class Geometry:
         cdef tg_geom **temp_to_free = NULL
         cdef int temp_count = 0
         cdef int i
-        # two-pass allocation for temporary geoms created from Points/tuples
-        # first pass: count how many temps we need
+        cdef int j
+        cdef tg_geom *tmpg = NULL
+        cdef tg_poly *tmp_poly = NULL
+        cdef tg_point tmppt
+        # two-pass allocation for temporary geoms created
+        # from Points/tuples/Line/Ring/Poly
         for i in range(n):
             obj = geoms[i]
             if isinstance(obj, Geometry):
                 continue
-            elif isinstance(obj, Point):
+            elif isinstance(obj, (Point, Line, Ring, Poly)):
                 temp_count += 1
-            elif isinstance(obj, Line) or isinstance(obj, Ring) or isinstance(obj, Poly):
-                continue
             else:
                 # try tuple-like point
                 try:
@@ -530,12 +548,17 @@ cdef class Geometry:
                     temp_count += 1
                 except Exception:
                     free(arr)
-                    raise TypeError("geometrycollection expects Geometry, Point/(x,y), Line, Ring, or Poly")
+                    raise TypeError(
+                        "geometrycollection expects Geometry, Point/(x,y), "
+                        "Line, Ring, or Poly"
+                    )
         if temp_count > 0:
             temp_to_free = <tg_geom **>malloc(temp_count * sizeof(tg_geom *))
             if not temp_to_free:
                 free(arr)
-                raise MemoryError("Failed to allocate temporary geoms for GeometryCollection")
+                raise MemoryError(
+                    "Failed to allocate temporary geoms for GeometryCollection"
+                )
         temp_count = 0
         for i in range(n):
             obj = geoms[i]
@@ -550,16 +573,68 @@ cdef class Geometry:
                                 tg_geom_free(temp_to_free[j])
                         free(temp_to_free)
                     free(arr)
-                    raise ValueError("Failed to create temporary Point geometry")
+                    raise ValueError(
+                        "Failed to create temporary Point geometry"
+                    )
                 temp_to_free[temp_count] = tmpg
                 temp_count += 1
                 arr[i] = tmpg
             elif isinstance(obj, Line):
-                arr[i] = <const tg_geom *>(<Line>obj)._get_c_line()
+                tmpg = tg_geom_new_linestring((<Line>obj)._get_c_line())
+                if not tmpg:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError(
+                        "Failed to create temporary LineString geometry"
+                    )
+                temp_to_free[temp_count] = tmpg
+                temp_count += 1
+                arr[i] = tmpg
             elif isinstance(obj, Ring):
-                arr[i] = <const tg_geom *>(<Ring>obj)._get_c_ring()
+                # Convert ring to a temporary polygon geometry
+                tmp_poly = tg_poly_new((<Ring>obj)._get_c_ring(), NULL, 0)
+                if not tmp_poly:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary Poly from Ring")
+                tmpg = tg_geom_new_polygon(<const tg_poly *>tmp_poly)
+                tg_poly_free(tmp_poly)
+                if not tmpg:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError(
+                        "Failed to create temporary Polygon geometry from Ring"
+                    )
+                temp_to_free[temp_count] = tmpg
+                temp_count += 1
+                arr[i] = tmpg
             elif isinstance(obj, Poly):
-                arr[i] = <const tg_geom *>(<Poly>obj)._get_c_poly()
+                tmpg = tg_geom_new_polygon((<Poly>obj)._get_c_poly())
+                if not tmpg:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError(
+                        "Failed to create temporary Polygon geometry"
+                    )
+                temp_to_free[temp_count] = tmpg
+                temp_count += 1
+                arr[i] = tmpg
             else:
                 # assume tuple-like point already validated
                 tmppt = tg_point(x=float(obj[0]), y=float(obj[1]))
@@ -571,7 +646,9 @@ cdef class Geometry:
                                 tg_geom_free(temp_to_free[j])
                         free(temp_to_free)
                     free(arr)
-                    raise ValueError("Failed to create temporary Point geometry")
+                    raise ValueError(
+                        "Failed to create temporary Point geometry"
+                    )
                 temp_to_free[temp_count] = tmpg2
                 temp_count += 1
                 arr[i] = tmpg2
@@ -648,9 +725,13 @@ cdef class Rect:
 
     def intersects(self, other):
         if isinstance(other, Rect):
-            return tg_rect_intersects_rect(self.rect, (<Rect>other)._get_c_rect())
+            return tg_rect_intersects_rect(
+                self.rect, (<Rect>other)._get_c_rect()
+            )
         elif isinstance(other, Point):
-            return tg_rect_intersects_point(self.rect, (<Point>other)._get_c_point())
+            return tg_rect_intersects_point(
+                self.rect, (<Point>other)._get_c_point()
+            )
         else:
             raise TypeError("intersects expects Rect or Point")
 
@@ -726,10 +807,19 @@ cdef class Ring:
         return tg_ring_clockwise(self.ring)
 
     def as_geometry(self):
-        return _geometry_from_ptr(<tg_geom *>self.ring)
+        # Convert the ring to a Polygon geometry with this ring as exterior
+        cdef tg_poly *p = tg_poly_new(self.ring, NULL, 0)
+        if not p:
+            raise ValueError("Failed to create Poly from Ring")
+        cdef tg_geom *g = tg_geom_new_polygon(<const tg_poly *>p)
+        tg_poly_free(p)
+        if not g:
+            raise ValueError("Failed to create Geometry from Ring")
+        return _geometry_from_ptr(g)
 
     def as_poly(self):
-        return _poly_from_ptr(<tg_poly *>self.ring)
+        # Build a new Poly object from this Ring
+        return Poly(self)
 
 
 cdef class Line:
@@ -773,7 +863,10 @@ cdef class Line:
         return tg_line_clockwise(self.line)
 
     def as_geometry(self):
-        return _geometry_from_ptr(<tg_geom *>self.line)
+        cdef tg_geom *g = tg_geom_new_linestring(self.line)
+        if not g:
+            raise ValueError("Failed to create Geometry from LineString")
+        return _geometry_from_ptr(g)
 
     cdef tg_line *_get_c_line(self):
         return self.line
@@ -856,7 +949,10 @@ cdef class Poly:
         return tg_poly_clockwise(self.poly)
 
     def as_geometry(self):
-        return _geometry_from_ptr(<tg_geom *>self.poly)
+        cdef tg_geom *g = tg_geom_new_polygon(self.poly)
+        if not g:
+            raise ValueError("Failed to create Geometry from Polygon")
+        return _geometry_from_ptr(g)
 
     cdef tg_poly *_get_c_poly(self):
         return self.poly
