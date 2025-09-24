@@ -74,49 +74,26 @@ second = gc[1]
 print(first.type_string())  # 'Point'
 ```
 
-### Point, Line, Ring, Poly
-
-Building blocks for constructing geometries:
+### Point
 
 ```python
+from togo import Point
+
 # Create a point
 p = Point(1.0, 2.0)
 
-# Create a line
-line = Line([(0,0), (1,1), (2,2)])
+# Access coordinates
+print(f"X: {p.x}, Y: {p.y}")
 
-# Create a ring (closed line)
-ring = Ring([(0,0), (10,0), (10,10), (0,10), (0,0)])
+# Get as a tuple
+print(p.as_tuple())
 
-# Create a polygon with holes
-exterior = Ring([(0,0), (10,0), (10,10), (0,10), (0,0)])
-hole = Ring([(2,2), (8,2), (8,8), (2,8), (2,2)])
-poly = Poly(exterior, [hole])
-```
-
-### MultiGeometries
-
-Creating collections of geometries:
-
-```python
-# Create a MultiPoint
-multi_point = Geometry.from_multipoint([(0,0), (1,1), Point(2,2)])
-
-# Create a MultiLineString
-multi_line = Geometry.from_multilinestring([
-    [(0,0), (1,1)],
-    Line([(2,2), (3,3)])
-])
-
-# Create a MultiPolygon
-poly1 = Poly(Ring([(0,0), (1,0), (1,1), (0,1), (0,0)]))
-poly2 = Poly(Ring([(2,2), (3,2), (3,3), (2,3), (2,2)]))
-multi_poly = Geometry.from_multipolygon([poly1, poly2])
+# Convert to a Geometry object
+geom = p.as_geometry()
+print(geom.type_string())
 ```
 
 ### Segment
-
-Represents a line segment between two points:
 
 ```python
 from togo import Segment, Point
@@ -137,6 +114,101 @@ print(rect)  # ((0.0, 0.0), (1.0, 1.0))
 # Check intersection with another segment
 other = Segment((1, 1), (2, 2))
 print(seg.intersects(other))  # True or False
+```
+
+### Line
+
+```python
+from togo import Line
+
+# Create a line from a list of tuples
+line = Line([(0,0), (1,1), (2,0)])
+
+# Get number of points
+print(f"Number of points: {line.num_points()}")
+
+# Get all points as a list of tuples
+print(f"Points: {line.points()}")
+
+# Get the length of the line
+print(f"Length: {line.length()}")
+
+# Get the bounding box
+print(f"Bounding box: {line.rect()}")
+
+# Get a point by index
+print(f"First point: {line[0].as_tuple()}")
+```
+
+### Ring
+
+```python
+from togo import Ring
+
+# Create a ring (must be closed)
+ring = Ring([(0,0), (10,0), (10,10), (0,10), (0,0)])
+
+# Get area and perimeter
+print(f"Area: {ring.area()}")
+print(f"Perimeter: {ring.perimeter()}")
+
+# Check if it's convex or clockwise
+print(f"Is convex: {ring.is_convex()}")
+print(f"Is clockwise: {ring.is_clockwise()}")
+
+# Get bounding box
+min_pt, max_pt = ring.rect().min, ring.rect().max
+print(f"Bounding box: {min_pt.as_tuple()}, {max_pt.as_tuple()}")
+```
+
+### Poly
+
+```python
+from togo import Poly, Ring, Point
+
+# Create a polygon with one exterior ring and one interior hole
+exterior = Ring([(0,0), (10,0), (10,10), (0,10), (0,0)])
+hole1 = Ring([(1,1), (2,1), (2,2), (1,2), (1,1)])
+poly = Poly(exterior, holes=[hole1])
+
+# Get the exterior ring
+ext_ring = poly.exterior()
+print(f"Exterior has {ext_ring.num_points()} points")
+
+# Get number of holes
+print(f"Number of holes: {poly.num_holes()}")
+
+# Get a hole by index
+h = poly.hole(0)
+print(f"Hole area: {h.area()}")
+
+# A polygon is a geometry, so you can use geometry methods
+geom = poly.as_geometry()
+print(f"Contains point (5,5): {geom.contains(Point(5,5).as_geometry())}")
+# Point is inside the hole, so it is not contained by the polygon
+print(f"Contains point (1.5,1.5): {geom.contains(Point(1.5,1.5).as_geometry())}")
+```
+
+### MultiGeometries
+
+Creating collections of geometries:
+
+```python
+from togo import Geometry, Point, Line, Poly, Ring
+
+# Create a MultiPoint
+multi_point = Geometry.from_multipoint([(0,0), (1,1), Point(2,2)])
+
+# Create a MultiLineString
+multi_line = Geometry.from_multilinestring([
+    [(0,0), (1,1)],
+    Line([(2,2), (3,3)])
+])
+
+# Create a MultiPolygon
+poly1 = Poly(Ring([(0,0), (1,0), (1,1), (0,1), (0,0)]))
+poly2 = Poly(Ring([(2,2), (3,2), (3,3), (2,3), (2,2)]))
+multi_poly = Geometry.from_multipolygon([poly1, poly2])
 ```
 
 ## Polygon Indexing
