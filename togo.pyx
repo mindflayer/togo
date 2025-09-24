@@ -237,6 +237,27 @@ cdef class Geometry:
         # The pointer will be set after __cinit__ in _geometry_from_ptr
         # So we just leave geom as NULL for now
 
+    def __str__(self):
+        if self.geom == NULL:
+            return "Geometry(NULL)"
+        # Prefer WKT for a concise, standard representation
+        try:
+            return self.to_wkt()
+        except Exception:
+            # Fallback to type string with rect if WKT fails
+            try:
+                t = self.type_string()
+            except Exception:
+                t = "?"
+            try:
+                r = self.rect()
+            except Exception:
+                r = None
+            return f"Geometry(type={t}, rect={r})"
+
+    def __repr__(self):
+        return self.__str__()
+
     def type(self):
         return tg_geom_typeof(self.geom)
 
@@ -672,6 +693,12 @@ cdef class Point:
         self.pt.x = x
         self.pt.y = y
 
+    def __str__(self):
+        return f"Point({self.pt.x}, {self.pt.y})"
+
+    def __repr__(self):
+        return self.__str__()
+
     @property
     def x(self):
         return self.pt.x
@@ -696,6 +723,15 @@ cdef class Rect:
     def __init__(self, min_pt: Point, max_pt: Point):
         self.rect.min = min_pt.pt
         self.rect.max = max_pt.pt
+
+    def __str__(self):
+        return (
+            f"Rect(min=({self.rect.min.x}, {self.rect.min.y}), "
+            f"max=({self.rect.max.x}, {self.rect.max.y}))"
+        )
+
+    def __repr__(self):
+        return self.__str__()
 
     @property
     def min(self):
@@ -767,6 +803,18 @@ cdef class Ring:
         if not self.ring:
             raise ValueError("Failed to create Ring")
         self.owns_pointer = True
+
+    def __str__(self):
+        try:
+            n = tg_ring_num_points(self.ring)
+            pts = tg_ring_points(self.ring)
+            pypts = [(pts[i].x, pts[i].y) for i in range(n)]
+            return f"Ring(n={n}, points={pypts})"
+        except Exception:
+            return "Ring(<unavailable>)"
+
+    def __repr__(self):
+        return self.__str__()
 
     @staticmethod
     cdef Ring from_ptr(tg_ring *ptr):
@@ -843,6 +891,18 @@ cdef class Line:
     def __dealloc__(self):
         if self.line and self.owns_pointer:
             tg_line_free(self.line)
+
+    def __str__(self):
+        try:
+            n = tg_line_num_points(self.line)
+            pts = tg_line_points(self.line)
+            pypts = [(pts[i].x, pts[i].y) for i in range(n)]
+            return f"Line(n={n}, points={pypts})"
+        except Exception:
+            return "Line(<unavailable>)"
+
+    def __repr__(self):
+        return self.__str__()
 
     def num_points(self):
         return tg_line_num_points(self.line)
@@ -923,6 +983,20 @@ cdef class Poly:
         if self.poly and self.owns_pointer:
             tg_poly_free(self.poly)
 
+    def __str__(self):
+        try:
+            ext_n = tg_poly_num_holes(self.poly)  # temporarily store holes count
+            # rect
+            r = tg_poly_rect(self.poly)
+            rect_str = f"(({r.min.x}, {r.min.y}), ({r.max.x}, {r.max.y}))"
+            holes_n = ext_n
+            return f"Poly(holes={holes_n}, rect={rect_str})"
+        except Exception:
+            return "Poly(<unavailable>)"
+
+    def __repr__(self):
+        return self.__str__()
+
     def exterior(self):
         ext = tg_poly_exterior(self.poly)
         return Ring.from_ptr(<tg_ring *>ext)
@@ -974,6 +1048,15 @@ cdef class Segment:
         else:
             self.seg.b.x = b[0]
             self.seg.b.y = b[1]
+
+    def __str__(self):
+        return (
+            f"Segment(a=({self.seg.a.x}, {self.seg.a.y}), "
+            f"b=({self.seg.b.x}, {self.seg.b.y}))"
+        )
+
+    def __repr__(self):
+        return self.__str__()
 
     def rect(self):
         cdef tg_rect r = tg_segment_rect(self.seg)
