@@ -381,15 +381,13 @@ cdef class Geometry:
             if not (0 <= idx < n):
                 raise IndexError("MultiLineString index out of range")
             ln = tg_geom_line_at(self.geom, idx)
-            from_ptr = _line_from_ptr(<tg_line *>ln)
-            return from_ptr.as_geometry()
+            return _geometry_from_ptr(tg_geom_new_linestring(<tg_line *>ln))
         elif t == 6:  # MultiPolygon
             n = tg_geom_num_polys(self.geom)
             if not (0 <= idx < n):
                 raise IndexError("MultiPolygon index out of range")
             poly = tg_geom_poly_at(self.geom, idx)
-            from_ptr = Poly._from_c_poly(<tg_poly *>poly)
-            return from_ptr.as_geometry()
+            return _geometry_from_ptr(tg_geom_new_polygon(<tg_poly *>poly))
         elif t == 7:  # GeometryCollection
             g = tg_geom_geometry_at(self.geom, idx)
             if g == NULL:
