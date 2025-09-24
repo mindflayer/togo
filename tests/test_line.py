@@ -48,3 +48,18 @@ def test_line_as_geometry():
     assert g.type_string() == "LineString"
     rect = g.rect()
     assert rect == ((0.0, 0.0), (2.0, 2.0))
+
+
+def test_line_getitem():
+    points = [(10, 20), (30, 40), (50, 60)]
+    line = Line(points)
+    pt0 = line[0]
+    pt1 = line[1]
+    pt2 = line[2]
+    assert pt0.x == 10 and pt0.y == 20
+    assert pt1.x == 30 and pt1.y == 40
+    assert pt2.x == 50 and pt2.y == 60
+    with pytest.raises(IndexError):
+        _ = line[3]
+    with pytest.raises(IndexError):
+        _ = line[-1]
