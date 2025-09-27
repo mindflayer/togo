@@ -5,17 +5,25 @@ from urllib.parse import urlparse
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 
-TG_SOURCE_URL = "https://raw.githubusercontent.com/tidwall/tg/main/tg.c"
-TG_SOURCE_FILENAME = os.path.basename(urlparse(TG_SOURCE_URL).path)
 
-if not os.path.exists(TG_SOURCE_FILENAME):
-    urllib.request.urlretrieve(TG_SOURCE_URL, TG_SOURCE_FILENAME)
+# Download the tg and tgx source and header files if not already present
+NEEDED_FILES = [
+    "https://raw.githubusercontent.com/tidwall/tg/main/tg.c",
+    "https://raw.githubusercontent.com/tidwall/tg/main/tg.h",
+    "https://raw.githubusercontent.com/tidwall/tgx/main/tgx.c",
+    "https://raw.githubusercontent.com/tidwall/tgx/main/tgx.h",
+]
 
-TG_HEADER_URL = "https://raw.githubusercontent.com/tidwall/tg/main/tg.h"
-TG_HEADER_FILENAME = os.path.basename(urlparse(TG_HEADER_URL).path)
 
-if not os.path.exists(TG_HEADER_FILENAME):
-    urllib.request.urlretrieve(TG_HEADER_URL, TG_HEADER_FILENAME)
+def download_if_missing(url: str, filename: str):
+    if not os.path.exists(filename):
+        print(f"Downloading {filename}...")
+        urllib.request.urlretrieve(url, filename)
+
+
+for url in NEEDED_FILES:
+    filename = os.path.basename(urlparse(url).path)
+    download_if_missing(url, filename)
 
 # Enable optional AddressSanitizer build via env var ASAN=1
 asan_enabled = os.environ.get("ASAN") == "1"
@@ -38,8 +46,13 @@ setup(
         [
             Extension(
                 "togo",
-                sources=["togo.pyx", TG_SOURCE_FILENAME],
-                include_dirs=["."],
+                sources=["togo.pyx", "tg.c", "tgx.c"],
+                include_dirs=[
+                    ".",
+                    "/usr/include",
+                    "/usr/include/geos",
+                ],  # Add GEOS include path
+                libraries=["geos_c"],  # Link against libgeos_c
                 extra_compile_args=extra_compile_args,
                 extra_link_args=extra_link_args,
             )

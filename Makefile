@@ -2,6 +2,7 @@ VENV_DIR = .venv
 DIST_DIR = dist
 
 install-deps: clean
+	sudo apt-get update && sudo apt-get install -y libgeos-dev
 	python3 -m venv ${VENV_DIR}
 	${VENV_DIR}/bin/pip install -r requirements.txt
 
@@ -11,7 +12,7 @@ build-c:
 build: install-deps build-c
 
 clean:
-	rm -rf tg.h tg.c togo.c* build/ ${VENV_DIR} .dist-deps ${DIST_DIR}/ *.egg-info/
+	rm -rf tg.h tg.c tgx.h tgx.c togo.c* build/ ${VENV_DIR} .dist-deps ${DIST_DIR}/ *.egg-info/
 
 dist-sdist:
 	${VENV_DIR}/bin/python setup.py sdist

@@ -33,3 +33,6 @@ Tracker = "https://github.com/mindflayer/togo/issues"
 addopts = "-v -x -q"
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.cython-lint]
+max-line-length = 100

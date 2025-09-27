@@ -1,5 +1,5 @@
 import pytest
-from togo import Geometry
+from togo import Geometry, Point, Ring, Poly
 
 
 def test_geometry_wkt():
@@ -193,3 +193,43 @@ def test_geometry_geom_at():
     assert g1.type_string() == "Point"
     assert g0.point().x == 1.0 and g0.point().y == 2.0
     assert g1.point().x == 3.0 and g1.point().y == 4.0
+
+
+def test_tgx_meters_grid():
+    # Create a simple point geometry
+    g = Geometry('{"type": "Point", "coordinates": [1.0, 2.0]}')
+    origin = Point(0.0, 0.0)
+    g2 = g.to_meters_grid(origin)
+    g3 = g2.from_meters_grid(origin)
+    # Should round-trip back to original coordinates
+    assert g3.point().x == pytest.approx(1.0, abs=1e-6)
+    assert g3.point().y == pytest.approx(2.0, abs=1e-6)
+
+
+def test_unary_union_geos_lines():
+    g1 = Geometry("LINESTRING(0 0, 1 1)", fmt="wkt")
+    g2 = Geometry("LINESTRING(1 1, 2 2)", fmt="wkt")
+    u = Geometry.unary_union([g1, g2])
+    assert u.type_string() == "MultiLineString"
+    wkt = u.to_wkt()
+    assert wkt == "MULTILINESTRING((0 0,1 1),(1 1,2 2))"
+
+
+def test_unary_union_geos_polys():
+    # Two intersecting squares
+    outer1 = Ring([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+    poly1 = Poly(outer1)
+    outer2 = Ring([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+    poly2 = Poly(outer2)
+    union_geom = Geometry.unary_union([poly1, poly2])
+    # Should be a single Polygon
+    assert union_geom.type_string() == "Polygon"
+    # Area should be 7 (each square is 4, overlap is 1)
+    # So union area = 4 + 4 - 1 = 7
+    area = union_geom.poly().exterior().area()
+    assert area == 7.0
+    # Bounding box should be ((0,0),(3,3))
+    assert union_geom.rect() == ((0.0, 0.0), (3.0, 3.0))
+    # WKT should represent the merged polygon
+    wkt = union_geom.to_wkt()
+    assert wkt == "POLYGON((2 0,0 0,0 2,1 2,1 3,3 3,3 1,2 1,2 0))"
