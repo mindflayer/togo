@@ -3,7 +3,7 @@ name: Build Wheels
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -23,18 +23,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: |
-          make install-deps
-
-      - name: Build extension
-        run: |
-          make build-c
-
       - name: Build wheel
-        run: |
-          make dist-wheel
-          make dist-check
+        uses: pypa/cibuildwheel@v3.2.0
 
       - name: Build sdist
         if: matrix.os == 'ubuntu-latest'
@@ -45,5 +35,5 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/
+          packages-dir: ./wheelhouse/
           skip-existing: true

@@ -49,12 +49,13 @@ setup(
                 sources=["togo.pyx", "tg.c", "tgx.c"],
                 include_dirs=[
                     ".",
-                    "/usr/include",
-                    "/usr/include/geos",
-                ],  # Add GEOS include path
-                libraries=["geos_c"],  # Link against libgeos_c
+                    "./vendor/geos/include",
+                ],
+                library_dirs=[
+                    "./vendor/geos/lib",
+                ],
+                libraries=["geos_c"],
                 extra_compile_args=extra_compile_args,
-                extra_link_args=extra_link_args,
             )
         ]
     ),

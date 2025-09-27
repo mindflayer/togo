@@ -4,3 +4,4 @@ pytest
 wheel
 twine
 cibuildwheel
+shapely
