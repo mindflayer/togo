@@ -2,6 +2,7 @@ VENV_DIR = .venv
 DIST_DIR = dist
 
 install-deps: clean
+	sudo apt-get update && sudo apt-get install -y libgeos-dev
 	python3 -m venv ${VENV_DIR}
 	${VENV_DIR}/bin/pip install -r requirements.txt
 
