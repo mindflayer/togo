@@ -222,6 +222,30 @@ from togo import TGIndex, set_polygon_indexing_mode
 set_polygon_indexing_mode(TGIndex.NATURAL)  # or NONE, YSTRIPES
 ```
 
+## Integration with tgx and libgeos
+
+Togo integrates with the [tgx](https://github.com/tidwall/tgx) extension and [libgeos](https://libgeos.org/) to provide advanced geometry operations, such as topological unions and conversions between TG and GEOS geometry formats. This allows you to leverage the speed of TG for basic operations and the flexibility of GEOS for more complex tasks.
+
+### Example: Unary Union (GEOS integration)
+
+The `unary_union` method demonstrates this integration. It combines multiple geometries into a single geometry using GEOS's topological union, with all conversions handled automatically:
+
+```python
+from togo import Geometry, Point, Poly, Ring
+
+# Create several polygons
+poly1 = Poly(Ring([(0,0), (2,0), (2,2), (0,2), (0,0)]))
+poly2 = Poly(Ring([(1,1), (3,1), (3,3), (1,3), (1,1)]))
+
+# Perform unary union (requires tgx and libgeos)
+union = Geometry.unary_union([poly1, poly2])
+
+# The result is a single geometry representing the union of the input polygons
+print(union.to_wkt())
+```
+
+This operation uses `tgx` to convert `TG` geometries to `GEOS`, applies the union in `libgeos`, and converts the result back to `TG` format for further use in `ToGo`.
+
 ## Performance Considerations
 
 - Togo is optimized for speed and memory efficiency
