@@ -198,8 +198,22 @@ cdef extern from "tg.h":
     const tg_line *tg_geom_line_at(const tg_geom *geom, int index)
     const tg_poly *tg_geom_poly_at(const tg_geom *geom, int index)
 
+cdef extern from "geos_c.h":
+    ctypedef void *GEOSContextHandle_t
+    ctypedef void *GEOSGeometry
+    GEOSContextHandle_t GEOS_init_r()
+    void GEOS_finish_r(GEOSContextHandle_t handle)
+    GEOSGeometry *GEOSUnaryUnion(const GEOSGeometry *g)
+    GEOSGeometry *GEOSUnaryUnion_r(GEOSContextHandle_t handle, const GEOSGeometry *g)
+
+cdef extern from "tgx.h":
+    GEOSGeometry *tg_geom_to_geos(GEOSContextHandle_t handle, const tg_geom *geom)
+    tg_geom *tg_geom_from_geos(GEOSContextHandle_t handle, GEOSGeometry *geom)
+    tg_geom *tg_geom_to_meters_grid(const tg_geom *geom, tg_point origin)
+    tg_geom *tg_geom_from_meters_grid(const tg_geom *geom, tg_point origin)
+
+
 from libc.stdlib cimport malloc, free
-from libc.string cimport memset
 
 cdef Geometry _geometry_from_ptr(tg_geom *ptr):
     cdef Geometry g = Geometry.__new__(Geometry)
@@ -332,60 +346,79 @@ cdef class Geometry:
     def intersects(self, other: Geometry):
         return tg_geom_intersects(self.geom, other.geom) != 0
 
-    def to_wkt(self):
-        cdef size_t bufsize = 4096
-        cdef char *buf = <char *>malloc(bufsize)
+    cdef _to_string(self, size_t (*writer_func)(const tg_geom*, char*, size_t), format_name):
+        # First call to get the required buffer size
+        cdef size_t required_size = writer_func(self.geom, NULL, 0)
+        if required_size == 0:
+            return ""
+
+        # Allocate buffer with an extra byte for the null terminator
+        cdef char *buf = <char *>malloc(required_size + 1)
         if not buf:
-            raise MemoryError("Failed to allocate memory for WKT buffer")
-        memset(buf, 0, bufsize)
-        n = tg_geom_wkt(self.geom, buf, bufsize)
-        result = (<bytes>buf[:n]).decode("utf-8")
+            raise MemoryError(
+                f"Failed to allocate memory for {format_name} buffer"
+            )
+
+        # Second call to actually write the data
+        cdef size_t n = writer_func(self.geom, buf, required_size + 1)
+        # Convert to bytes and remove any trailing null terminators
+        result = (<bytes>buf[:n]).rstrip(b"\x00").decode("utf-8")
         free(buf)
         return result
 
+    def to_wkt(self):
+        return self._to_string(tg_geom_wkt, "WKT")
+
     def to_geojson(self):
-        cdef size_t bufsize = 4096
-        cdef char *buf = <char *>malloc(bufsize)
+        return self._to_string(tg_geom_geojson, "GeoJSON")
+
+    cdef _to_binary(
+        self,
+        size_t (*writer_func)(const tg_geom*, unsigned char*, size_t),
+        format_name
+    ):
+        # First call to get the required buffer size
+        cdef size_t required_size = writer_func(self.geom, NULL, 0)
+        if required_size == 0:
+            return b""
+
+        # Allocate buffer with the exact required size
+        cdef unsigned char *buf = <unsigned char *>malloc(required_size)
         if not buf:
-            raise MemoryError("Failed to allocate memory for GeoJSON buffer")
-        memset(buf, 0, bufsize)
-        n = tg_geom_geojson(self.geom, buf, bufsize)
-        result = (<bytes>buf[:n]).decode("utf-8")
+            raise MemoryError(
+                f"Failed to allocate memory for {format_name} buffer"
+            )
+
+        # Second call to actually write the data
+        cdef size_t n = writer_func(self.geom, buf, required_size)
+        # Ensure we don't read beyond the allocated buffer
+        cdef size_t actual_len = min(n, required_size)
+        result = bytes(buf[:actual_len])
         free(buf)
         return result
 
     def to_wkb(self):
-        cdef size_t bufsize = 4096
-        cdef unsigned char *buf = <unsigned char *>malloc(bufsize)
-        if not buf:
-            raise MemoryError("Failed to allocate memory for WKB buffer")
-        memset(buf, 0, bufsize)
-        n = tg_geom_wkb(self.geom, buf, bufsize)
-        result = bytes(buf[:n])
-        free(buf)
-        return result
+        return self._to_binary(tg_geom_wkb, "WKB")
 
     def to_hex(self):
-        cdef size_t bufsize = 4096
-        cdef char *buf = <char *>malloc(bufsize)
-        if not buf:
-            raise MemoryError("Failed to allocate memory for HEX buffer")
-        memset(buf, 0, bufsize)
-        n = tg_geom_hex(self.geom, buf, bufsize)
-        result = (<bytes>buf[:n]).decode("utf-8")
-        free(buf)
-        return result
+        return self._to_string(tg_geom_hex, "HEX")
 
     def to_geobin(self):
-        cdef size_t bufsize = 4096
-        cdef unsigned char *buf = <unsigned char *>malloc(bufsize)
-        if not buf:
-            raise MemoryError("Failed to allocate memory for Geobin buffer")
-        memset(buf, 0, bufsize)
-        n = tg_geom_geobin(self.geom, buf, bufsize)
-        result = bytes(buf[:n])
-        free(buf)
-        return result
+        return self._to_binary(tg_geom_geobin, "Geobin")
+
+    def to_meters_grid(self, origin: Point):
+        """Convert geometry to meters grid using tgx."""
+        cdef tg_geom *g2 = tg_geom_to_meters_grid(self.geom, origin._get_c_point())
+        if not g2:
+            raise ValueError("tgx meters grid conversion failed")
+        return _geometry_from_ptr(g2)
+
+    def from_meters_grid(self, origin: Point):
+        """Convert geometry from meters grid using tgx."""
+        cdef tg_geom *g2 = tg_geom_from_meters_grid(self.geom, origin._get_c_point())
+        if not g2:
+            raise ValueError("tgx from meters grid conversion failed")
+        return _geometry_from_ptr(g2)
 
     cpdef point(self):
         """Get point from Point geometry"""
@@ -684,6 +717,155 @@ cdef class Geometry:
         if not gptr:
             raise ValueError("Failed to create GeometryCollection")
         return _geometry_from_ptr(gptr)
+
+    @staticmethod
+    def unary_union(geoms):
+        """Return the unary union of a sequence of geometries using GEOS."""
+        cdef int n = len(geoms)
+        if n == 0:
+            raise ValueError("unary_union requires at least one geometry")
+        cdef const tg_geom **arr = <const tg_geom **>malloc(n * sizeof(tg_geom *))
+        if not arr:
+            raise MemoryError("Failed to allocate geometry array for unary_union")
+        cdef tg_geom **temp_to_free = NULL
+        cdef int temp_count = 0
+        cdef int i, j
+        cdef tg_geom *tmpg = NULL
+        cdef tg_poly *tmp_poly = NULL
+        cdef tg_point tmppt
+        # Count temporaries needed
+        for i in range(n):
+            obj = geoms[i]
+            if isinstance(obj, Geometry):
+                continue
+            elif isinstance(obj, (Point, Line, Ring, Poly)):
+                temp_count += 1
+            else:
+                try:
+                    _x, _y = float(obj[0]), float(obj[1])
+                    temp_count += 1
+                except Exception:
+                    free(arr)
+                    raise TypeError(
+                        "unary_union expects Geometry, Point/(x,y), Line, Ring, or Poly"
+                    )
+        if temp_count > 0:
+            temp_to_free = <tg_geom **>malloc(temp_count * sizeof(tg_geom *))
+            if not temp_to_free:
+                free(arr)
+                raise MemoryError(
+                    "Failed to allocate temporary geoms for unary_union"
+                )
+        temp_count = 0
+        for i in range(n):
+            obj = geoms[i]
+            if isinstance(obj, Geometry):
+                arr[i] = (<Geometry>obj)._get_c_geom()
+            elif isinstance(obj, Point):
+                tmpg = tg_geom_new_point((<Point>obj)._get_c_point())
+                if not tmpg:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary Point geometry")
+                temp_to_free[temp_count] = tmpg
+                temp_count += 1
+                arr[i] = tmpg
+            elif isinstance(obj, Line):
+                tmpg = tg_geom_new_linestring((<Line>obj)._get_c_line())
+                if not tmpg:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary LineString geometry")
+                temp_to_free[temp_count] = tmpg
+                temp_count += 1
+                arr[i] = tmpg
+            elif isinstance(obj, Ring):
+                tmp_poly = tg_poly_new((<Ring>obj)._get_c_ring(), NULL, 0)
+                if not tmp_poly:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary Poly from Ring")
+                tmpg = tg_geom_new_polygon(<const tg_poly *>tmp_poly)
+                tg_poly_free(tmp_poly)
+                if not tmpg:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary Polygon geometry from Ring")
+                temp_to_free[temp_count] = tmpg
+                temp_count += 1
+                arr[i] = tmpg
+            elif isinstance(obj, Poly):
+                tmpg = tg_geom_new_polygon((<Poly>obj)._get_c_poly())
+                if not tmpg:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary Polygon geometry")
+                temp_to_free[temp_count] = tmpg
+                temp_count += 1
+                arr[i] = tmpg
+            else:
+                tmppt = tg_point(x=float(obj[0]), y=float(obj[1]))
+                tmpg2 = tg_geom_new_point(tmppt)
+                if not tmpg2:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError("Failed to create temporary Point geometry")
+                temp_to_free[temp_count] = tmpg2
+                temp_count += 1
+                arr[i] = tmpg2
+        gptr = tg_geom_new_geometrycollection(arr, n)
+        if temp_to_free != NULL:
+            for i in range(temp_count):
+                if temp_to_free[i] != NULL:
+                    tg_geom_free(temp_to_free[i])
+            free(temp_to_free)
+        free(arr)
+        if not gptr:
+            raise ValueError("Failed to create GeometryCollection for unary_union")
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            tg_geom_free(gptr)
+            raise RuntimeError("Failed to initialize GEOS context")
+        cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, gptr)
+        if g_geos == NULL:
+            GEOS_finish_r(ctx)
+            tg_geom_free(gptr)
+            raise RuntimeError("Failed to convert TG geometry to GEOS")
+        cdef GEOSGeometry *g_union = GEOSUnaryUnion_r(ctx, g_geos)
+        if g_union == NULL:
+            GEOS_finish_r(ctx)
+            tg_geom_free(gptr)
+            raise RuntimeError("GEOSUnaryUnion failed")
+        cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_union)
+        GEOS_finish_r(ctx)
+        tg_geom_free(gptr)
+        if g_tg == NULL:
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+        return _geometry_from_ptr(g_tg)
 
 
 cdef class Point:

@@ -21,6 +21,7 @@ except Exception as e:
 # Import Shapely with compatibility across 1.x/2.x
 try:
     import shapely
+    from shapely.ops import unary_union
 
     try:
         # Shapely 2.x preferred API
@@ -231,6 +232,18 @@ def main():
         ),
         lambda: shp_from_wkt(wkt_point).equals(shp_from_geojson(geojson_point)),
         iters=3000,
+    )
+
+    # Unary union (polygon merge)
+    bench_case(
+        "unary_union (merge two polygons)",
+        lambda: Geometry.unary_union(
+            [Geometry(TOGO_JSON, fmt="geojson"), Geometry(BENIN_JSON, fmt="geojson")]
+        ),
+        lambda: unary_union(
+            [shp_from_geojson(TOGO_JSON), shp_from_geojson(BENIN_JSON)]
+        ),
+        iters=2000,
     )
 
     print("\nNote: Results are rough microbenchmarks. Real-world performance can vary.")
