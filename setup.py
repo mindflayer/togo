@@ -1,45 +1,22 @@
 import os
-import urllib.request
-from urllib.parse import urlparse
 
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 
 
-# Download the tg and tgx source and header files if not already present
-NEEDED_FILES = [
-    "https://raw.githubusercontent.com/tidwall/tg/main/tg.c",
-    "https://raw.githubusercontent.com/tidwall/tg/main/tg.h",
-    "https://raw.githubusercontent.com/tidwall/tgx/main/tgx.c",
-    "https://raw.githubusercontent.com/tidwall/tgx/main/tgx.h",
+extra_compile_args = [
+    "-ffunction-sections",  # Enable function-level sections
+    "-fdata-sections",  # Enable data-level sections
+]
+# Avoid gc-sections when statically linking C++ libs with RTTI/vtables
+extra_link_args = [
+    # intentionally no --gc-sections
+    "-lstdc++",  # Link against C++ standard library
 ]
 
-
-def download_if_missing(url: str, filename: str):
-    if not os.path.exists(filename):
-        print(f"Downloading {filename}...")
-        urllib.request.urlretrieve(url, filename)
-
-
-for url in NEEDED_FILES:
-    filename = os.path.basename(urlparse(url).path)
-    download_if_missing(url, filename)
-
-# Enable optional AddressSanitizer build via env var ASAN=1
-asan_enabled = os.environ.get("ASAN") == "1"
-extra_compile_args = []
-extra_link_args = []
-if asan_enabled:
-    # Favor debuggability over speed
-    extra_compile_args += [
-        "-O1",
-        "-g",
-        "-fno-omit-frame-pointer",
-        "-fsanitize=address",
-    ]
-    extra_link_args += [
-        "-fsanitize=address",
-    ]
+# Paths to GEOS headers and libraries
+geos_include = os.path.abspath("vendor/geos/include")
+geos_lib = os.path.abspath("vendor/geos/lib")
 
 setup(
     ext_modules=cythonize(
@@ -48,14 +25,18 @@ setup(
                 "togo",
                 sources=["togo.pyx", "tg.c", "tgx.c"],
                 include_dirs=[
-                    ".",
-                    "./vendor/geos/include",
+                    ".",  # For tg.h and tgx.h
+                    geos_include,
                 ],
-                library_dirs=[
-                    "./vendor/geos/lib",
-                ],
-                libraries=["geos_c"],
+                # Link static archives as whole-archive to keep all needed RTTI/vtables
                 extra_compile_args=extra_compile_args,
+                extra_link_args=[
+                    "-Wl,--whole-archive",  # Link static libraries as whole-archive
+                    os.path.join(geos_lib, "libgeos_c.a"),
+                    os.path.join(geos_lib, "libgeos.a"),
+                    "-Wl,--no-whole-archive",  # End whole-archive linking
+                ]
+                + extra_link_args,
             )
         ]
     ),

@@ -1,7 +1,3 @@
-Cython
-setuptools
+build
 pytest
-wheel
 twine
-cibuildwheel
-shapely

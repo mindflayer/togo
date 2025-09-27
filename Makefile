@@ -4,9 +4,10 @@ DIST_DIR = dist
 install-deps: clean
 	python3 -m venv ${VENV_DIR}
 	${VENV_DIR}/bin/pip install -r requirements.txt
+	${VENV_DIR}/bin/python tools/prepare_tg.py
 
 build-c:
-	LD_LIBRARY_PATH=$(PWD)/vendor/geos/lib:$$LD_LIBRARY_PATH $(VENV_DIR)/bin/python setup.py build_ext --inplace
+	$(VENV_DIR)/bin/python -m build
 
 build: install-deps build-c
 
@@ -27,7 +28,7 @@ publish:
 	${VENV_DIR}/bin/twine upload ${DIST_DIR}/*.tar.gz
 
 test:
-	LD_LIBRARY_PATH=$(PWD)/vendor/geos/lib:$$LD_LIBRARY_PATH $(VENV_DIR)/bin/pytest
+	$(VENV_DIR)/bin/pytest
 
 bench:
 	${VENV_DIR}/bin/python benchmarks/bench_shapely_vs_togo.py
