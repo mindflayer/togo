@@ -39,6 +39,10 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Prepare TG sources
+        run: |
+          python3 tools/prepare_tg.py
+
       - name: Build wheels with cibuildwheel
         uses: pypa/cibuildwheel@v3.2.0
         env:
