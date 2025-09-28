@@ -1,5 +1,4 @@
-include README.md
-include LICENSE
-include togo.pyx
-include tg.c
-include tg.h
+graft vendor
+include *.pyx
+include *.c
+include *.h

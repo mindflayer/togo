@@ -14,21 +14,38 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+    env:
+      # Keep in sync with build workflow/tools/prepare_vendor.sh
+      GEOS_VERSION: '3.14.0'
 
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: recursive
 
+    - name: Compute cache base key
+      id: cache-keys
+      run: |
+        echo "base_key=${{ runner.os }}-geos-${{ env.GEOS_VERSION }}-$(sha256sum tools/prepare_vendor.sh | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+    - name: Restore GEOS vendor cache
+      uses: actions/cache@v4
+      with:
+        path: vendor/geos
+        key: ${{ steps.cache-keys.outputs.base_key }}-tests
+        restore-keys: |
+          ${{ steps.cache-keys.outputs.base_key }}
+
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Build extension
+    - name: Build module and install it
       run: |
         ./tools/prepare_vendor.sh
-        make build-c
+        make build
+        .venv/bin/pip install --force-reinstall dist/togo*.whl
 
     - name: Test with pytest
       run: |

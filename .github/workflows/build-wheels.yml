@@ -12,25 +12,38 @@ jobs:
     permissions:
       contents: read
       id-token: write  # This enables OIDC token creation
+    env:
+      # Keep this in sync with tools/prepare_vendor.sh default or override as needed
+      GEOS_VERSION: '3.14.0'
 
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Build wheel
-        uses: pypa/cibuildwheel@v3.2.0
-
-      - name: Build sdist
-        if: matrix.os == 'ubuntu-latest'
+      - name: Compute cache base key
+        id: cache-keys
         run: |
-          make dist-sdist
-          make dist-check
+          echo "base_key=${{ runner.os }}-geos-${{ env.GEOS_VERSION }}-$(sha256sum tools/prepare_vendor.sh | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Restore GEOS vendor cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/geos
+          key: ${{ steps.cache-keys.outputs.base_key }}-wheels
+          restore-keys: |
+            ${{ steps.cache-keys.outputs.base_key }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v3.2.0
+        env:
+          # Ensure the GEOS_VERSION flows into the container for prepare_vendor.sh
+          GEOS_VERSION: ${{ env.GEOS_VERSION }}
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

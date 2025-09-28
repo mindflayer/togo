@@ -38,7 +38,8 @@ pythonpath = ["."]
 max-line-length = 100
 
 [tool.cibuildwheel]
-skip = ["*-musllinux_*"]
+#skip = ["*-musllinux_*"]
 build-verbosity = 1
 before-build = "bash tools/prepare_vendor.sh"
-repair-wheel-command = "LD_LIBRARY_PATH=/project/vendor/geos/lib auditwheel repair -w {dest_dir} {wheel}"
+# Compute platform ID from CIBW_BUILD and point LD_LIBRARY_PATH at the right vendor dir for repair
+repair-wheel-command = "PLATFORM_ID=$(echo \"$CIBW_BUILD\" | cut -d- -f2-); LD_LIBRARY_PATH=/project/vendor/geos/${PLATFORM_ID}/lib auditwheel repair -w {dest_dir} {wheel}"

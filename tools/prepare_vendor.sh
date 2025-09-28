@@ -1,27 +1,64 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-make install-deps
+# Repo root (works both locally and inside cibuildwheel containers)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+VENDOR_DIR="${REPO_ROOT}/vendor/geos"
 
-# Ensure vendor directories exist
-mkdir -p vendor/geos/lib
+# GEOS version to build (allow override from environment)
+GEOS_VERSION="${GEOS_VERSION:-3.14.0}"
+GEOS_DIR="geos-${GEOS_VERSION}"
+TARBALL="${GEOS_VERSION}.tar.gz"
+TARBALL_URL="https://github.com/libgeos/geos/archive/refs/tags/${GEOS_VERSION}.tar.gz"
 
-# Remove any existing files in vendor/geos/lib to avoid conflicts
-find vendor/geos/lib -type f -delete
-find vendor/geos/lib -type l -delete
+# Derive a platform identifier:
+#  - in cibuildwheel, CIBW_BUILD looks like cp311-manylinux_x86_64; we keep the part after first '-'
+#  - locally, fall back to 'local'
+CIBW_BUILD_TAG=${CIBW_BUILD:-local}
+if [[ "${CIBW_BUILD_TAG}" == *-* ]]; then
+  PLATFORM_ID="${CIBW_BUILD_TAG#*-}"
+else
+  PLATFORM_ID="${CIBW_BUILD_TAG}"
+fi
 
-# Find Shapely's GEOS libraries and header using Python
-GEOS_LIB_DIR=.venv/lib/python3.*/site-packages/shapely.libs
+INSTALL_PREFIX="${VENDOR_DIR}/${PLATFORM_ID}"
+INCLUDE_DIR="${INSTALL_PREFIX}/include"
+LIB_DIR="${INSTALL_PREFIX}/lib"
 
-VENDOR_DIR=vendor/geos/lib
+# Short-circuit if we already have the libraries for this platform
+if [[ -f "${LIB_DIR}/libgeos.a" && -f "${LIB_DIR}/libgeos_c.a" && -f "${INCLUDE_DIR}/geos_c.h" ]]; then
+  echo "GEOS already prepared for platform '${PLATFORM_ID}' at ${INSTALL_PREFIX}. Skipping build."
+  exit 0
+fi
 
-cp ${GEOS_LIB_DIR}/libgeos-*.so.* ${VENDOR_DIR}/
-cp ${GEOS_LIB_DIR}/libgeos_c-*.so.* ${VENDOR_DIR}/
-cd ${VENDOR_DIR}
-ln -sf libgeos-*.so.* libgeos.so
-ln -sf libgeos_c-*.so.* libgeos_c.so
-cd -
+echo "Preparing GEOS ${GEOS_VERSION} for platform '${PLATFORM_ID}'..."
+mkdir -p "${INCLUDE_DIR}" "${LIB_DIR}"
 
-touch vendor/geos/include/geos_c.h
+# Download and unpack
+rm -rf "${GEOS_DIR}" "${TARBALL}"
+curl -fsSL -o "${TARBALL}" "${TARBALL_URL}"
+tar -xzf "${TARBALL}"
 
-echo "Shapely GEOS libraries and header have been copied to vendor/geos/lib."
+# Build static libs
+pushd "${GEOS_DIR}" >/dev/null
+mkdir -p build
+pushd build >/dev/null
+cmake .. -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+make -j"$(nproc)"
+popd >/dev/null
+
+# Copy artifacts
+cp "build/lib/libgeos.a" "${LIB_DIR}/"
+cp "build/lib/libgeos_c.a" "${LIB_DIR}/"
+cp "build/capi/geos_c.h" "${INCLUDE_DIR}/"
+mkdir -p "${INCLUDE_DIR}/geos"
+cp "include/geos/export.h" "${INCLUDE_DIR}/geos/"
+
+popd >/dev/null
+
+# Cleanup
+rm -rf "${GEOS_DIR}" "${TARBALL}"
+
+echo "GEOS prepared at: ${INSTALL_PREFIX}"
+# Print a lightweight tree using find to avoid tree dependency
+find "${INSTALL_PREFIX}" -maxdepth 2 -type f -printf "%P\n" | sed "s#^#vendor/geos/${PLATFORM_ID}/#"
