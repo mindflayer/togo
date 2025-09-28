@@ -28,4 +28,4 @@ rm -rf ${GEOS_DIR}
 rm ${GEOS_VERSION}.tar.gz
 
 echo "Shapely GEOS static libraries and header have been built and copied to ${VENDOR_GEOS_DIR}."
-tree vendor/geos
+ls -R ls -Rl ${VENDOR_GEOS_DIR}
