@@ -3,7 +3,7 @@ DIST_DIR = dist
 
 install-deps: clean
 	python3 -m venv ${VENV_DIR}
-	${VENV_DIR}/bin/pip install -r requirements.txt
+	${VENV_DIR}/bin/pip install -U pip -r requirements.txt
 	${VENV_DIR}/bin/python tools/prepare_tg.py
 
 build-c:
