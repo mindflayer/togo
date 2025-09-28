@@ -44,7 +44,7 @@ jobs:
     - name: Build extension
       run: |
         ./tools/prepare_vendor.sh
-        make build-c
+        make build
 
     - name: Test with pytest
       run: |
