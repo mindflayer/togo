@@ -45,7 +45,7 @@ jobs:
       run: |
         ./tools/prepare_vendor.sh
         make build
-        pip install --force-reinstall dist/togo*.whl
+        .venv/bin/pip install --force-reinstall dist/togo*.whl
 
     - name: Test with pytest
       run: |
