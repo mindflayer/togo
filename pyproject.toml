@@ -38,7 +38,7 @@ pythonpath = ["."]
 max-line-length = 100
 
 [tool.cibuildwheel]
-skip = ["*-musllinux_*"]
+#skip = ["*-musllinux_*"]
 build-verbosity = 1
 before-build = "bash tools/prepare_vendor.sh"
 repair-wheel-command = "LD_LIBRARY_PATH=/project/vendor/geos/lib auditwheel repair -w {dest_dir} {wheel}"

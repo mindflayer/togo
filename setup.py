@@ -28,8 +28,8 @@ setup(
                     ".",  # For tg.h and tgx.h
                     geos_include,
                 ],
-                # Link static archives as whole-archive to keep all needed RTTI/vtables
                 extra_compile_args=extra_compile_args,
+                # Link static archives as whole-archive to keep all needed RTTI/vtables
                 extra_link_args=[
                     "-Wl,--whole-archive",  # Link static libraries as whole-archive
                     os.path.join(geos_lib, "libgeos_c.a"),
