@@ -6,7 +6,7 @@ GEOS_VERSION=3.14.0
 GEOS_DIR=geos-${GEOS_VERSION}
 
 # download and unpack GEOS
-wget https://github.com/libgeos/geos/archive/refs/tags/${GEOS_VERSION}.tar.gz
+curl -fsSL -o ${GEOS_VERSION}.tar.gz "https://github.com/libgeos/geos/archive/refs/tags/${GEOS_VERSION}.tar.gz"
 tar -xzf ${GEOS_VERSION}.tar.gz
 cd ${GEOS_DIR}
 # build GEOS as static libraries
