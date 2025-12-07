@@ -266,6 +266,44 @@ def main():
         iters=2000,
     )
 
+    # Buffer operations
+    buffer_point = from_wkt("POINT (0 0)")
+    shp_buffer_point = shp_from_wkt("POINT (0 0)")
+
+    buffer_line = from_wkt("LINESTRING (0 0, 10 10, 20 0)")
+    shp_buffer_line = shp_from_wkt("LINESTRING (0 0, 10 10, 20 0)")
+
+    buffer_poly = from_geojson(TOGO_JSON)
+    shp_buffer_poly = shp_from_geojson(TOGO_JSON)
+
+    bench_case(
+        "buffer point (distance=1.0, resolution=8)",
+        lambda: buffer_point.buffer(1.0, resolution=8),
+        lambda: shp_buffer_point.buffer(1.0, resolution=8),
+        iters=500,
+    )
+
+    bench_case(
+        "buffer linestring (distance=2.0, resolution=8)",
+        lambda: buffer_line.buffer(2.0, resolution=8),
+        lambda: shp_buffer_line.buffer(2.0, resolution=8),
+        iters=500,
+    )
+
+    bench_case(
+        "buffer polygon (distance=1.0, resolution=8)",
+        lambda: buffer_poly.buffer(1.0, resolution=8),
+        lambda: shp_buffer_poly.buffer(1.0, resolution=8),
+        iters=200,
+    )
+
+    bench_case(
+        "buffer polygon (distance=1.0, resolution=16, custom join)",
+        lambda: buffer_poly.buffer(1.0, resolution=16, join_style=2),
+        lambda: shp_buffer_poly.buffer(1.0, resolution=16, join_style=2),
+        iters=200,
+    )
+
     print("\nNote: Results are rough microbenchmarks. Real-world performance can vary.")
 
 

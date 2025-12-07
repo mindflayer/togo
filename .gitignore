@@ -213,4 +213,4 @@ marimo/_lsp/
 __marimo__/
 
 # lib GEOS vendor dir
-vendor/geos/lib/
+vendor/

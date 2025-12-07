@@ -205,6 +205,12 @@ cdef extern from "geos_c.h":
     void GEOS_finish_r(GEOSContextHandle_t handle)
     GEOSGeometry *GEOSUnaryUnion(const GEOSGeometry *g)
     GEOSGeometry *GEOSUnaryUnion_r(GEOSContextHandle_t handle, const GEOSGeometry *g)
+    GEOSGeometry *GEOSBuffer(const GEOSGeometry *g, double width)
+    GEOSGeometry *GEOSBuffer_r(GEOSContextHandle_t handle, const GEOSGeometry *g, double width)
+    GEOSGeometry *GEOSBufferWithStyle_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g, double width,
+        int quadSegs, int endCapStyle, int joinStyle, double mitreLimit
+    )
 
 cdef extern from "tgx.h":
     GEOSGeometry *tg_geom_to_geos(GEOSContextHandle_t handle, const tg_geom *geom)
@@ -946,6 +952,57 @@ cdef class Geometry:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
         return _geometry_from_ptr(g_tg)
 
+    def buffer(self, distance: float, resolution: int = 16,
+               cap_style: int = 1, join_style: int = 1,
+               mitre_limit: float = 5.0) -> Geometry:
+        """
+        Return a geometry that is the input geometry buffered by the given distance.
+
+        Parameters:
+        -----------
+        distance : float
+            The buffer distance in the geometry's units
+        resolution : int
+            Number of segments per quadrant (default: 16). Higher values = smoother buffer.
+        cap_style : int
+            End cap style: 1=round (default), 2=flat, 3=square
+        join_style : int
+            Join style: 1=round (default), 2=mitre, 3=bevel
+        mitre_limit : float
+            Mitre ratio limit for joins (default: 5.0)
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the buffered shape
+        """
+        if distance == 0:
+            return self
+
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
+        if g_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert TG geometry to GEOS")
+
+        cdef GEOSGeometry *g_buffered = GEOSBufferWithStyle_r(
+            ctx, g_geos, distance, resolution, cap_style, join_style, mitre_limit
+        )
+        if g_buffered == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError(f"GEOSBuffer failed with distance {distance}")
+
+        cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_buffered)
+        GEOS_finish_r(ctx)
+
+        if g_tg == NULL:
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+
+        return _geometry_from_ptr(g_tg)
+
 
 cdef class Point:
     cdef tg_point pt
@@ -1011,6 +1068,33 @@ cdef class Point:
     def __geo_interface__(self):
         """Returns GeoJSON-like dict for Shapely compatibility"""
         return {"type": "Point", "coordinates": [self.pt.x, self.pt.y]}
+
+    def buffer(self, distance: float, resolution: int = 16,
+               cap_style: int = 1, join_style: int = 1,
+               mitre_limit: float = 5.0) -> Geometry:
+        """
+        Return a geometry that is this Point buffered by the given distance.
+        This creates a circular polygon around the point.
+
+        Parameters:
+        -----------
+        distance : float
+            The buffer distance (radius) in the geometry's units
+        resolution : int
+            Number of segments per quadrant (default: 16). Higher values = smoother circle.
+        cap_style : int
+            End cap style: 1=round (default), 2=flat, 3=square
+        join_style : int
+            Join style: 1=round (default), 2=mitre, 3=bevel
+        mitre_limit : float
+            Mitre ratio limit for joins (default: 5.0)
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the buffered point (as a polygon)
+        """
+        return self.as_geometry().buffer(distance, resolution, cap_style, join_style, mitre_limit)
 
 
 cdef class Rect:
@@ -1171,6 +1255,32 @@ cdef class Ring:
         """Returns coordinate sequence for Shapely compatibility"""
         return self.points()
 
+    def buffer(self, distance: float, resolution: int = 16,
+               cap_style: int = 1, join_style: int = 1,
+               mitre_limit: float = 5.0) -> Geometry:
+        """
+        Return a geometry that is this Ring buffered by the given distance.
+
+        Parameters:
+        -----------
+        distance : float
+            The buffer distance in the geometry's units. Positive = outward, negative = inward
+        resolution : int
+            Number of segments per quadrant (default: 16). Higher values = smoother buffer.
+        cap_style : int
+            End cap style: 1=round (default), 2=flat, 3=square
+        join_style : int
+            Join style: 1=round (default), 2=mitre, 3=bevel
+        mitre_limit : float
+            Mitre ratio limit for joins (default: 5.0)
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the buffered ring
+        """
+        return self.as_geometry().buffer(distance, resolution, cap_style, join_style, mitre_limit)
+
 
 cdef class Line:
     cdef tg_line *line
@@ -1276,6 +1386,32 @@ cdef class Line:
     def __geo_interface__(self):
         """Returns GeoJSON-like dict for Shapely compatibility"""
         return {"type": "LineString", "coordinates": self.points()}
+
+    def buffer(self, distance: float, resolution: int = 16,
+               cap_style: int = 1, join_style: int = 1,
+               mitre_limit: float = 5.0) -> Geometry:
+        """
+        Return a geometry that is this LineString buffered by the given distance.
+
+        Parameters:
+        -----------
+        distance : float
+            The buffer distance in the geometry's units
+        resolution : int
+            Number of segments per quadrant (default: 16). Higher values = smoother buffer.
+        cap_style : int
+            End cap style: 1=round (default), 2=flat, 3=square
+        join_style : int
+            Join style: 1=round (default), 2=mitre, 3=bevel
+        mitre_limit : float
+            Mitre ratio limit for joins (default: 5.0)
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the buffered line
+        """
+        return self.as_geometry().buffer(distance, resolution, cap_style, join_style, mitre_limit)
 
 
 cdef class Poly:
@@ -1417,6 +1553,32 @@ cdef class Poly:
             hole_coords = [self.hole(i).points() for i in range(self.num_holes())]
             return {"type": "Polygon", "coordinates": [ext_coords] + hole_coords}
 
+    def buffer(self, distance: float, resolution: int = 16,
+               cap_style: int = 1, join_style: int = 1,
+               mitre_limit: float = 5.0) -> Geometry:
+        """
+        Return a geometry that is this Polygon buffered by the given distance.
+
+        Parameters:
+        -----------
+        distance : float
+            The buffer distance in the geometry's units. Positive = outward, negative = inward
+        resolution : int
+            Number of segments per quadrant (default: 16). Higher values = smoother buffer.
+        cap_style : int
+            End cap style: 1=round (default), 2=flat, 3=square
+        join_style : int
+            Join style: 1=round (default), 2=mitre, 3=bevel
+        mitre_limit : float
+            Mitre ratio limit for joins (default: 5.0)
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the buffered polygon
+        """
+        return self.as_geometry().buffer(distance, resolution, cap_style, join_style, mitre_limit)
+
 
 cdef class Segment:
     cdef public tg_segment seg
@@ -1497,7 +1659,8 @@ LineString = Line
 
 
 def Polygon(exterior, holes=None):
-    """Create a Polygon geometry from an exterior ring (list of coordinates or Ring object) and optional holes (list of lists of coordinates or Ring objects)"""
+    """Create a Polygon geometry from an exterior ring (list of coordinates or Ring object)
+    and optional holes (list of lists of coordinates or Ring objects)"""
     exterior = Ring(exterior) if not isinstance(exterior, Ring) else exterior
     holes = (
         [Ring(h) if not isinstance(h, Ring) else h for h in holes]
