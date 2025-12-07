@@ -35,8 +35,8 @@ line.geom_type     # 'LineString'
 
 ### Polygon
 ```python
-exterior = Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
-hole = Ring([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+exterior = [(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]
+hole = [(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)]
 
 # Without holes
 poly = Polygon(exterior)
@@ -93,7 +93,7 @@ geo_dict = point.__geo_interface__()
 
 ```python
 # Create test geometries
-poly = Polygon(Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]))
+poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
 point = Point(5, 5)
 
 # Convert to Geometry for predicates
@@ -125,7 +125,7 @@ lines = [LineString([(0, 0), (1, 1)]), LineString([(2, 2), (3, 3)])]
 multi = MultiLineString(lines)
 
 # MultiPolygon
-polys = [Polygon(Ring(...)), Polygon(Ring(...))]
+polys = [Polygon(), Polygon()]
 multi = MultiPolygon(polys)
 
 # GeometryCollection
@@ -159,17 +159,11 @@ wkt = point.wkt
 
 ### After (ToGo)
 ```python
-from togo import Point, LineString, Polygon, Ring
+from togo import Point, LineString, Polygon
 from togo import from_wkt, to_wkt
 
 point = Point(1, 2)
-wkt = point.wkt  # Same!
-```
-
-**Note:** Polygons require explicit Ring objects in ToGo:
-```python
-# ToGo - must use Ring
-poly = Polygon(Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]))
+wkt = point.wkt
 ```
 
 ## Error Handling
@@ -220,9 +214,6 @@ poly = Poly(Ring([...]))
 
 | Feature | Shapely | ToGo |
 |---------|---------|------|
-| Polygon creation | `Polygon(coords)` | `Polygon(Ring(coords))` |
-| Point creation | `Point(x, y)` | `Point(x, y)` ✓ Same |
-| Property access | Most are properties | All are properties ✓ Same |
 | Predicates | Work on shapes directly | Need `.as_geometry()` |
 | Multi-geometries | Auto-created | Explicit constructors |
 
