@@ -214,6 +214,15 @@ class TestPolygonShapelyAPI:
         hole = [(2, 2), (4, 2), (4, 4), (2, 4), (2, 2)]
         poly = Polygon(exterior, holes=[hole])
         assert poly is not None
+        # Verify the exterior coordinates match the input
+        ext = poly.exterior()
+        assert ext.coords == exterior
+        # Verify the hole coordinates match the input
+        assert poly.num_holes() == 1
+        h = poly.hole(0)
+        assert h.coords == hole
+        # Also verify bounds as an additional check
+        assert poly.bounds == (0, 0, 10, 10)
 
     def test_polygon_creation_with_exterior_as_list(self):
         from togo import Polygon
@@ -221,6 +230,11 @@ class TestPolygonShapelyAPI:
         exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
         poly = Polygon(exterior)
         assert poly is not None
+        # Verify the exterior coordinates match the input
+        ext = poly.exterior()
+        assert ext.coords == exterior
+        # Also verify bounds as an additional check
+        assert poly.bounds == (0, 0, 10, 10)
 
     def test_polygon_creation_with_exterior_as_list_and_holes_as_empty_list(self):
         from togo import Polygon
@@ -228,6 +242,11 @@ class TestPolygonShapelyAPI:
         exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
         poly = Polygon(exterior, holes=[])
         assert poly is not None
+        # Verify the exterior coordinates match the input
+        ext = poly.exterior()
+        assert ext.coords == exterior
+        # Also verify bounds as an additional check
+        assert poly.bounds == (0, 0, 10, 10)
 
     def test_polygon_creation(self):
         from togo import Polygon, Ring
