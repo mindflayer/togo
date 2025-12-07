@@ -3,7 +3,7 @@
 Example script demonstrating Shapely-compatible API in ToGo
 """
 
-from togo import Point, LineString, Polygon, Ring
+from togo import Point, LineString, Polygon
 from togo import from_wkt, from_geojson
 
 print("=" * 60)
@@ -26,8 +26,8 @@ print(f"  geom_type: {line.geom_type}")
 print(f"  length: {line.length:.3f}")
 print(f"  bounds: {line.bounds}")
 
-exterior = Ring([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)])
-hole = Ring([(1, 1), (4, 1), (4, 4), (1, 4), (1, 1)])
+exterior = [(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)]
+hole = [(1, 1), (4, 1), (4, 4), (1, 4), (1, 1)]
 poly = Polygon(exterior, holes=[hole])
 print(f"\nPolygon: {poly}")
 print(f"  geom_type: {poly.geom_type}")
@@ -74,8 +74,8 @@ print("\n5. Spatial Predicates:")
 print("-" * 40)
 
 # Create two overlapping polygons
-poly1 = Polygon(Ring([(0, 0), (3, 0), (3, 3), (0, 3), (0, 0)]))
-poly2 = Polygon(Ring([(2, 2), (5, 2), (5, 5), (2, 5), (2, 2)]))
+poly1 = Polygon([(0, 0), (3, 0), (3, 3), (0, 3), (0, 0)])
+poly2 = Polygon([(2, 2), (5, 2), (5, 5), (2, 5), (2, 2)])
 test_point = Point(1, 1)
 
 # Convert to Geometry objects for predicates
@@ -98,7 +98,7 @@ print(f"  poly1.equals(poly2): {geom1.equals(geom2)}")
 print("\n6. Geometry Properties:")
 print("-" * 40)
 
-big_poly = Polygon(Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]))
+big_poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
 
 print("Polygon properties:")
 print(f"  geom_type: {big_poly.geom_type}")
