@@ -222,23 +222,11 @@ geom1.coveredby(geom2)   # False
    poly = Polygon(Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]))
    ```
 
-2. **Method vs Property**: Some properties are methods in ToGo:
-   ```python
-   # Shapely
-   length = line.length
-
-   # ToGo
-   length = line.length
-   ```
-
-3. **Geometry conversion**: ToGo uses `.as_geometry()` for predicates:
+2. **Geometry conversion**: ToGo uses `.as_geometry()` for predicates:
    ```python
    # ToGo
    poly_geom = poly.as_geometry()
    poly_geom.contains(point.as_geometry())
-   ```
-
-4. **Operations**: ToGo focuses on predicates and doesn't yet support operations like `buffer()`, `union()`, `intersection()` (though GEOS integration is available via `tgx`)
 
 ## Performance
 
