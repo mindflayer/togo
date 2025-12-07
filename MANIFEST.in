@@ -1,4 +1,6 @@
 graft vendor
-include *.pyx
-include *.c
-include *.h
+include togo.pyx
+include tg.c
+include tgx.c
+include tg.h
+include tgx.h

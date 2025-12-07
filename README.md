@@ -6,7 +6,7 @@ ToGo is a high-performance Python library for computational geometry, providing 
 
 The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient library for geometric operations, including spatial predicates, format conversions, and spatial indexing.
 
-While ToGo's API interfaces are still a work in progress, the underling C library is stable and well-tested.
+**New:** ToGo now provides a **Shapely-compatible API**! See [SHAPELY_API.md](SHAPELY_API.md) for details.
 
 ## Installation
 
@@ -18,12 +18,43 @@ pip install togo
 
 - Fast and efficient geometric operations
 - Support for standard geometry types: Point, Line, Ring, Polygon, and their multi-variants
+- **Shapely-compatible API** with familiar class names and properties
 - Geometric predicates: contains, intersects, covers, touches, etc.
 - Format conversion between WKT, GeoJSON, WKB, and HEX
 - Spatial indexing for accelerated queries
 - Memory-efficient C implementation with Python-friendly interface
 
 ## Basic Usage
+
+### Shapely-Compatible API
+
+```python
+from togo import Point, LineString, Polygon, Ring
+from togo import from_wkt, from_geojson
+
+# Create geometries using familiar Shapely-like syntax
+point = Point(1.0, 2.0)
+line = LineString([(0, 0), (1, 1), (2, 2)])
+poly = Polygon(Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]))
+
+# Access Shapely-compatible properties
+print(point.geom_type)  # 'Point'
+print(point.bounds)     # (1.0, 2.0, 1.0, 2.0)
+print(line.length)      # 2.828...
+print(poly.area)        # 16.0
+
+# Parse from WKT/GeoJSON
+geom = from_wkt("POINT (1 2)")
+geom2 = from_geojson('{"type":"Point","coordinates":[3,4]}')
+
+# Spatial predicates
+poly_geom = poly.as_geometry()
+point_geom = point.as_geometry()
+if poly_geom.contains(point_geom):
+    print("Polygon contains point!")
+```
+
+### Original ToGo API
 
 ```python
 from togo import Geometry, Point, Ring, Poly
@@ -131,7 +162,7 @@ print(f"Number of points: {line.num_points()}")
 print(f"Points: {line.points()}")
 
 # Get the length of the line
-print(f"Length: {line.length()}")
+print(f"Length: {line.length}")
 
 # Get the bounding box
 print(f"Bounding box: {line.rect()}")

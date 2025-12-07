@@ -35,15 +35,8 @@ if os.environ.get("ASAN") == "1":
 repo_root = os.path.abspath(os.path.dirname(__file__))
 plat_id = _platform_id()
 
-# Prefer platform-specific vendor path, fall back to legacy flat layout
-cand_include = os.path.join(repo_root, "vendor", "geos", plat_id, "include")
-cand_lib = os.path.join(repo_root, "vendor", "geos", plat_id, "lib")
-if os.path.isdir(cand_include) and os.path.isdir(cand_lib):
-    geos_include = cand_include
-    geos_lib = cand_lib
-else:
-    geos_include = os.path.join(repo_root, "vendor", "geos", "include")
-    geos_lib = os.path.join(repo_root, "vendor", "geos", "lib")
+geos_include = os.path.join(repo_root, "vendor", "geos", plat_id, "include")
+geos_lib = os.path.join(repo_root, "vendor", "geos", plat_id, "lib")
 
 setup(
     ext_modules=cythonize(

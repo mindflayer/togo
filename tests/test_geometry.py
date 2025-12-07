@@ -10,7 +10,7 @@ def test_geometry_wkt():
     assert g.num_points() == 0  # FIXME? Points in a Point geometry is considered 0
     assert not g.is_feature()
     assert not g.is_featurecollection()
-    assert not g.is_empty()
+    assert not g.is_empty
     assert g.dims() == 2
     assert g.has_z() is False
     assert g.has_m() is False

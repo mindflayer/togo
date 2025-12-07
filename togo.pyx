@@ -289,6 +289,7 @@ cdef class Geometry:
     def is_featurecollection(self):
         return tg_geom_is_featurecollection(self.geom) != 0
 
+    @property
     def is_empty(self):
         return tg_geom_is_empty(self.geom) != 0
 
@@ -473,6 +474,84 @@ cdef class Geometry:
     # internal accessor for C pointer
     cdef tg_geom *_get_c_geom(self):
         return self.geom
+
+    # Shapely-compatible properties
+    @property
+    def geom_type(self):
+        """Returns geometry type string for Shapely compatibility"""
+        return self.type_string()
+
+    @property
+    def bounds(self):
+        """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
+        cdef tg_rect r = tg_geom_rect(self.geom)
+        return (r.min.x, r.min.y, r.max.x, r.max.y)
+
+    @property
+    def area(self):
+        """Returns area for Polygon geometries"""
+        t = tg_geom_typeof(self.geom)
+        if t == 3:  # Polygon
+            poly = tg_geom_poly(self.geom)
+            return tg_ring_area(tg_poly_exterior(poly))
+        elif t == 6:  # MultiPolygon
+            total = 0.0
+            n = tg_geom_num_polys(self.geom)
+            for i in range(n):
+                poly = tg_geom_poly_at(self.geom, i)
+                total += tg_ring_area(tg_poly_exterior(poly))
+            return total
+        return 0.0
+
+    @property
+    def length(self):
+        """Returns length for LineString geometries"""
+        t = tg_geom_typeof(self.geom)
+        if t == 2:  # LineString
+            line = tg_geom_line(self.geom)
+            return tg_line_length(line)
+        elif t == 5:  # MultiLineString
+            total = 0.0
+            n = tg_geom_num_lines(self.geom)
+            for i in range(n):
+                line = tg_geom_line_at(self.geom, i)
+                total += tg_line_length(line)
+            return total
+        elif t == 3:  # Polygon - return perimeter
+            poly = tg_geom_poly(self.geom)
+            return tg_ring_perimeter(tg_poly_exterior(poly))
+        return 0.0
+
+    @property
+    def wkt(self):
+        """Returns WKT representation"""
+        return self.to_wkt()
+
+    @property
+    def wkb(self):
+        """Returns WKB representation"""
+        return self.to_wkb()
+
+    @property
+    def coords(self):
+        """Returns coordinate sequence for Point/LineString geometries"""
+        t = tg_geom_typeof(self.geom)
+        if t == 1:  # Point
+            pt = tg_geom_point(self.geom)
+            return [(pt.x, pt.y)]
+        elif t == 2:  # LineString
+            line = tg_geom_line(self.geom)
+            n = tg_line_num_points(line)
+            pts = tg_line_points(line)
+            return [(pts[i].x, pts[i].y) for i in range(n)]
+        else:
+            raise AttributeError(f"coords not available for {self.type_string()}")
+
+    def __geo_interface__(self):
+        """Returns GeoJSON-like dict for Shapely compatibility"""
+        import json
+        geojson_str = self.to_geojson()
+        return json.loads(geojson_str)
 
     # --- Factory methods ---
     @staticmethod
@@ -898,6 +977,41 @@ cdef class Point:
     def as_geometry(self):
         return _geometry_from_ptr(tg_geom_new_point(self.pt))
 
+    # Shapely-compatible properties
+    @property
+    def geom_type(self):
+        """Returns 'Point' for Shapely compatibility"""
+        return "Point"
+
+    @property
+    def coords(self):
+        """Returns coordinate sequence for Shapely compatibility"""
+        return [(self.pt.x, self.pt.y)]
+
+    @property
+    def bounds(self):
+        """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
+        return (self.pt.x, self.pt.y, self.pt.x, self.pt.y)
+
+    @property
+    def is_empty(self):
+        """Always False for non-null Point"""
+        return False
+
+    @property
+    def wkt(self):
+        """Returns WKT representation"""
+        return self.as_geometry().to_wkt()
+
+    @property
+    def wkb(self):
+        """Returns WKB representation"""
+        return self.as_geometry().to_wkb()
+
+    def __geo_interface__(self):
+        """Returns GeoJSON-like dict for Shapely compatibility"""
+        return {"type": "Point", "coordinates": [self.pt.x, self.pt.y]}
+
 
 cdef class Rect:
     cdef tg_rect rect
@@ -1051,6 +1165,12 @@ cdef class Ring:
         # Build a new Poly object from this Ring
         return Poly(self)
 
+    # Shapely-compatible properties
+    @property
+    def coords(self):
+        """Returns coordinate sequence for Shapely compatibility"""
+        return self.points()
+
 
 cdef class Line:
     cdef tg_line *line
@@ -1094,6 +1214,7 @@ cdef class Line:
         pts = tg_line_points(self.line)
         return [(pts[i].x, pts[i].y) for i in range(n)]
 
+    @property
     def length(self):
         return tg_line_length(self.line)
 
@@ -1119,6 +1240,42 @@ cdef class Line:
             raise IndexError("Line index out of range")
         cdef tg_point pt = tg_line_point_at(self.line, idx)
         return Point(pt.x, pt.y)
+
+    # Shapely-compatible properties
+    @property
+    def geom_type(self):
+        """Returns 'LineString' for Shapely compatibility"""
+        return "LineString"
+
+    @property
+    def coords(self):
+        """Returns coordinate sequence for Shapely compatibility"""
+        return self.points()
+
+    @property
+    def bounds(self):
+        """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
+        r = tg_line_rect(self.line)
+        return (r.min.x, r.min.y, r.max.x, r.max.y)
+
+    @property
+    def is_empty(self):
+        """Check if LineString is empty"""
+        return tg_line_num_points(self.line) == 0
+
+    @property
+    def wkt(self):
+        """Returns WKT representation"""
+        return self.as_geometry().to_wkt()
+
+    @property
+    def wkb(self):
+        """Returns WKB representation"""
+        return self.as_geometry().to_wkb()
+
+    def __geo_interface__(self):
+        """Returns GeoJSON-like dict for Shapely compatibility"""
+        return {"type": "LineString", "coordinates": self.points()}
 
 
 cdef class Poly:
@@ -1213,6 +1370,53 @@ cdef class Poly:
     cdef tg_poly *_get_c_poly(self):
         return self.poly
 
+    # Shapely-compatible properties
+    @property
+    def geom_type(self):
+        """Returns 'Polygon' for Shapely compatibility"""
+        return "Polygon"
+
+    @property
+    def bounds(self):
+        """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
+        r = tg_poly_rect(self.poly)
+        return (r.min.x, r.min.y, r.max.x, r.max.y)
+
+    @property
+    def area(self):
+        """Returns the area of the polygon"""
+        return tg_ring_area(tg_poly_exterior(self.poly))
+
+    @property
+    def is_empty(self):
+        """Check if Polygon is empty"""
+        ext = tg_poly_exterior(self.poly)
+        return tg_ring_num_points(ext) == 0
+
+    @property
+    def wkt(self):
+        """Returns WKT representation"""
+        return self.as_geometry().to_wkt()
+
+    @property
+    def wkb(self):
+        """Returns WKB representation"""
+        return self.as_geometry().to_wkb()
+
+    @property
+    def interiors(self):
+        """Returns list of holes for Shapely compatibility"""
+        return [self.hole(i) for i in range(self.num_holes())]
+
+    def __geo_interface__(self):
+        """Returns GeoJSON-like dict for Shapely compatibility"""
+        ext_coords = self.exterior().points()
+        if self.num_holes() == 0:
+            return {"type": "Polygon", "coordinates": [ext_coords]}
+        else:
+            hole_coords = [self.hole(i).points() for i in range(self.num_holes())]
+            return {"type": "Polygon", "coordinates": [ext_coords] + hole_coords}
+
 
 cdef class Segment:
     cdef public tg_segment seg
@@ -1288,7 +1492,84 @@ def set_polygon_indexing_mode(ix: TGIndex):
     tg_env_set_index(ix)
 
 
+# Shapely-compatible aliases
+LineString = Line
+Polygon = Poly
+
+
+def MultiPoint(points):
+    """Create a MultiPoint geometry from a list of points"""
+    return Geometry.from_multipoint(points)
+
+
+def MultiLineString(lines):
+    """Create a MultiLineString geometry from a list of lines"""
+    return Geometry.from_multilinestring(lines)
+
+
+def MultiPolygon(polys):
+    """Create a MultiPolygon geometry from a list of polygons"""
+    return Geometry.from_multipolygon(polys)
+
+
+def GeometryCollection(geoms):
+    """Create a GeometryCollection from a list of geometries"""
+    return Geometry.from_geometrycollection(geoms)
+
+
+# Shapely-compatible module-level functions
+def from_wkt(wkt_string: str) -> Geometry:
+    """Create a Geometry from a WKT string (Shapely-compatible)"""
+    return Geometry(wkt_string, fmt="wkt")
+
+
+def from_geojson(geojson_string: str) -> Geometry:
+    """Create a Geometry from a GeoJSON string (Shapely-compatible)"""
+    return Geometry(geojson_string, fmt="geojson")
+
+
+def from_wkb(wkb_bytes: bytes) -> Geometry:
+    """Create a Geometry from WKB bytes (Shapely-compatible)"""
+    import binascii
+    hex_string = binascii.hexlify(wkb_bytes).decode("ascii")
+    return Geometry(hex_string, fmt="hex")
+
+
+def to_wkt(geom) -> str:
+    """Convert a geometry to WKT (Shapely-compatible)"""
+    if hasattr(geom, "as_geometry"):
+        return geom.as_geometry().to_wkt()
+    elif isinstance(geom, Geometry):
+        return geom.to_wkt()
+    else:
+        raise TypeError("Object must be a togo geometry")
+
+
+def to_geojson(geom) -> str:
+    """Convert a geometry to GeoJSON (Shapely-compatible)"""
+    if hasattr(geom, "as_geometry"):
+        return geom.as_geometry().to_geojson()
+    elif isinstance(geom, Geometry):
+        return geom.to_geojson()
+    else:
+        raise TypeError("Object must be a togo geometry")
+
+
+def to_wkb(geom) -> bytes:
+    """Convert a geometry to WKB (Shapely-compatible)"""
+    if hasattr(geom, "as_geometry"):
+        return geom.as_geometry().to_wkb()
+    elif isinstance(geom, Geometry):
+        return geom.to_wkb()
+    else:
+        raise TypeError("Object must be a togo geometry")
+
+
 __all__ = [
     "Geometry", "Point", "Rect", "Ring", "Line", "Poly", "Segment",
+    "LineString", "Polygon",
+    "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection",
+    "from_wkt", "from_geojson", "from_wkb",
+    "to_wkt", "to_geojson", "to_wkb",
     "set_polygon_indexing_mode", "TGIndex"
 ]
