@@ -228,6 +228,7 @@ class TestPolygonShapelyAPI:
         exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
         poly = Polygon(exterior, holes=[])
         assert poly is not None
+        assert len(poly.interiors) == 0
 
     def test_polygon_creation(self):
         from togo import Polygon, Ring
