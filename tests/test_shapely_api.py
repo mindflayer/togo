@@ -217,12 +217,16 @@ class TestPolygonShapelyAPI:
         # Verify the exterior coordinates match the input
         ext = poly.exterior()
         assert ext.coords == exterior
-        # Verify the hole coordinates match the input
+        # Verify there is exactly one hole
+        assert len(poly.interiors) == 1
         assert poly.num_holes() == 1
+        # Verify the hole coordinates match the input
         h = poly.hole(0)
         assert h.coords == hole
         # Also verify bounds as an additional check
         assert poly.bounds == (0, 0, 10, 10)
+        # Verify the hole coordinates
+        assert poly.interiors[0].coords == hole
 
     def test_polygon_creation_with_exterior_as_list(self):
         from togo import Polygon
@@ -247,6 +251,7 @@ class TestPolygonShapelyAPI:
         assert ext.coords == exterior
         # Also verify bounds as an additional check
         assert poly.bounds == (0, 0, 10, 10)
+        assert len(poly.interiors) == 0
 
     def test_polygon_creation(self):
         from togo import Polygon, Ring
