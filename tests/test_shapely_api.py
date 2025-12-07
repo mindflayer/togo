@@ -207,6 +207,28 @@ class TestLineStringShapelyAPI:
 class TestPolygonShapelyAPI:
     """Test Shapely-compatible API for Polygon"""
 
+    def test_polygon_creation_with_exterior_and_holes_as_lists(self):
+        from togo import Polygon
+
+        exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+        hole = [(2, 2), (4, 2), (4, 4), (2, 4), (2, 2)]
+        poly = Polygon(exterior, holes=[hole])
+        assert poly is not None
+
+    def test_polygon_creation_with_exterior_as_list(self):
+        from togo import Polygon
+
+        exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+        poly = Polygon(exterior)
+        assert poly is not None
+
+    def test_polygon_creation_with_exterior_as_list_and_holes_as_empty_list(self):
+        from togo import Polygon
+
+        exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+        poly = Polygon(exterior, holes=[])
+        assert poly is not None
+
     def test_polygon_creation(self):
         from togo import Polygon, Ring
 
