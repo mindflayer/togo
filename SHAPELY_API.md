@@ -286,8 +286,8 @@ print(f"GeoJSON: {point.__geo_interface__()}")
 | `geom.geom_type` | `geom.geom_type` | ✅ Supported |
 | `geom.bounds` | `geom.bounds` | ✅ Supported |
 | `geom.area` | `geom.area` | ✅ Supported |
-| `geom.length` | `geom.length` | ✅ Supported (as property) |
-| `geom.is_empty` | `geom.is_empty` | ✅ Supported (as property) |
+| `geom.length` | `geom.length` | ✅ Supported |
+| `geom.is_empty` | `geom.is_empty` | ✅ Supported |
 | `geom.coords` | `geom.coords` | ✅ Supported |
 | `geom.wkt` | `geom.wkt` | ✅ Supported |
 | `geom.wkb` | `geom.wkb` | ✅ Supported |
