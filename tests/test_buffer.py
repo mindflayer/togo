@@ -2,6 +2,7 @@
 Tests for buffer() method implementations in togo
 """
 
+import pytest
 from togo import Point, LineString, Polygon, Ring, Geometry
 
 
@@ -156,3 +157,86 @@ class TestBufferParameters:
         for join_style in [1, 2, 3]:
             buffered = geom.buffer(1.0, join_style=join_style)
             assert buffered.geom_type == "Polygon"
+
+
+class TestBufferErrorCases:
+    """Test buffer error handling and edge cases"""
+
+    def test_buffer_invalid_cap_style_zero(self):
+        """Test buffer with invalid cap_style value 0"""
+        geom = Geometry("LINESTRING(0 0, 10 0)", fmt="wkt")
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, cap_style=0)
+
+    def test_buffer_invalid_cap_style_negative(self):
+        """Test buffer with invalid negative cap_style value"""
+        geom = Geometry("LINESTRING(0 0, 10 0)", fmt="wkt")
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, cap_style=-1)
+
+    def test_buffer_invalid_cap_style_too_large(self):
+        """Test buffer with invalid cap_style value > 3"""
+        geom = Geometry("LINESTRING(0 0, 10 0)", fmt="wkt")
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, cap_style=4)
+
+    def test_buffer_invalid_join_style_zero(self):
+        """Test buffer with invalid join_style value 0"""
+        geom = Geometry("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))", fmt="wkt")
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, join_style=0)
+
+    def test_buffer_invalid_join_style_negative(self):
+        """Test buffer with invalid negative join_style value"""
+        geom = Geometry("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))", fmt="wkt")
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, join_style=-1)
+
+    def test_buffer_invalid_join_style_too_large(self):
+        """Test buffer with invalid join_style value > 3"""
+        geom = Geometry("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))", fmt="wkt")
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, join_style=4)
+
+    def test_buffer_very_large_negative_distance(self):
+        """Test buffer with very large negative distance that exceeds geometry size"""
+        geom = Geometry("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))", fmt="wkt")
+        # Negative buffer larger than the geometry should produce empty or very small result
+        buffered = geom.buffer(-100.0, resolution=8)
+        # GEOS should handle this gracefully - result may be empty or None
+        assert buffered is not None
+
+    def test_buffer_negative_resolution(self):
+        """Test buffer with negative resolution value"""
+        geom = Geometry("POINT(0 0)", fmt="wkt")
+        # Negative resolution should fail or be handled by GEOS
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, resolution=-1)
+
+    def test_buffer_zero_resolution(self):
+        """Test buffer with zero resolution value"""
+        geom = Geometry("POINT(0 0)", fmt="wkt")
+        # Zero resolution should fail as it's invalid
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, resolution=0)
+
+    def test_buffer_very_small_distance(self):
+        """Test buffer with very small distance value"""
+        geom = Geometry("POINT(0 0)", fmt="wkt")
+        # Very small buffer should still work
+        buffered = geom.buffer(0.0001, resolution=8)
+        assert buffered.geom_type == "Polygon"
+
+    def test_buffer_large_positive_distance(self):
+        """Test buffer with very large positive distance"""
+        geom = Geometry("POINT(0 0)", fmt="wkt")
+        # Very large buffer should still work
+        buffered = geom.buffer(1000.0, resolution=8)
+        assert buffered.geom_type == "Polygon"
+
+    def test_buffer_negative_mitre_limit(self):
+        """Test buffer with negative mitre_limit"""
+        geom = Geometry("LINESTRING(0 0, 10 0)", fmt="wkt")
+        # Negative mitre_limit might be invalid
+        with pytest.raises(RuntimeError):
+            geom.buffer(1.0, join_style=2, mitre_limit=-1.0)
