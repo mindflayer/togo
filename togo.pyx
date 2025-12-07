@@ -205,8 +205,6 @@ cdef extern from "geos_c.h":
     void GEOS_finish_r(GEOSContextHandle_t handle)
     GEOSGeometry *GEOSUnaryUnion(const GEOSGeometry *g)
     GEOSGeometry *GEOSUnaryUnion_r(GEOSContextHandle_t handle, const GEOSGeometry *g)
-    GEOSGeometry *GEOSBuffer(const GEOSGeometry *g, double width)
-    GEOSGeometry *GEOSBuffer_r(GEOSContextHandle_t handle, const GEOSGeometry *g, double width)
     GEOSGeometry *GEOSBufferWithStyle_r(
         GEOSContextHandle_t handle, const GEOSGeometry *g, double width,
         int quadSegs, int endCapStyle, int joinStyle, double mitreLimit
