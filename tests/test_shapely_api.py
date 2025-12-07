@@ -214,13 +214,17 @@ class TestPolygonShapelyAPI:
         hole = [(2, 2), (4, 2), (4, 4), (2, 4), (2, 2)]
         poly = Polygon(exterior, holes=[hole])
         assert poly is not None
-        
-        # Verify exterior coordinates
-        assert poly.exterior().coords == exterior
-        
+        # Verify the exterior coordinates match the input
+        ext = poly.exterior()
+        assert ext.coords == exterior
         # Verify there is exactly one hole
         assert len(poly.interiors) == 1
-        
+        assert poly.num_holes() == 1
+        # Verify the hole coordinates match the input
+        h = poly.hole(0)
+        assert h.coords == hole
+        # Also verify bounds as an additional check
+        assert poly.bounds == (0, 0, 10, 10)
         # Verify the hole coordinates
         assert poly.interiors[0].coords == hole
 
@@ -230,6 +234,11 @@ class TestPolygonShapelyAPI:
         exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
         poly = Polygon(exterior)
         assert poly is not None
+        # Verify the exterior coordinates match the input
+        ext = poly.exterior()
+        assert ext.coords == exterior
+        # Also verify bounds as an additional check
+        assert poly.bounds == (0, 0, 10, 10)
 
     def test_polygon_creation_with_exterior_as_list_and_holes_as_empty_list(self):
         from togo import Polygon
@@ -237,6 +246,11 @@ class TestPolygonShapelyAPI:
         exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
         poly = Polygon(exterior, holes=[])
         assert poly is not None
+        # Verify the exterior coordinates match the input
+        ext = poly.exterior()
+        assert ext.coords == exterior
+        # Also verify bounds as an additional check
+        assert poly.bounds == (0, 0, 10, 10)
         assert len(poly.interiors) == 0
 
     def test_polygon_creation(self):

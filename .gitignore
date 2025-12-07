@@ -214,3 +214,5 @@ __marimo__/
 
 # lib GEOS vendor dir
 vendor/geos/lib/
+tgx.h
+tgx.c
