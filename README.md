@@ -286,7 +286,7 @@ from togo import Point, LineString, Polygon, Ring, Geometry
 
 # Buffer a point to create a circular zone
 point = Point(0, 0)
-circular_zone = point.buffer(10.0, resolution=16)
+circular_zone = point.buffer(10.0, quad_segs=16)
 print(f"Point buffer: {circular_zone.geom_type}")  # Polygon
 
 # Buffer a line to create a corridor around it
@@ -305,7 +305,7 @@ shrunk = poly.buffer(-1.0)     # Shrink inward by 1 unit
 geom = Geometry("POLYGON((0 0, 20 0, 20 20, 0 20, 0 0))")
 buffered = geom.buffer(
     distance=3.0,
-    resolution=16,           # Segments per quadrant (higher = smoother)
+    quad_segs=16,           # Segments per quadrant (higher = smoother)
     cap_style=1,            # 1=round, 2=flat, 3=square
     join_style=1,           # 1=round, 2=mitre, 3=bevel
     mitre_limit=5.0         # Mitre ratio limit
@@ -319,6 +319,6 @@ Like `unary_union`, buffer operations automatically handle TG ↔ GEOS conversio
 - Togo is optimized for speed and memory efficiency
 - For large datasets, proper indexing can significantly improve performance
 - Creating geometries with the appropriate format avoids unnecessary conversions
-- Buffer operations support resolution parameter to balance quality vs. performance
+- Buffer operations support quad_segs parameter to balance quality vs. performance
 
 Soon there will be a full API documentation, for now please refer to the test suite for more usage examples.

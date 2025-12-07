@@ -951,7 +951,7 @@ cdef class Geometry:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
         return _geometry_from_ptr(g_tg)
 
-    def buffer(self, distance: float, resolution: int = 16,
+    def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
                mitre_limit: float = 5.0) -> Geometry:
         """
@@ -961,7 +961,7 @@ cdef class Geometry:
         -----------
         distance : float
             The buffer distance in the geometry's units
-        resolution : int
+        quad_segs : int
             Number of segments per quadrant (default: 16). Higher values = smoother buffer.
         cap_style : int
             End cap style: 1=round (default), 2=flat, 3=square
@@ -978,6 +978,18 @@ cdef class Geometry:
         if distance == 0:
             return self
 
+        if not (0 < cap_style < 4):
+            raise ValueError("cap_style must be 1 (round), 2 (flat), or 3 (square)")
+
+        if not (0 < join_style < 4):
+            raise ValueError("join_style must be 1 (round), 2 (flat), or 3 (bevel)")
+
+        if quad_segs < 1:
+            raise ValueError("quad_segs must be >= 1")
+
+        if not mitre_limit > 0.0:
+            raise ValueError("mitre_limit must be > 0.0")
+
         cdef GEOSContextHandle_t ctx = GEOS_init_r()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
@@ -988,7 +1000,7 @@ cdef class Geometry:
             raise RuntimeError("Failed to convert TG geometry to GEOS")
 
         cdef GEOSGeometry *g_buffered = GEOSBufferWithStyle_r(
-            ctx, g_geos, distance, resolution, cap_style, join_style, mitre_limit
+            ctx, g_geos, distance, quad_segs, cap_style, join_style, mitre_limit
         )
         if g_buffered == NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
@@ -1001,7 +1013,7 @@ cdef class Geometry:
             GEOSGeom_destroy_r(ctx, g_geos)
             GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert GEOS geometry to TG")
-        
+
         GEOSGeom_destroy_r(ctx, g_buffered)
         GEOSGeom_destroy_r(ctx, g_geos)
         GEOS_finish_r(ctx)
@@ -1074,7 +1086,7 @@ cdef class Point:
         """Returns GeoJSON-like dict for Shapely compatibility"""
         return {"type": "Point", "coordinates": [self.pt.x, self.pt.y]}
 
-    def buffer(self, distance: float, resolution: int = 16,
+    def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
                mitre_limit: float = 5.0) -> Geometry:
         """
@@ -1085,7 +1097,7 @@ cdef class Point:
         -----------
         distance : float
             The buffer distance (radius) in the geometry's units
-        resolution : int
+        quad_segs : int
             Number of segments per quadrant (default: 16). Higher values = smoother circle.
         cap_style : int
             End cap style: 1=round (default), 2=flat, 3=square
@@ -1099,7 +1111,7 @@ cdef class Point:
         Geometry
             A new Geometry representing the buffered point (as a polygon)
         """
-        return self.as_geometry().buffer(distance, resolution, cap_style, join_style, mitre_limit)
+        return self.as_geometry().buffer(distance, quad_segs, cap_style, join_style, mitre_limit)
 
 
 cdef class Rect:
@@ -1260,7 +1272,7 @@ cdef class Ring:
         """Returns coordinate sequence for Shapely compatibility"""
         return self.points()
 
-    def buffer(self, distance: float, resolution: int = 16,
+    def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
                mitre_limit: float = 5.0) -> Geometry:
         """
@@ -1270,7 +1282,7 @@ cdef class Ring:
         -----------
         distance : float
             The buffer distance in the geometry's units. Positive = outward, negative = inward
-        resolution : int
+        quad_segs : int
             Number of segments per quadrant (default: 16). Higher values = smoother buffer.
         cap_style : int
             End cap style: 1=round (default), 2=flat, 3=square
@@ -1284,7 +1296,7 @@ cdef class Ring:
         Geometry
             A new Geometry representing the buffered ring
         """
-        return self.as_geometry().buffer(distance, resolution, cap_style, join_style, mitre_limit)
+        return self.as_geometry().buffer(distance, quad_segs, cap_style, join_style, mitre_limit)
 
 
 cdef class Line:
@@ -1392,7 +1404,7 @@ cdef class Line:
         """Returns GeoJSON-like dict for Shapely compatibility"""
         return {"type": "LineString", "coordinates": self.points()}
 
-    def buffer(self, distance: float, resolution: int = 16,
+    def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
                mitre_limit: float = 5.0) -> Geometry:
         """
@@ -1402,7 +1414,7 @@ cdef class Line:
         -----------
         distance : float
             The buffer distance in the geometry's units
-        resolution : int
+        quad_segs : int
             Number of segments per quadrant (default: 16). Higher values = smoother buffer.
         cap_style : int
             End cap style: 1=round (default), 2=flat, 3=square
@@ -1416,7 +1428,7 @@ cdef class Line:
         Geometry
             A new Geometry representing the buffered line
         """
-        return self.as_geometry().buffer(distance, resolution, cap_style, join_style, mitre_limit)
+        return self.as_geometry().buffer(distance, quad_segs, cap_style, join_style, mitre_limit)
 
 
 cdef class Poly:
@@ -1558,7 +1570,7 @@ cdef class Poly:
             hole_coords = [self.hole(i).points() for i in range(self.num_holes())]
             return {"type": "Polygon", "coordinates": [ext_coords] + hole_coords}
 
-    def buffer(self, distance: float, resolution: int = 16,
+    def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
                mitre_limit: float = 5.0) -> Geometry:
         """
@@ -1568,7 +1580,7 @@ cdef class Poly:
         -----------
         distance : float
             The buffer distance in the geometry's units. Positive = outward, negative = inward
-        resolution : int
+        quad_segs : int
             Number of segments per quadrant (default: 16). Higher values = smoother buffer.
         cap_style : int
             End cap style: 1=round (default), 2=flat, 3=square
@@ -1582,7 +1594,7 @@ cdef class Poly:
         Geometry
             A new Geometry representing the buffered polygon
         """
-        return self.as_geometry().buffer(distance, resolution, cap_style, join_style, mitre_limit)
+        return self.as_geometry().buffer(distance, quad_segs, cap_style, join_style, mitre_limit)
 
 
 cdef class Segment:

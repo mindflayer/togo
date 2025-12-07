@@ -21,7 +21,7 @@ The buffer operation creates a new geometry that is the input geometry expanded 
 ## Method Signature
 
 ```python
-def buffer(self, distance: float, resolution: int = 16,
+def buffer(self, distance: float, quad_segs: int = 16,
            cap_style: int = 1, join_style: int = 1,
            mitre_limit: float = 5.0) -> Geometry
 ```
@@ -34,7 +34,7 @@ The buffer distance in the geometry's coordinate units.
 - **Negative values**: Shrink geometry inward (for Polygons only; may produce empty result if too large)
 - **Zero**: Returns the original geometry unchanged
 
-### `resolution: int` (optional, default: 16)
+### `quad_segs: int` (optional, default: 16)
 Number of segments per quadrant of a circle. Higher values create smoother buffers but take more computation.
 - Typical values: 4, 8, 16, 32
 - Higher values = smoother curves
@@ -70,7 +70,7 @@ from togo import Point, Geometry
 
 # Create a circular buffer around a point
 p = Point(0, 0)
-circular_buffer = p.buffer(10.0, resolution=16)
+circular_buffer = p.buffer(10.0, quad_segs=16)
 # Result: Polygon (circle with radius 10)
 
 # Via Geometry interface
@@ -95,7 +95,7 @@ flat_ends = line.buffer(5.0, cap_style=2)    # Flat ends
 
 # Via Geometry
 geom = Geometry("LINESTRING(0 0, 10 10)")
-buffered = geom.buffer(1.0, resolution=8)
+buffered = geom.buffer(1.0, quad_segs=8)
 ```
 
 ### Buffer a Polygon
@@ -126,11 +126,11 @@ from togo import Geometry
 
 geom = Geometry("POLYGON((0 0, 20 0, 20 20, 0 20, 0 0))")
 
-# Smooth buffer with high resolution
-smooth = geom.buffer(2.0, resolution=32)
+# Smooth buffer with high quad_segs
+smooth = geom.buffer(2.0, quad_segs=32)
 
-# Fast buffer with low resolution
-fast = geom.buffer(2.0, resolution=4)
+# Fast buffer with low quad_segs
+fast = geom.buffer(2.0, quad_segs=4)
 
 # Custom join style with mitre limit
 mitre_join = geom.buffer(2.0, join_style=2, mitre_limit=3.0)
@@ -170,10 +170,10 @@ Some buffer operations may produce empty geometries:
 
 ## Performance Considerations
 
-- **Resolution**: Higher resolution produces smoother buffers but takes longer
-  - For visualization: resolution 8-16 usually sufficient
-  - For precision work: use resolution 16-32
-  - For quick approximations: use resolution 4-8
+- **Resolution**: Higher quad_segs produces smoother buffers but takes longer
+  - For visualization: quad_segs 8-16 usually sufficient
+  - For precision work: use quad_segs 16-32
+  - For quick approximations: use quad_segs 4-8
 
 - **Join/Cap Styles**: Different styles have different performance characteristics
   - Round joins/caps are generally fastest
@@ -191,12 +191,12 @@ Togo's `buffer()` method works the same as Shapely's:
 # Shapely
 from shapely.geometry import Point as ShapelyPoint
 p = ShapelyPoint(0, 0)
-buffered = p.buffer(10.0, resolution=16)
+buffered = p.buffer(10.0, quad_segs=16)
 
 # Togo
 from togo import Point
 p = Point(0, 0)
-buffered = p.buffer(10.0, resolution=16)
+buffered = p.buffer(10.0, quad_segs=16)
 
 # Results are identical!
 ```

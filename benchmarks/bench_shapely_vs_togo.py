@@ -277,30 +277,30 @@ def main():
     shp_buffer_poly = shp_from_geojson(TOGO_JSON)
 
     bench_case(
-        "buffer point (distance=1.0, resolution=8)",
-        lambda: buffer_point.buffer(1.0, resolution=8),
-        lambda: shp_buffer_point.buffer(1.0, resolution=8),
+        "buffer point (distance=1.0, quad_segs=8)",
+        lambda: buffer_point.buffer(1.0, quad_segs=8),
+        lambda: shp_buffer_point.buffer(1.0, quad_segs=8),
         iters=500,
     )
 
     bench_case(
-        "buffer linestring (distance=2.0, resolution=8)",
-        lambda: buffer_line.buffer(2.0, resolution=8),
-        lambda: shp_buffer_line.buffer(2.0, resolution=8),
+        "buffer linestring (distance=2.0, quad_segs=8)",
+        lambda: buffer_line.buffer(2.0, quad_segs=8),
+        lambda: shp_buffer_line.buffer(2.0, quad_segs=8),
         iters=500,
     )
 
     bench_case(
-        "buffer polygon (distance=1.0, resolution=8)",
-        lambda: buffer_poly.buffer(1.0, resolution=8),
-        lambda: shp_buffer_poly.buffer(1.0, resolution=8),
+        "buffer polygon (distance=1.0, quad_segs=8)",
+        lambda: buffer_poly.buffer(1.0, quad_segs=8),
+        lambda: shp_buffer_poly.buffer(1.0, quad_segs=8),
         iters=200,
     )
 
     bench_case(
-        "buffer polygon (distance=1.0, resolution=16, custom join)",
-        lambda: buffer_poly.buffer(1.0, resolution=16, join_style=2),
-        lambda: shp_buffer_poly.buffer(1.0, resolution=16, join_style=2),
+        "buffer polygon (distance=1.0, quad_segs=16, custom join)",
+        lambda: buffer_poly.buffer(1.0, quad_segs=16, join_style=2),
+        lambda: shp_buffer_poly.buffer(1.0, quad_segs=16, join_style=2),
         iters=200,
     )
 

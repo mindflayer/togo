@@ -211,7 +211,7 @@ from togo import Point, LineString, Polygon, Ring
 
 # Buffer a point - creates a circular polygon
 point = Point(0, 0)
-circle = point.buffer(10.0, resolution=16)
+circle = point.buffer(10.0, quad_segs=16)
 
 # Buffer a line - creates polygon around line
 line = LineString([(0, 0), (10, 10)])
@@ -228,7 +228,7 @@ shrunk = poly.buffer(-1.0)    # Shrink inward
 geom = from_wkt("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))")
 buffered = geom.buffer(
     distance=2.0,
-    resolution=16,      # Segments per quadrant
+    quad_segs=16,      # Segments per quadrant
     cap_style=1,        # 1=round, 2=flat, 3=square (for lines)
     join_style=1,       # 1=round, 2=mitre, 3=bevel
     mitre_limit=5.0     # For mitre joins
