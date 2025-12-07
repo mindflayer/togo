@@ -200,6 +200,43 @@ geom1.covers(pt_geom)    # True
 geom1.coveredby(geom2)   # False
 ```
 
+## Geometric Operations
+
+### Buffer
+
+All geometry types support the `buffer()` method for creating expanded or shrunk versions of geometries:
+
+```python
+from togo import Point, LineString, Polygon, Ring
+
+# Buffer a point - creates a circular polygon
+point = Point(0, 0)
+circle = point.buffer(10.0, quad_segs=16)
+
+# Buffer a line - creates polygon around line
+line = LineString([(0, 0), (10, 10)])
+zone = line.buffer(2.0, cap_style=1)  # round caps
+
+# Buffer a polygon - expand outward or shrink inward
+ring = Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+poly = Polygon(ring)
+
+expanded = poly.buffer(2.0)   # Expand outward
+shrunk = poly.buffer(-1.0)    # Shrink inward
+
+# Via Geometry object
+geom = from_wkt("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))")
+buffered = geom.buffer(
+    distance=2.0,
+    quad_segs=16,      # Segments per quadrant
+    cap_style=1,        # 1=round, 2=flat, 3=square (for lines)
+    join_style=1,       # 1=round, 2=mitre, 3=bevel
+    mitre_limit=5.0     # For mitre joins
+)
+```
+
+For detailed buffer documentation, see [BUFFER_API.md](BUFFER_API.md).
+
 ## Comparison with Shapely
 
 ### Similarities
@@ -209,6 +246,7 @@ geom1.coveredby(geom2)   # False
 3. **Serialization**: `wkt`, `wkb`, `__geo_interface__`
 4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`
 5. **Predicates**: `contains()`, `intersects()`, `touches()`, etc.
+6. **Operations**: `buffer()` - Create geometrical buffers
 
 ### Differences
 
@@ -299,8 +337,8 @@ print(f"GeoJSON: {point.__geo_interface__()}")
 | `intersects()` | `intersects()` | ✅ Supported |
 | `touches()` | `touches()` | ✅ Supported |
 | `within()` | `within()` | ✅ Supported |
-| `buffer()` | - | ❌ Not yet (use GEOS via tgx) |
-| `union()` | - | ❌ Not yet (use GEOS via tgx) |
+| `buffer()` | `buffer()` | ✅ Supported (via GEOS) |
+| `union()` | `unary_union()` | ✅ Supported (via GEOS) |
 | `intersection()` | - | ❌ Not yet (use GEOS via tgx) |
 
 ## Conclusion
