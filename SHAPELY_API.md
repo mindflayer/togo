@@ -5,7 +5,7 @@ ToGo now provides a Shapely-compatible API, making it easy to migrate from Shape
 ## Quick Start
 
 ```python
-from togo import Point, LineString, Polygon
+from togo import Point, LineString, Polygon, Ring
 from togo import from_wkt, from_geojson, to_wkt
 
 # Create geometries using Shapely-like constructors
@@ -21,7 +21,7 @@ print(poly.area)        # 16.0
 
 # Use module-level functions
 geom = from_wkt("POINT (1 2)")
-wkt_str = to_wkt(geom)
+print(to_wkt(geom))
 ```
 
 ## Shapely-Compatible Classes
