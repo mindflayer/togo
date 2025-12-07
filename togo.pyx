@@ -996,14 +996,15 @@ cdef class Geometry:
             raise RuntimeError(f"GEOSBuffer failed with distance {distance}")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_buffered)
-
-        # Cleanup GEOS geometries
-        GEOSGeom_destroy_r(ctx, g_geos)
-        GEOSGeom_destroy_r(ctx, g_buffered)
-        GEOS_finish_r(ctx)
-
         if g_tg == NULL:
+            GEOSGeom_destroy_r(ctx, g_buffered)
+            GEOSGeom_destroy_r(ctx, g_geos)
+            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert GEOS geometry to TG")
+        
+        GEOSGeom_destroy_r(ctx, g_buffered)
+        GEOSGeom_destroy_r(ctx, g_geos)
+        GEOS_finish_r(ctx)
 
         return _geometry_from_ptr(g_tg)
 
