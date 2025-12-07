@@ -992,10 +992,12 @@ cdef class Geometry:
             ctx, g_geos, distance, resolution, cap_style, join_style, mitre_limit
         )
         if g_buffered == NULL:
+            GEOSGeom_destroy_r(ctx, g_geos)
             GEOS_finish_r(ctx)
             raise RuntimeError(f"GEOSBuffer failed with distance {distance}")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_buffered)
+        GEOSGeom_destroy_r(ctx, g_geos)
         GEOS_finish_r(ctx)
 
         if g_tg == NULL:
