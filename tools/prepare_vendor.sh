@@ -61,4 +61,5 @@ rm -rf "${GEOS_DIR}" "${TARBALL}"
 
 echo "GEOS prepared at: ${INSTALL_PREFIX}"
 # Print a lightweight tree using find to avoid tree dependency
-find "${INSTALL_PREFIX}" -maxdepth 2 -type f -printf "%P\n" | sed "s#^#vendor/geos/${PLATFORM_ID}/#"
+# Use POSIX-compliant find (works with BusyBox)
+find "${INSTALL_PREFIX}" -maxdepth 2 -type f | sed "s#^${INSTALL_PREFIX}/##" | sed "s#^#vendor/geos/${PLATFORM_ID}/#"
