@@ -6,7 +6,7 @@ from tests.geometries import TOGO, BENIN, GRAN_BUENOS_AIRES_AREA
 def test_togo():
     togo = Geometry(TOGO)
     assert togo.memsize() == 6080
-    assert not togo.is_empty()
+    assert not togo.is_empty
     assert not togo.has_z()
     assert togo.dims() == 2
     assert togo.type_string() == "Polygon"
@@ -24,7 +24,7 @@ def test_togo():
 def test_benin():
     benin = Geometry(BENIN, fmt="geojson")
     assert benin.memsize() == 6688
-    assert not benin.is_empty()
+    assert not benin.is_empty
     assert not benin.has_z()
     assert benin.dims() == 2
     assert benin.type_string() == "Polygon"
@@ -42,7 +42,7 @@ def test_benin():
 def test_buenos_aires():
     b_aires = Geometry(GRAN_BUENOS_AIRES_AREA, fmt="wkt")
     assert b_aires.memsize() == 456
-    assert not b_aires.is_empty()
+    assert not b_aires.is_empty
     assert b_aires.has_z()
     assert b_aires.dims() == 3
     assert b_aires.type_string() == "Polygon"
@@ -65,7 +65,7 @@ def test_togo_union_benin():
         [Geometry(TOGO, fmt="geojson"), Geometry(BENIN, fmt="geojson")]
     )
     # The union should not be empty and should be a valid geometry
-    assert not g.is_empty()
+    assert not g.is_empty
     assert g.type_string() == "Polygon"
     wkt = g.to_wkt()
     new_g = Geometry(wkt, fmt="wkt")

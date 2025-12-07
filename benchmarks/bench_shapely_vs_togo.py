@@ -1,3 +1,17 @@
+"""
+Benchmark comparing togo vs Shapely geometry libraries.
+
+This benchmark uses the new Shapely-compatible API for togo, allowing a true
+apples-to-apples comparison between the two libraries.
+
+ToGo now offers:
+- Shapely-compatible class names (Point, LineString, Polygon)
+- Shapely-compatible properties (geom_type, bounds, area, length, coords, etc.)
+- Shapely-compatible module functions (from_wkt, from_geojson, to_wkt, etc.)
+
+Run with: python benchmarks/bench_shapely_vs_togo.py
+"""
+
 import os
 import sys
 import json
@@ -11,9 +25,17 @@ TESTS_DIR = os.path.join(ROOT, "tests")
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
-# Import togo classes
+# Import togo classes - using new Shapely-compatible API
 try:
-    from togo import Geometry, Line, Ring, Poly
+    from togo import (
+        LineString,
+        Polygon,
+        Ring,
+        from_wkt,
+        from_geojson,
+        to_geojson,
+        Geometry,
+    )
 except Exception as e:
     print("ERROR: Failed to import togo:", e)
     sys.exit(1)
@@ -115,8 +137,8 @@ def main():
     )
 
     # Pre-parse big polygons for predicate tests
-    g_togo_a = Geometry(TOGO_JSON, fmt="geojson")
-    g_togo_b = Geometry(BENIN_JSON, fmt="geojson")
+    g_togo_a = from_geojson(TOGO_JSON)
+    g_togo_b = from_geojson(BENIN_JSON)
 
     g_shp_a = shp_from_geojson(TOGO_JSON)
     g_shp_b = shp_from_geojson(BENIN_JSON)
@@ -137,19 +159,19 @@ def main():
     # Parsing WKT
     bench_case(
         "parse WKT point",
-        lambda: Geometry(wkt_point, fmt="wkt"),
+        lambda: from_wkt(wkt_point),
         lambda: shp_from_wkt(wkt_point),
         iters=2000,
     )
     bench_case(
         "parse WKT linestring",
-        lambda: Geometry(wkt_line, fmt="wkt"),
+        lambda: from_wkt(wkt_line),
         lambda: shp_from_wkt(wkt_line),
         iters=1000,
     )
     bench_case(
         "parse GeoJSON polygon (country-scale)",
-        lambda: Geometry(TOGO_JSON, fmt="geojson"),
+        lambda: from_geojson(TOGO_JSON),
         lambda: shp_from_geojson(TOGO_JSON),
         iters=200,
     )
@@ -157,13 +179,13 @@ def main():
     # Serialization
     bench_case(
         "to WKT (point)",
-        lambda: Geometry(wkt_point, fmt="wkt").to_wkt(),
+        lambda: from_wkt(wkt_point).wkt,
         lambda: shp_to_wkt(shp_from_wkt(wkt_point)),
         iters=2000,
     )
     bench_case(
         "to GeoJSON (point)",
-        lambda: Geometry(geojson_point, fmt="geojson").to_geojson(),
+        lambda: to_geojson(from_geojson(geojson_point)),
         lambda: shp_to_geojson(shp_from_geojson(geojson_point)),
         iters=2000,
     )
@@ -171,7 +193,7 @@ def main():
     # Bounds/rect
     bench_case(
         "bounds/rect (big polygon)",
-        lambda: g_togo_a.rect(),
+        lambda: g_togo_a.bounds,
         lambda: g_shp_a.bounds,
         iters=2000,
     )
@@ -185,35 +207,35 @@ def main():
     )
     bench_case(
         "contains (polygon contains point)",
-        lambda: g_togo_a.contains(Geometry("POINT (1 8)", fmt="wkt")),
+        lambda: g_togo_a.contains(from_wkt("POINT (1 8)")),
         lambda: g_shp_a.contains(ShpPoint(1, 8)),
         iters=1000,
     )
     bench_case(
         "covers (polygon covers point)",
-        lambda: g_togo_a.covers(Geometry("POINT (1 8)", fmt="wkt")),
+        lambda: g_togo_a.covers(from_wkt("POINT (1 8)")),
         lambda: g_shp_a.covers(ShpPoint(1, 8)),
         iters=1000,
     )
 
     # Line length
     line_points = [(i, (i * i) % 10) for i in range(0, 200)]
-    togo_line = Line(line_points)
+    togo_line = LineString(line_points)
     shp_line = ShpLineString(line_points)
     bench_case(
         "line length (200 vertices)",
-        lambda: togo_line.length(),
+        lambda: togo_line.length,
         lambda: shp_line.length,
         iters=2000,
     )
 
     # Ring area/perimeter via exterior
     ring = Ring(ring_pts)
-    poly = Poly(ring)
+    poly = Polygon(ring)
     shp_poly = ShpPolygon(ring_pts)
     bench_case(
         "polygon area (square)",
-        lambda: poly.exterior().area(),
+        lambda: poly.area,
         lambda: shp_poly.area,
         iters=5000,
     )
@@ -227,9 +249,7 @@ def main():
     # Geometry equals
     bench_case(
         "equals (point)",
-        lambda: Geometry(wkt_point, fmt="wkt").equals(
-            Geometry(geojson_point, fmt="geojson")
-        ),
+        lambda: from_wkt(wkt_point).equals(from_geojson(geojson_point)),
         lambda: shp_from_wkt(wkt_point).equals(shp_from_geojson(geojson_point)),
         iters=3000,
     )
@@ -238,7 +258,7 @@ def main():
     bench_case(
         "unary_union (merge two polygons)",
         lambda: Geometry.unary_union(
-            [Geometry(TOGO_JSON, fmt="geojson"), Geometry(BENIN_JSON, fmt="geojson")]
+            [from_geojson(TOGO_JSON), from_geojson(BENIN_JSON)]
         ),
         lambda: unary_union(
             [shp_from_geojson(TOGO_JSON), shp_from_geojson(BENIN_JSON)]

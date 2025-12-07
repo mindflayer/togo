@@ -7,7 +7,7 @@ def test_line_basic():
     line = Line(points)
     assert line.num_points() == 3
     assert line.points() == points
-    assert isinstance(line.length(), float)
+    assert isinstance(line.length, float)
     rect = line.rect()
     assert isinstance(rect, Rect)
     assert rect.min.as_tuple() == (0, 0)
@@ -20,7 +20,7 @@ def test_line_two_points():
     line = Line(points)
     assert line.num_points() == 2
     assert line.points() == points
-    assert line.length() == pytest.approx(1.0)
+    assert line.length == pytest.approx(1.0)
 
 
 def test_line_collinear():
@@ -28,7 +28,7 @@ def test_line_collinear():
     line = Line(points)
     # Length should be sqrt(2) + sqrt(2)
     expected_length = 2**0.5 + 2**0.5
-    assert line.length() == pytest.approx(expected_length)
+    assert line.length == pytest.approx(expected_length)
 
 
 def test_line_closed():
@@ -37,7 +37,7 @@ def test_line_closed():
     assert line.num_points() == 5
     assert line.points() == points
     # Perimeter of a square
-    assert line.length() == pytest.approx(4.0)
+    assert line.length == pytest.approx(4.0)
 
 
 def test_line_as_geometry():
