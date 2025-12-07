@@ -1497,7 +1497,7 @@ LineString = Line
 
 
 def Polygon(exterior, holes=None):
-    """Create a Polygon geometry from an exterior Ring and optional holes"""
+    """Create a Polygon geometry from an exterior ring (list of coordinates or Ring object) and optional holes (list of lists of coordinates or Ring objects)"""
     exterior = Ring(exterior) if not isinstance(exterior, Ring) else exterior
     holes = (
         [Ring(h) if not isinstance(h, Ring) else h for h in holes]
