@@ -203,6 +203,7 @@ cdef extern from "geos_c.h":
     ctypedef void *GEOSGeometry
     GEOSContextHandle_t GEOS_init_r()
     void GEOS_finish_r(GEOSContextHandle_t handle)
+    void GEOSGeom_destroy_r(GEOSContextHandle_t handle, GEOSGeometry *g)
     GEOSGeometry *GEOSUnaryUnion(const GEOSGeometry *g)
     GEOSGeometry *GEOSUnaryUnion_r(GEOSContextHandle_t handle, const GEOSGeometry *g)
     GEOSGeometry *GEOSBufferWithStyle_r(
@@ -995,7 +996,10 @@ cdef class Geometry:
             raise RuntimeError(f"GEOSBuffer failed with distance {distance}")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_buffered)
+
+        # Cleanup GEOS geometries
         GEOSGeom_destroy_r(ctx, g_geos)
+        GEOSGeom_destroy_r(ctx, g_buffered)
         GEOS_finish_r(ctx)
 
         if g_tg == NULL:
