@@ -214,6 +214,15 @@ class TestPolygonShapelyAPI:
         hole = [(2, 2), (4, 2), (4, 4), (2, 4), (2, 2)]
         poly = Polygon(exterior, holes=[hole])
         assert poly is not None
+        
+        # Verify exterior coordinates
+        assert poly.exterior().coords == exterior
+        
+        # Verify there is exactly one hole
+        assert len(poly.interiors) == 1
+        
+        # Verify the hole coordinates
+        assert poly.interiors[0].coords == hole
 
     def test_polygon_creation_with_exterior_as_list(self):
         from togo import Polygon

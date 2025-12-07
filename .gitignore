@@ -1,5 +1,6 @@
 # Project compilation files
 tg.[h|c]
+tgx.[h|c]
 togo.c
 
 # Byte-compiled / optimized / DLL files
