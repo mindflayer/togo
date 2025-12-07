@@ -5,13 +5,13 @@ ToGo now provides a Shapely-compatible API, making it easy to migrate from Shape
 ## Quick Start
 
 ```python
-from togo import Point, LineString, Polygon, Ring
+from togo import Point, LineString, Polygon
 from togo import from_wkt, from_geojson, to_wkt
 
 # Create geometries using Shapely-like constructors
 point = Point(1.0, 2.0)
 line = LineString([(0, 0), (1, 1), (2, 2)])
-poly = Polygon(Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]))
+poly = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
 
 # Access Shapely-compatible properties
 print(point.geom_type)  # 'Point'
@@ -80,14 +80,14 @@ line.__geo_interface__()  # GeoJSON-like dict
 ### Polygon
 
 ```python
-from togo import Polygon, Ring
+from togo import Polygon
 
 # Create a polygon
-exterior = Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
+exterior = [(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]
 poly = Polygon(exterior)
 
 # With holes
-hole = Ring([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+hole = [(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)]
 poly_with_hole = Polygon(exterior, holes=[hole])
 
 # Shapely-compatible properties
@@ -180,8 +180,8 @@ All predicates work with Shapely-compatible API:
 from togo import Point, Polygon, Ring, from_wkt
 
 # Create geometries
-poly1 = Polygon(Ring([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)]))
-poly2 = Polygon(Ring([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)]))
+poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
 point = Point(0.5, 0.5)
 
 # Convert to Geometry for predicates
@@ -212,17 +212,7 @@ geom1.coveredby(geom2)   # False
 
 ### Differences
 
-1. **Ring construction**: Polygons in ToGo require explicit `Ring` objects:
-   ```python
-   # Shapely
-   poly = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
-
-   # ToGo
-   from togo import Ring
-   poly = Polygon(Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]))
-   ```
-
-2. **Geometry conversion**: ToGo uses `.as_geometry()` for predicates:
+1. **Geometry conversion**: ToGo uses `.as_geometry()` for predicates:
    ```python
    # ToGo
    poly_geom = poly.as_geometry()
@@ -249,22 +239,20 @@ from shapely.geometry import Point, LineString, Polygon
 from shapely import from_wkt, to_wkt
 
 # After
-from togo import Point, LineString, Polygon, Ring
+from togo import Point, LineString, Polygon
 from togo import from_wkt, to_wkt
 ```
-
-Note: Polygon construction requires explicit Ring objects in ToGo.
 
 ## Complete Example
 
 ```python
-from togo import Point, LineString, Polygon, Ring
+from togo import Point, LineString, Polygon
 from togo import from_wkt, to_wkt
 
 # Create various geometries
 point = Point(1.0, 2.0)
 line = LineString([(0, 0), (1, 1), (2, 2)])
-poly = Polygon(Ring([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)]))
+poly = Polygon([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)])
 
 # Check properties
 print(f"Point: {point.geom_type}, coords: {point.coords}")
@@ -294,7 +282,7 @@ print(f"GeoJSON: {point.__geo_interface__()}")
 |-------------|----------|--------|
 | `Point(x, y)` | `Point(x, y)` | ✅ Supported |
 | `LineString(coords)` | `LineString(coords)` | ✅ Supported |
-| `Polygon(shell, holes)` | `Polygon(Ring(shell), holes=[Ring(...)])` | ✅ Supported (with Ring) |
+| `Polygon(shell, holes)` | `Polygon(shell, holes=[...])` | ✅ Supported |
 | `geom.geom_type` | `geom.geom_type` | ✅ Supported |
 | `geom.bounds` | `geom.bounds` | ✅ Supported |
 | `geom.area` | `geom.area` | ✅ Supported |

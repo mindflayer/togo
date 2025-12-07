@@ -1494,7 +1494,16 @@ def set_polygon_indexing_mode(ix: TGIndex):
 
 # Shapely-compatible aliases
 LineString = Line
-Polygon = Poly
+
+
+def Polygon(exterior, holes=None):
+    """Create a Polygon geometry from an exterior ring (list of coordinates or Ring object) and optional holes (list of lists of coordinates or Ring objects)"""
+    exterior = Ring(exterior) if not isinstance(exterior, Ring) else exterior
+    holes = (
+        [Ring(h) if not isinstance(h, Ring) else h for h in holes]
+        if holes is not None else None
+    )
+    return Poly(exterior, holes)
 
 
 def MultiPoint(points):
