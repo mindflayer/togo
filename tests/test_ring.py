@@ -5,7 +5,7 @@ from togo import Ring, Rect, Geometry, Poly
 def test_ring_triangle():
     points = [(0, 0), (1, 0), (0, 1), (0, 0)]
     ring = Ring(points)
-    assert ring.num_points() == 4
+    assert ring.num_points == 4
     assert ring.points() == points
     assert ring.area() == 0.5
     assert ring.perimeter() > 0
@@ -20,7 +20,7 @@ def test_ring_triangle():
 def test_ring_square():
     points = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
     ring = Ring(points)
-    assert ring.num_points() == 5
+    assert ring.num_points == 5
     assert ring.points() == points
     assert ring.area() == pytest.approx(1.0)
     assert ring.perimeter() == pytest.approx(4.0)
@@ -33,7 +33,7 @@ def test_ring_square():
 def test_ring_degenerate():
     points = [(0, 0), (0, 0), (0, 0)]
     ring = Ring(points)
-    assert ring.num_points() == 3
+    assert ring.num_points == 3
     assert ring.area() == 0
     assert ring.perimeter() == 0
     rect = ring.rect()
@@ -44,7 +44,7 @@ def test_ring_degenerate():
 def test_ring_nonconvex():
     points = [(0, 0), (2, 0), (1, 1), (2, 2), (0, 2), (0, 0)]
     ring = Ring(points)
-    assert ring.num_points() == 6
+    assert ring.num_points == 6
     assert ring.points() == points
     assert ring.is_convex() is False
     assert ring.area() > 0
@@ -62,5 +62,4 @@ def test_ring_as_geometry():
     g = p.as_geometry()
     assert isinstance(g, Geometry)
     assert g.type_string() == "Polygon"
-    rect = g.rect()
-    assert rect == ((0.0, 0.0), (1.0, 1.0))
+    assert g.bounds == (0.0, 0.0, 1.0, 1.0)

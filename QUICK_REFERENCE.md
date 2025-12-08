@@ -125,7 +125,7 @@ lines = [LineString([(0, 0), (1, 1)]), LineString([(2, 2), (3, 3)])]
 multi = MultiLineString(lines)
 
 # MultiPolygon
-polys = [Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]), 
+polys = [Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]),
          Polygon([(2, 2), (3, 2), (3, 3), (2, 3), (2, 2)])]
 multi = MultiPolygon(polys)
 
@@ -141,7 +141,8 @@ All geometries support:
 ```python
 geom.geom_type     # String: 'Point', 'LineString', 'Polygon', etc.
 geom.bounds        # Tuple: (minx, miny, maxx, maxy)
-geom.is_empty      # Boolean
+geom.is_empty      # Boolean: True if geometry is empty
+geom.is_valid      # Boolean: True if geometry is valid
 geom.wkt           # String: WKT representation
 geom.wkb           # Bytes: WKB representation
 geom.__geo_interface__()  # Dict: GeoJSON-like

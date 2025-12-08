@@ -27,4 +27,4 @@ def test_point_as_geometry():
     g = p.as_geometry()
     assert isinstance(g, Geometry)
     assert g.type_string() == "Point"
-    assert g.rect() == ((3.5, -7.2), (3.5, -7.2))
+    assert g.bounds == (3.5, -7.2, 3.5, -7.2)

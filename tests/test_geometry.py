@@ -5,15 +5,15 @@ from togo import Geometry, Point, Ring, Poly
 def test_geometry_wkt():
     g = Geometry("POINT(1 2)", fmt="wkt")
     assert g.type_string() == "Point"
-    assert g.rect() == ((1.0, 2.0), (1.0, 2.0))
-    assert g.memsize() == 24
-    assert g.num_points() == 0  # FIXME? Points in a Point geometry is considered 0
+    assert g.bounds == (1.0, 2.0, 1.0, 2.0)
+    assert g.memsize == 24
+    assert g.num_points == 0  # FIXME? Points in a Point geometry is considered 0
     assert not g.is_feature()
     assert not g.is_featurecollection()
     assert not g.is_empty
-    assert g.dims() == 2
-    assert g.has_z() is False
-    assert g.has_m() is False
+    assert g.dims == 2
+    assert g.has_z is False
+    assert g.has_m is False
     assert g.to_wkt() == "POINT(1 2)"
 
 
@@ -85,15 +85,15 @@ def test_equals():
 
 def test_geometry_num_lines_polys_geometries():
     g_lines = Geometry("MULTILINESTRING((0 0,1 1),(2 2,3 3))", fmt="wkt")
-    assert g_lines.num_lines() == 2
+    assert g_lines.num_lines == 2
     g_polys = Geometry(
         "MULTIPOLYGON(((0 0,1 0,1 1,0 1,0 0)),((2 2,3 2,3 3,2 3,2 2)))", fmt="wkt"
     )
-    assert g_polys.num_polys() == 2
+    assert g_polys.num_polys == 2
     g_collection = Geometry(
         "GEOMETRYCOLLECTION(POINT(1 2),LINESTRING(0 0,1 1))", fmt="wkt"
     )
-    assert g_collection.num_geometries() == 2
+    assert g_collection.num_geometries == 2
     # Use Geometry.__getitem__ to access sub-geometries of MultiLineString
     first_line = g_lines[0]
     assert first_line.type_string() == "LineString"
@@ -101,10 +101,10 @@ def test_geometry_num_lines_polys_geometries():
 
 def test_geometry_z_m():
     g = Geometry("POINT ZM (1 2 3 4)", fmt="wkt")
-    assert g.has_z() is True
-    assert g.has_m() is True
-    assert g.z() == 3.0
-    assert g.m() == 4.0
+    assert g.has_z is True
+    assert g.has_m is True
+    assert g.z == 3.0
+    assert g.m == 4.0
 
 
 def test_geometry_spatial_predicates():
@@ -133,21 +133,21 @@ def test_geometry_to_wkb_and_geobin():
 def test_geometry_constructor_wkt():
     g = Geometry("POINT(1 2)", fmt="wkt")
     assert g.type_string() == "Point"
-    assert g.rect() == ((1.0, 2.0), (1.0, 2.0))
+    assert g.bounds == (1.0, 2.0, 1.0, 2.0)
 
 
 def test_geometry_constructor_geojson():
     geojson = '{"type":"Point","coordinates":[1,2]}'
     g = Geometry(geojson, fmt="geojson")
     assert g.type_string() == "Point"
-    assert g.rect() == ((1.0, 2.0), (1.0, 2.0))
+    assert g.bounds == (1.0, 2.0, 1.0, 2.0)
 
 
 def test_geometry_constructor_hex():
     hexstr = "0101000000000000000000F03F0000000000000040"
     g = Geometry(hexstr, fmt="hex")
     assert g.type_string() == "Point"
-    assert g.rect() == ((1.0, 2.0), (1.0, 2.0))
+    assert g.bounds == (1.0, 2.0, 1.0, 2.0)
 
 
 def test_geometry_constructor_invalid():
@@ -181,7 +181,7 @@ def test_geometry_poly_accessor():
     g = Geometry(wkt, fmt="wkt")
     poly = g.poly()
     ext = poly.exterior()
-    assert ext.num_points() == 5
+    assert ext.num_points == 5
 
 
 def test_geometry_geom_at():
@@ -229,7 +229,7 @@ def test_unary_union_geos_polys():
     area = union_geom.poly().exterior().area()
     assert area == 7.0
     # Bounding box should be ((0,0),(3,3))
-    assert union_geom.rect() == ((0.0, 0.0), (3.0, 3.0))
+    assert union_geom.bounds == (0.0, 0.0, 3.0, 3.0)
     # WKT should represent the merged polygon
     wkt = union_geom.to_wkt()
     assert wkt == "POLYGON((2 0,0 0,0 2,1 2,1 3,3 3,3 1,2 1,2 0))"

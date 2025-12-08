@@ -57,5 +57,5 @@ def test_poly_as_geometry():
     g = poly.as_geometry()
     assert isinstance(g, Geometry)
     assert g.type_string() == "Polygon"
-    rect = g.rect()
-    assert rect == ((0.0, 0.0), (1.0, 1.0))
+    rect = g.bounds
+    assert rect == (0.0, 0.0, 1.0, 1.0)

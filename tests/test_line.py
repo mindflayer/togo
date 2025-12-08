@@ -5,7 +5,7 @@ from togo import Line, Rect, Geometry
 def test_line_basic():
     points = [(0, 0), (1, 1), (2, 2)]
     line = Line(points)
-    assert line.num_points() == 3
+    assert line.num_points == 3
     assert line.points() == points
     assert isinstance(line.length, float)
     rect = line.rect()
@@ -18,7 +18,7 @@ def test_line_basic():
 def test_line_two_points():
     points = [(0, 0), (1, 0)]
     line = Line(points)
-    assert line.num_points() == 2
+    assert line.num_points == 2
     assert line.points() == points
     assert line.length == pytest.approx(1.0)
 
@@ -29,12 +29,13 @@ def test_line_collinear():
     # Length should be sqrt(2) + sqrt(2)
     expected_length = 2**0.5 + 2**0.5
     assert line.length == pytest.approx(expected_length)
+    assert line.num_points == 3
 
 
 def test_line_closed():
     points = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
     line = Line(points)
-    assert line.num_points() == 5
+    assert line.num_points == 5
     assert line.points() == points
     # Perimeter of a square
     assert line.length == pytest.approx(4.0)
@@ -46,8 +47,8 @@ def test_line_as_geometry():
     g = line.as_geometry()
     assert isinstance(g, Geometry)
     assert g.type_string() == "LineString"
-    rect = g.rect()
-    assert rect == ((0.0, 0.0), (2.0, 2.0))
+    rect = g.bounds
+    assert rect == (0.0, 0.0, 2.0, 2.0)
 
 
 def test_line_getitem():
