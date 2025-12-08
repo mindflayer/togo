@@ -53,6 +53,7 @@ p.y              # 2.5
 p.coords         # [(1.5, 2.5)]
 p.bounds         # (1.5, 2.5, 1.5, 2.5)
 p.is_empty       # False
+p.is_valid       # True
 p.wkt            # 'POINT(1.5 2.5)'
 p.wkb            # bytes object
 p.__geo_interface__()  # {'type': 'Point', 'coordinates': [1.5, 2.5]}
@@ -71,6 +72,7 @@ line.geom_type   # 'LineString'
 line.coords      # [(0, 0), (1, 1), (2, 2), (3, 3)]
 line.bounds      # (0, 0, 3, 3)
 line.is_empty    # False
+line.is_valid    # True
 line.length      # 4.242... (property)
 line.wkt         # 'LINESTRING(0 0,1 1,2 2,3 3)'
 line.wkb         # bytes object
@@ -95,6 +97,7 @@ poly.geom_type   # 'Polygon'
 poly.bounds      # (0, 0, 4, 4)
 poly.area        # 16.0
 poly.is_empty    # False
+poly.is_valid    # True
 poly.exterior()  # Ring object
 poly.interiors   # List of Ring objects (holes)
 poly.wkt         # 'POLYGON((0 0,4 0,4 4,0 4,0 0))'
@@ -149,6 +152,7 @@ All geometry types support these Shapely-compatible properties:
 geom.geom_type    # String: 'Point', 'LineString', 'Polygon', etc.
 geom.bounds       # Tuple: (minx, miny, maxx, maxy)
 geom.is_empty     # Boolean: True if geometry is empty (property)
+geom.is_valid     # Boolean: True if geometry is valid (property)
 geom.wkt          # String: WKT representation
 geom.wkb          # Bytes: WKB representation
 geom.__geo_interface__()  # Dict: GeoJSON-like interface
@@ -242,7 +246,7 @@ For detailed buffer documentation, see [BUFFER_API.md](BUFFER_API.md).
 ### Similarities
 
 1. **Class names**: `Point`, `LineString`, `Polygon`
-2. **Properties**: `geom_type`, `bounds`, `area`, `coords`, `is_empty`
+2. **Properties**: `geom_type`, `bounds`, `area`, `coords`, `is_empty`, `is_valid`
 3. **Serialization**: `wkt`, `wkb`, `__geo_interface__`
 4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`
 5. **Predicates**: `contains()`, `intersects()`, `touches()`, etc.

@@ -210,6 +210,7 @@ cdef extern from "geos_c.h":
         GEOSContextHandle_t handle, const GEOSGeometry *g, double width,
         int quadSegs, int endCapStyle, int joinStyle, double mitreLimit
     )
+    char GEOSisValid_r(GEOSContextHandle_t handle, const GEOSGeometry *g)
 
 cdef extern from "tgx.h":
     GEOSGeometry *tg_geom_to_geos(GEOSContextHandle_t handle, const tg_geom *geom)
@@ -263,16 +264,16 @@ cdef class Geometry:
         try:
             return self.to_wkt()
         except Exception:
-            # Fallback to type string with rect if WKT fails
+            # Fallback to type string with bounds if WKT fails
             try:
                 t = self.type_string()
             except Exception:
                 t = "?"
             try:
-                r = self.rect()
+                r = self.bounds
             except Exception:
                 r = None
-            return f"Geometry(type={t}, rect={r})"
+            return f"Geometry(type={t}, bounds={r})"
 
     def __repr__(self):
         return self.__str__()
@@ -283,10 +284,12 @@ cdef class Geometry:
     def type_string(self):
         return tg_geom_type_string(tg_geom_typeof(self.geom)).decode("utf-8")
 
-    def rect(self):
+    @property
+    def bounds(self):
+        """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
         cdef tg_rect r
         r = tg_geom_rect(self.geom)
-        return ((r.min.x, r.min.y), (r.max.x, r.max.y))
+        return (r.min.x, r.min.y, r.max.x, r.max.y)
 
     def is_feature(self):
         return tg_geom_is_feature(self.geom) != 0
@@ -298,33 +301,68 @@ cdef class Geometry:
     def is_empty(self):
         return tg_geom_is_empty(self.geom) != 0
 
+    @property
+    def is_valid(self):
+        """Check if the geometry is valid using GEOS.
+
+        A geometry is valid if it satisfies geometric constraints.
+        For example, polygons must have proper ring orientation and no self-intersections.
+        """
+        if self.geom == NULL:
+            return False
+
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
+        if g_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert TG geometry to GEOS")
+
+        cdef char result = GEOSisValid_r(ctx, g_geos)
+        GEOSGeom_destroy_r(ctx, g_geos)
+        GEOS_finish_r(ctx)
+
+        return result == 1
+
+    @property
     def dims(self):
         return tg_geom_dims(self.geom)
 
+    @property
     def has_z(self):
         return tg_geom_has_z(self.geom) != 0
 
+    @property
     def has_m(self):
         return tg_geom_has_m(self.geom) != 0
 
+    @property
     def z(self):
         return tg_geom_z(self.geom)
 
+    @property
     def m(self):
         return tg_geom_m(self.geom)
 
+    @property
     def memsize(self):
         return tg_geom_memsize(self.geom)
 
+    @property
     def num_points(self):
         return tg_geom_num_points(self.geom)
 
+    @property
     def num_lines(self):
         return tg_geom_num_lines(self.geom)
 
+    @property
     def num_polys(self):
         return tg_geom_num_polys(self.geom)
 
+    @property
     def num_geometries(self):
         return tg_geom_num_geometries(self.geom)
 
@@ -1073,6 +1111,11 @@ cdef class Point:
         return False
 
     @property
+    def is_valid(self):
+        """A Point is always valid."""
+        return True
+
+    @property
     def wkt(self):
         """Returns WKT representation"""
         return self.as_geometry().to_wkt()
@@ -1227,6 +1270,7 @@ cdef class Ring:
         if self.ring and self.owns_pointer:
             tg_ring_free(self.ring)
 
+    @property
     def num_points(self):
         return tg_ring_num_points(self.ring)
 
@@ -1271,6 +1315,16 @@ cdef class Ring:
     def coords(self):
         """Returns coordinate sequence for Shapely compatibility"""
         return self.points()
+
+    @property
+    def is_empty(self):
+        """Check if Ring is empty"""
+        return tg_ring_num_points(self.ring) == 0
+
+    @property
+    def is_valid(self):
+        """A Ring is always valid."""
+        return True
 
     def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
@@ -1333,6 +1387,7 @@ cdef class Line:
     def __repr__(self):
         return self.__str__()
 
+    @property
     def num_points(self):
         return tg_line_num_points(self.line)
 
@@ -1362,7 +1417,7 @@ cdef class Line:
         return self.line
 
     def __getitem__(self, idx):
-        n = self.num_points()
+        n = self.num_points
         if not (0 <= idx < n):
             raise IndexError("Line index out of range")
         cdef tg_point pt = tg_line_point_at(self.line, idx)
@@ -1389,6 +1444,11 @@ cdef class Line:
     def is_empty(self):
         """Check if LineString is empty"""
         return tg_line_num_points(self.line) == 0
+
+    @property
+    def is_valid(self):
+        """A LineString is always valid."""
+        return True
 
     @property
     def wkt(self):
@@ -1545,6 +1605,34 @@ cdef class Poly:
         """Check if Polygon is empty"""
         ext = tg_poly_exterior(self.poly)
         return tg_ring_num_points(ext) == 0
+
+    @property
+    def is_valid(self):
+        """Check if the polygon is valid using GEOS.
+
+        A polygon is valid if it satisfies geometric constraints,
+        such as proper ring orientation and no self-intersections.
+        """
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef tg_geom *g_tg = tg_geom_new_polygon(self.poly)
+        if not g_tg:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to create geometry from polygon")
+
+        cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, g_tg)
+        tg_geom_free(g_tg)
+        if g_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert TG geometry to GEOS")
+
+        cdef char result = GEOSisValid_r(ctx, g_geos)
+        GEOSGeom_destroy_r(ctx, g_geos)
+        GEOS_finish_r(ctx)
+
+        return result == 1
 
     @property
     def wkt(self):

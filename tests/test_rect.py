@@ -61,4 +61,4 @@ def test_rect_as_geometry():
     g = rect.as_geometry()
     assert isinstance(g, Geometry)
     assert g.type_string() == "Polygon"
-    assert g.rect() == ((0.0, 0.0), (2.0, 3.0))
+    assert g.bounds == (0.0, 0.0, 2.0, 3.0)

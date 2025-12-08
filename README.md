@@ -156,7 +156,7 @@ from togo import Line
 line = Line([(0,0), (1,1), (2,0)])
 
 # Get number of points
-print(f"Number of points: {line.num_points()}")
+print(f"Number of points: {line.num_points}")
 
 # Get all points as a list of tuples
 print(f"Points: {line.points()}")
@@ -204,7 +204,7 @@ poly = Poly(exterior, holes=[hole1])
 
 # Get the exterior ring
 ext_ring = poly.exterior()
-print(f"Exterior has {ext_ring.num_points()} points")
+print(f"Exterior has {ext_ring.num_points} points")
 
 # Get number of holes
 print(f"Number of holes: {poly.num_holes()}")
