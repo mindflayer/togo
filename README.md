@@ -29,7 +29,7 @@ pip install togo
 ### Shapely-Compatible API
 
 ```python
-from togo import Point, LineString, Polygon, Ring
+from togo import Point, LineString, Polygon
 from togo import from_wkt, from_geojson
 
 # Create geometries using familiar Shapely-like syntax
