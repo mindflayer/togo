@@ -101,10 +101,10 @@ buffered = geom.buffer(1.0, quad_segs=8)
 ### Buffer a Polygon
 
 ```python
-from togo import Polygon, Ring
+from togo import Polygon
 
 # Expand a polygon
-exterior = Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
 poly = Polygon(exterior)
 
 # Expand outward by 2 units
@@ -114,7 +114,7 @@ expanded = poly.buffer(2.0)
 shrunk = poly.buffer(-1.0)
 
 # Polygon with holes
-hole = Ring([(2, 2), (4, 2), (4, 4), (2, 4), (2, 2)])
+hole = [(2, 2), (4, 2), (4, 4), (2, 4), (2, 2)]
 poly_with_hole = Polygon(exterior, holes=[hole])
 buffered = poly_with_hole.buffer(1.0)
 ```
