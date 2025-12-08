@@ -35,7 +35,7 @@ from togo import from_wkt, from_geojson
 # Create geometries using familiar Shapely-like syntax
 point = Point(1.0, 2.0)
 line = LineString([(0, 0), (1, 1), (2, 2)])
-poly = Polygon(Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]))
+poly = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
 
 # Access Shapely-compatible properties
 print(point.geom_type)  # 'Point'
