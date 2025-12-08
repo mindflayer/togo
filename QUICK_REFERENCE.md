@@ -125,7 +125,8 @@ lines = [LineString([(0, 0), (1, 1)]), LineString([(2, 2), (3, 3)])]
 multi = MultiLineString(lines)
 
 # MultiPolygon
-polys = [Polygon(), Polygon()]
+polys = [Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]), 
+         Polygon([(2, 2), (3, 2), (3, 3), (2, 3), (2, 2)])]
 multi = MultiPolygon(polys)
 
 # GeometryCollection
