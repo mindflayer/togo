@@ -164,6 +164,19 @@ class TestPolyIsValid:
         poly = Polygon([(0, 0), (1, 0), (0.5, 1), (0, 0)])
         assert poly.is_valid is True
 
+    def test_empty_polygon_from_empty_ring_is_valid(self):
+        """Test that empty polygon created from empty Ring is valid."""
+        empty_ring = Ring([])
+        empty_poly = Polygon(empty_ring)
+        assert empty_poly.is_empty is True
+        assert empty_poly.is_valid is True
+
+    def test_empty_polygon_from_wkt_is_valid(self):
+        """Test that empty polygon parsed from WKT is valid."""
+        empty_poly = from_wkt("POLYGON EMPTY")
+        assert empty_poly.is_empty is True
+        assert empty_poly.is_valid is True
+
 
 class TestGeometryIsInvalid:
     """Test is_valid property for geometrically invalid geometries."""
