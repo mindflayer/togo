@@ -241,6 +241,42 @@ buffered = geom.buffer(
 
 For detailed buffer documentation, see [BUFFER_API.md](BUFFER_API.md).
 
+### Simplify
+
+All geometry types support the `simplify()` method for reducing the complexity of geometries using the Douglas-Peucker algorithm:
+
+```python
+from togo import Point, LineString, Polygon, Ring
+
+# Simplify a line
+line = LineString([(0, 0), (0.1, 0.1), (0.2, 0.2), (1, 1), (2, 2)])
+simplified = line.simplify(0.5, preserve_topology=True)
+
+# Simplify a polygon with topology preservation (default)
+poly = Polygon([
+    (0, 0), (0.1, 0), (0.2, 0), (1, 0),
+    (2, 0), (2, 1), (2, 2), (1, 2), (0, 2), (0, 0)
+])
+simplified = poly.simplify(0.5)  # preserve_topology=True by default
+
+# Simplify without topology preservation (faster, may create invalid geometries)
+simplified = poly.simplify(1.0, preserve_topology=False)
+
+# Via Geometry object
+geom = from_wkt("LINESTRING(0 0, 0.1 0.1, 1 1, 1.1 1.1, 2 2)")
+simplified = geom.simplify(
+    tolerance=0.5,          # Max distance from original coordinates
+    preserve_topology=True  # Preserve topology (default)
+)
+```
+
+The `simplify()` method:
+- Reduces the number of vertices/points in a geometry
+- Uses the Douglas-Peucker algorithm
+- `preserve_topology=True` (default): Uses topology-preserving simplification to avoid self-intersections and invalid geometries
+- `preserve_topology=False`: Uses standard Douglas-Peucker for faster simplification but may produce invalid geometries
+- `tolerance`: Maximum distance from original coordinates. Larger tolerance = more simplification
+
 ## Comparison with Shapely
 
 ### Similarities
@@ -249,9 +285,9 @@ For detailed buffer documentation, see [BUFFER_API.md](BUFFER_API.md).
 2. **Properties**: `geom_type`, `bounds`, `area`, `coords`, `is_empty`, `is_valid`
 3. **Serialization**: `wkt`, `wkb`, `__geo_interface__`
 4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`
-5. **Predicates**: `contains()`, `intersects()`, `touches()`, etc.
-6. **Operations**: `buffer()` - Create geometrical buffers
 
+5. **Predicates**: `contains()`, `intersects()`, `touches()`, `crosses()`, `within()`, `equals()`
+6. **Operations**: `union()`, `intersection()`, `difference()`, `buffer()`, `simplify()`
 ### Differences
 
 1. **Geometry conversion**: ToGo uses `.as_geometry()` for predicates:
@@ -342,6 +378,7 @@ print(f"GeoJSON: {point.__geo_interface__()}")
 | `touches()` | `touches()` | ✅ Supported |
 | `within()` | `within()` | ✅ Supported |
 | `buffer()` | `buffer()` | ✅ Supported (via GEOS) |
+| `simplify()` | `simplify()` | ✅ Supported (via GEOS) |
 | `union()` | `unary_union()` | ✅ Supported (via GEOS) |
 | `intersection()` | - | ❌ Not yet (use GEOS via tgx) |
 
