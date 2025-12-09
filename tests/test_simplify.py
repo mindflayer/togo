@@ -13,7 +13,6 @@ class TestGeometrySimplify:
         """Test simplifying a LineString geometry"""
         # Create a line with extra points that should be simplified
         geom = Geometry("LINESTRING(0 0, 0.1 0.1, 0.2 0.2, 1 1, 2 2)", fmt="wkt")
-        geom.to_wkt()
         simplified = geom.simplify(0.5, preserve_topology=True)
         assert simplified is not None
         assert simplified.geom_type == "LineString"
