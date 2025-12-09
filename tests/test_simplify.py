@@ -119,7 +119,6 @@ class TestLineStringSimplify:
         # Simplified should have fewer or equal points
         # Use as_line() to get a Line object if possible, then check num_points
         simplified_wkt = simplified.to_wkt()
-        line.as_geometry().to_wkt()
         assert simplified_wkt is not None
 
     def test_linestring_simplify_preserve_topology(self):
