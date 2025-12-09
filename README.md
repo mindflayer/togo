@@ -4,9 +4,9 @@ Python bindings for [TG](https://github.com/tidwall/tg)
 
 ToGo is a high-performance Python library for computational geometry, providing a Cython wrapper around the above-mentioned C library.
 
-The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient library for geometric operations, including spatial predicates, format conversions, and spatial indexing.
+The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient library for geometric operations, including spatial predicates, format conversions, and spatial indexing. ToGo's API is flexible and allows you to reason in either TG concepts (if you're familiar with the TG library) or Shapely conventions (the de facto standard for geospatial work in Python)—whichever fits your workflow best.
 
-**New:** ToGo now provides a **Shapely-compatible API**! See [SHAPELY_API.md](SHAPELY_API.md) for details.
+See [SHAPELY_API.md](SHAPELY_API.md) for more details on Shapely compatibility.
 
 ## Installation
 
@@ -18,65 +18,59 @@ pip install togo
 
 - Fast and efficient geometric operations
 - Support for standard geometry types: Point, Line, Ring, Polygon, and their multi-variants
-- **Shapely-compatible API** with familiar class names and properties
+- Flexible API supporting both TG and Shapely conventions
 - Geometric predicates: contains, intersects, covers, touches, etc.
 - Format conversion between WKT, GeoJSON, WKB, and HEX
 - Spatial indexing for accelerated queries
 - Memory-efficient C implementation with Python-friendly interface
+- Advanced operations via libgeos integration (buffer, unary union, etc.)
 
 ## Basic Usage
 
-### Shapely-Compatible API
+ToGo's API supports multiple styles of interaction. You can use Shapely-like conventions for familiarity, TG-like conventions if you're already familiar with that library, or mix both as needed.
+
+### Creating Geometries
 
 ```python
-from togo import Point, LineString, Polygon
-from togo import from_wkt, from_geojson
+from togo import Point, LineString, Polygon, Ring, Poly, Geometry
 
-# Create geometries using familiar Shapely-like syntax
+# Shapely-like syntax
 point = Point(1.0, 2.0)
 line = LineString([(0, 0), (1, 1), (2, 2)])
 poly = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
 
-# Access Shapely-compatible properties
-print(point.geom_type)  # 'Point'
-print(point.bounds)     # (1.0, 2.0, 1.0, 2.0)
-print(line.length)      # 2.828...
-print(poly.area)        # 16.0
-
-# Parse from WKT/GeoJSON
-geom = from_wkt("POINT (1 2)")
-geom2 = from_geojson('{"type":"Point","coordinates":[3,4]}')
-
-# Spatial predicates
-poly_geom = poly.as_geometry()
-point_geom = point.as_geometry()
-if poly_geom.contains(point_geom):
-    print("Polygon contains point!")
-```
-
-### Original ToGo API
-
-```python
-from togo import Geometry, Point, Ring, Poly
-
-# Create a geometry from GeoJSON
-geom = Geometry('{"type":"Point","coordinates":[1.0,2.0]}')
-
-# Create a point
-point = Point(1.0, 2.0)
-
-# Create a polygon
+# TG-like syntax with Ring and Poly
 ring = Ring([(0,0), (10,0), (10,10), (0,10), (0,0)])
 polygon = Poly(ring)
 
-# Convert to various formats
-wkt = polygon.as_geometry().to_wkt()
-geojson = polygon.as_geometry().to_geojson()
-
-# Perform spatial predicates
-point_geom = point.as_geometry()
-contains = polygon.as_geometry().contains(point_geom)
+# Direct Geometry creation from formats
+geom = Geometry("POINT(1 2)", fmt='wkt')
+geom2 = Geometry('{"type":"Point","coordinates":[1,2]}', fmt='geojson')
 ```
+
+### Working with Geometries
+
+```python
+from togo import Point, Polygon
+
+# Access properties (works with both API styles)
+point = Point(1.0, 2.0)
+print(point.geom_type)     # 'Point'
+print(point.bounds)        # (1.0, 2.0, 1.0, 2.0)
+
+poly = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
+print(poly.area)           # 16.0
+print(poly.length)         # 16.0
+
+# Convert between formats
+print(point.to_wkt())      # 'POINT (1 2)'
+print(point.to_geojson())  # '{"type":"Point","coordinates":[1.0,2.0]}'
+
+# Spatial predicates
+if poly.contains(point):
+    print("Polygon contains point!")
+```
+
 
 ## Core Classes
 
