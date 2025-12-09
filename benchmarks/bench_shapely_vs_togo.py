@@ -304,6 +304,59 @@ def main():
         iters=200,
     )
 
+    # Simplify operations
+    simplify_line = from_wkt(
+        "LINESTRING (0 0, 0.1 0.1, 0.2 0.2, 0.3 0.3, 1 1, 1.1 1.1, 1.2 1.2, 2 2, 2.1 2.1, 2.2 2.2, 3 3)"
+    )
+    shp_simplify_line = shp_from_wkt(
+        "LINESTRING (0 0, 0.1 0.1, 0.2 0.2, 0.3 0.3, 1 1, 1.1 1.1, 1.2 1.2, 2 2, 2.1 2.1, 2.2 2.2, 3 3)"
+    )
+
+    simplify_poly = from_geojson(TOGO_JSON)
+    shp_simplify_poly = shp_from_geojson(TOGO_JSON)
+
+    bench_case(
+        "simplify linestring (tolerance=0.5, preserve_topology=True)",
+        lambda: simplify_line.simplify(0.5, preserve_topology=True),
+        lambda: shp_simplify_line.simplify(0.5, preserve_topology=True),
+        iters=1000,
+    )
+
+    bench_case(
+        "simplify linestring (tolerance=0.5, preserve_topology=False)",
+        lambda: simplify_line.simplify(0.5, preserve_topology=False),
+        lambda: shp_simplify_line.simplify(0.5, preserve_topology=False),
+        iters=1000,
+    )
+
+    bench_case(
+        "simplify polygon (tolerance=0.05, preserve_topology=True)",
+        lambda: simplify_poly.simplify(0.05, preserve_topology=True),
+        lambda: shp_simplify_poly.simplify(0.05, preserve_topology=True),
+        iters=500,
+    )
+
+    bench_case(
+        "simplify polygon (tolerance=0.05, preserve_topology=False)",
+        lambda: simplify_poly.simplify(0.05, preserve_topology=False),
+        lambda: shp_simplify_poly.simplify(0.05, preserve_topology=False),
+        iters=500,
+    )
+
+    bench_case(
+        "simplify polygon (tolerance=0.1, preserve_topology=True)",
+        lambda: simplify_poly.simplify(0.1, preserve_topology=True),
+        lambda: shp_simplify_poly.simplify(0.1, preserve_topology=True),
+        iters=500,
+    )
+
+    bench_case(
+        "simplify polygon (tolerance=0.1, preserve_topology=False)",
+        lambda: simplify_poly.simplify(0.1, preserve_topology=False),
+        lambda: shp_simplify_poly.simplify(0.1, preserve_topology=False),
+        iters=500,
+    )
+
     print("\nNote: Results are rough microbenchmarks. Real-world performance can vary.")
 
 

@@ -211,6 +211,12 @@ cdef extern from "geos_c.h":
         int quadSegs, int endCapStyle, int joinStyle, double mitreLimit
     )
     char GEOSisValid_r(GEOSContextHandle_t handle, const GEOSGeometry *g)
+    GEOSGeometry *GEOSSimplify_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g, double tolerance
+    )
+    GEOSGeometry *GEOSTopologyPreserveSimplify_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g, double tolerance
+    )
 
 cdef extern from "tgx.h":
     GEOSGeometry *tg_geom_to_geos(GEOSContextHandle_t handle, const tg_geom *geom)
@@ -1058,6 +1064,62 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
+    def simplify(self, tolerance: float, preserve_topology: bool = True) -> Geometry:
+        """
+        Return a simplified geometry produced by the Douglas-Peucker algorithm.
+
+        Parameters:
+        -----------
+        tolerance : float
+            The tolerance distance. Coordinates of the simplified geometry will be no more
+            than the tolerance distance from the original.
+        preserve_topology : bool
+            If True (default), use topology-preserving simplification which is more
+            computationally expensive but prevents self-intersections and invalid geometries.
+            If False, use the standard Douglas-Peucker algorithm which may produce
+            self-intersecting geometries but is faster.
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the simplified shape
+        """
+        if tolerance < 0:
+            raise ValueError("tolerance must be >= 0")
+
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
+        if g_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert TG geometry to GEOS")
+
+        cdef GEOSGeometry *g_simplified
+        if preserve_topology:
+            g_simplified = GEOSTopologyPreserveSimplify_r(ctx, g_geos, tolerance)
+        else:
+            g_simplified = GEOSSimplify_r(ctx, g_geos, tolerance)
+
+        if g_simplified == NULL:
+            GEOSGeom_destroy_r(ctx, g_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError(f"GEOSSimplify failed with tolerance {tolerance}")
+
+        cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_simplified)
+        if g_tg == NULL:
+            GEOSGeom_destroy_r(ctx, g_simplified)
+            GEOSGeom_destroy_r(ctx, g_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+
+        GEOSGeom_destroy_r(ctx, g_simplified)
+        GEOSGeom_destroy_r(ctx, g_geos)
+        GEOS_finish_r(ctx)
+
+        return _geometry_from_ptr(g_tg)
+
 
 cdef class Point:
     cdef tg_point pt
@@ -1155,6 +1217,26 @@ cdef class Point:
             A new Geometry representing the buffered point (as a polygon)
         """
         return self.as_geometry().buffer(distance, quad_segs, cap_style, join_style, mitre_limit)
+
+    def simplify(self, tolerance: float, preserve_topology: bool = True) -> Geometry:
+        """
+        Return a simplified geometry produced by the Douglas-Peucker algorithm.
+
+        Parameters:
+        -----------
+        tolerance : float
+            The tolerance distance. Coordinates of the simplified geometry will be no more
+            than the tolerance distance from the original.
+        preserve_topology : bool
+            If True (default), use topology-preserving simplification.
+            If False, use the standard Douglas-Peucker algorithm.
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the simplified shape
+        """
+        return self.as_geometry().simplify(tolerance, preserve_topology)
 
 
 cdef class Rect:
@@ -1352,6 +1434,26 @@ cdef class Ring:
         """
         return self.as_geometry().buffer(distance, quad_segs, cap_style, join_style, mitre_limit)
 
+    def simplify(self, tolerance: float, preserve_topology: bool = True) -> Geometry:
+        """
+        Return a simplified geometry produced by the Douglas-Peucker algorithm.
+
+        Parameters:
+        -----------
+        tolerance : float
+            The tolerance distance. Coordinates of the simplified geometry will be no more
+            than the tolerance distance from the original.
+        preserve_topology : bool
+            If True (default), use topology-preserving simplification.
+            If False, use the standard Douglas-Peucker algorithm.
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the simplified shape
+        """
+        return self.as_geometry().simplify(tolerance, preserve_topology)
+
 
 cdef class Line:
     cdef tg_line *line
@@ -1489,6 +1591,26 @@ cdef class Line:
             A new Geometry representing the buffered line
         """
         return self.as_geometry().buffer(distance, quad_segs, cap_style, join_style, mitre_limit)
+
+    def simplify(self, tolerance: float, preserve_topology: bool = True) -> Geometry:
+        """
+        Return a simplified geometry produced by the Douglas-Peucker algorithm.
+
+        Parameters:
+        -----------
+        tolerance : float
+            The tolerance distance. Coordinates of the simplified geometry will be no more
+            than the tolerance distance from the original.
+        preserve_topology : bool
+            If True (default), use topology-preserving simplification.
+            If False, use the standard Douglas-Peucker algorithm.
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the simplified shape
+        """
+        return self.as_geometry().simplify(tolerance, preserve_topology)
 
 
 cdef class Poly:
@@ -1683,6 +1805,26 @@ cdef class Poly:
             A new Geometry representing the buffered polygon
         """
         return self.as_geometry().buffer(distance, quad_segs, cap_style, join_style, mitre_limit)
+
+    def simplify(self, tolerance: float, preserve_topology: bool = True) -> Geometry:
+        """
+        Return a simplified geometry produced by the Douglas-Peucker algorithm.
+
+        Parameters:
+        -----------
+        tolerance : float
+            The tolerance distance. Coordinates of the simplified geometry will be no more
+            than the tolerance distance from the original.
+        preserve_topology : bool
+            If True (default), use topology-preserving simplification.
+            If False, use the standard Douglas-Peucker algorithm.
+
+        Returns:
+        --------
+        Geometry
+            A new Geometry representing the simplified shape
+        """
+        return self.as_geometry().simplify(tolerance, preserve_topology)
 
 
 cdef class Segment:
