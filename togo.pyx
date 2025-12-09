@@ -1105,7 +1105,7 @@ cdef class Geometry:
         if g_simplified == NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
             GEOS_finish_r(ctx)
-            raise RuntimeError(f"GEOSSimplify failed with tolerance {tolerance}")
+            raise RuntimeError(f"Simplification failed with tolerance {tolerance} (preserve_topology={preserve_topology})")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_simplified)
         if g_tg == NULL:
