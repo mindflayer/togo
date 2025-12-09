@@ -286,8 +286,8 @@ The `simplify()` method:
 3. **Serialization**: `wkt`, `wkb`, `__geo_interface__`
 4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`
 
-
-
+5. **Predicates**: `contains()`, `intersects()`, `touches()`, `crosses()`, `within()`, `equals()`
+6. **Operations**: `union()`, `intersection()`, `difference()`, `buffer()`, `simplify()`
 ### Differences
 
 1. **Geometry conversion**: ToGo uses `.as_geometry()` for predicates:
