@@ -66,7 +66,7 @@ print("\n4. Exporting Geometries:")
 print("-" * 40)
 
 print(f"Point as WKT: {point.wkt}")
-print(f"Point as GeoJSON: {point.__geo_interface__()}")
+print(f"Point as GeoJSON: {point.__geo_interface__}")
 print(f"Point as WKB: {len(point.wkb)} bytes")
 
 # Example 5: Spatial Predicates

@@ -100,7 +100,7 @@ class TestPointShapelyAPI:
         from togo import Point
 
         p = Point(1.5, 2.5)
-        geo = p.__geo_interface__()
+        geo = p.__geo_interface__
         assert isinstance(geo, dict)
         assert geo["type"] == "Point"
         assert geo["coordinates"] == [1.5, 2.5]
@@ -184,7 +184,7 @@ class TestLineStringShapelyAPI:
 
         coords = [(0, 0), (1, 1), (2, 2)]
         line = LineString(coords)
-        geo = line.__geo_interface__()
+        geo = line.__geo_interface__
         assert isinstance(geo, dict)
         assert geo["type"] == "LineString"
         assert geo["coordinates"] == coords
@@ -339,7 +339,7 @@ class TestPolygonShapelyAPI:
         coords = [(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]
         exterior = Ring(coords)
         poly = Polygon(exterior)
-        geo = poly.__geo_interface__()
+        geo = poly.__geo_interface__
         assert isinstance(geo, dict)
         assert geo["type"] == "Polygon"
         assert geo["coordinates"] == [coords]
@@ -352,7 +352,7 @@ class TestPolygonShapelyAPI:
         exterior = Ring(ext_coords)
         hole = Ring(hole_coords)
         poly = Polygon(exterior, holes=[hole])
-        geo = poly.__geo_interface__()
+        geo = poly.__geo_interface__
         assert geo["type"] == "Polygon"
         assert geo["coordinates"] == [ext_coords, hole_coords]
 
@@ -472,7 +472,7 @@ class TestGeometryShapelyAPI:
         from togo import Geometry
 
         geom = Geometry('{"type":"Point","coordinates":[3,4]}')
-        geo = geom.__geo_interface__()
+        geo = geom.__geo_interface__
         assert isinstance(geo, dict)
         assert geo["type"] == "Point"
         assert geo["coordinates"] == [3, 4]

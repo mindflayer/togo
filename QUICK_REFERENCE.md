@@ -86,7 +86,7 @@ wkb = point.wkb
 wkb = to_wkb(geom)
 
 # To GeoJSON dict
-geo_dict = point.__geo_interface__()
+geo_dict = point.__geo_interface__
 ```
 
 ## Spatial Predicates
@@ -145,7 +145,7 @@ geom.is_empty      # Boolean: True if geometry is empty
 geom.is_valid      # Boolean: True if geometry is valid
 geom.wkt           # String: WKT representation
 geom.wkb           # Bytes: WKB representation
-geom.__geo_interface__()  # Dict: GeoJSON-like
+geom.__geo_interface__  # Dict: GeoJSON-like
 ```
 
 ## Migration from Shapely

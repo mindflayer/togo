@@ -56,7 +56,7 @@ p.is_empty       # False
 p.is_valid       # True
 p.wkt            # 'POINT(1.5 2.5)'
 p.wkb            # bytes object
-p.__geo_interface__()  # {'type': 'Point', 'coordinates': [1.5, 2.5]}
+p.__geo_interface__  # {'type': 'Point', 'coordinates': [1.5, 2.5]}
 ```
 
 ### LineString
@@ -76,7 +76,7 @@ line.is_valid    # True
 line.length      # 4.242... (property)
 line.wkt         # 'LINESTRING(0 0,1 1,2 2,3 3)'
 line.wkb         # bytes object
-line.__geo_interface__()  # GeoJSON-like dict
+line.__geo_interface__  # GeoJSON-like dict
 ```
 
 ### Polygon
@@ -102,7 +102,7 @@ poly.exterior  # Ring object
 poly.interiors   # List of Ring objects (holes)
 poly.wkt         # 'POLYGON((0 0,4 0,4 4,0 4,0 0))'
 poly.wkb         # bytes object
-poly.__geo_interface__()  # GeoJSON-like dict
+poly.__geo_interface__  # GeoJSON-like dict
 ```
 
 ## Module-Level Functions
@@ -155,7 +155,7 @@ geom.is_empty     # Boolean: True if geometry is empty (property)
 geom.is_valid     # Boolean: True if geometry is valid (property)
 geom.wkt          # String: WKT representation
 geom.wkb          # Bytes: WKB representation
-geom.__geo_interface__()  # Dict: GeoJSON-like interface
+geom.__geo_interface__  # Dict: GeoJSON-like interface
 ```
 
 ### Type-Specific Properties
@@ -351,7 +351,7 @@ if poly_geom.contains(pt_geom):
 
 # Export to different formats
 print(f"WKT: {point.wkt}")
-print(f"GeoJSON: {point.__geo_interface__()}")
+print(f"GeoJSON: {point.__geo_interface__}")
 ```
 
 ## API Reference Summary
@@ -369,7 +369,7 @@ print(f"GeoJSON: {point.__geo_interface__()}")
 | `geom.coords` | `geom.coords` | ✅ Supported |
 | `geom.wkt` | `geom.wkt` | ✅ Supported |
 | `geom.wkb` | `geom.wkb` | ✅ Supported |
-| `geom.__geo_interface__` | `geom.__geo_interface__()` | ✅ Supported |
+| `geom.__geo_interface__` | `geom.__geo_interface__` | ✅ Supported |
 | `from_wkt()` | `from_wkt()` | ✅ Supported |
 | `from_geojson()` | `from_geojson()` | ✅ Supported |
 | `to_wkt()` | `to_wkt()` | ✅ Supported |
