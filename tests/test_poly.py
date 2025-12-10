@@ -5,7 +5,7 @@ from togo import Poly, Ring, Rect, Geometry
 def test_poly_square_no_holes():
     exterior = Ring([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
     poly = Poly(exterior)
-    assert isinstance(poly.exterior(), Ring)
+    assert isinstance(poly.exterior, Ring)
     assert poly.num_holes() == 0
     rect = poly.rect()
     assert isinstance(rect, Rect)
@@ -13,8 +13,8 @@ def test_poly_square_no_holes():
     assert rect.max.as_tuple() == (1, 1)
     assert poly.is_clockwise() in (True, False)
     # Area and perimeter via exterior ring
-    assert poly.exterior().area() == pytest.approx(1.0)
-    assert poly.exterior().perimeter() == pytest.approx(4.0)
+    assert poly.exterior.area() == pytest.approx(1.0)
+    assert poly.exterior.perimeter() == pytest.approx(4.0)
 
 
 def test_poly_with_hole():
@@ -26,7 +26,7 @@ def test_poly_with_hole():
     assert isinstance(h, Ring)
     assert h.area() == pytest.approx(4.0)
     # Exterior area should be larger than hole
-    assert poly.exterior().area() == pytest.approx(16.0)
+    assert poly.exterior.area() == pytest.approx(16.0)
 
 
 def test_poly_multiple_holes():
@@ -37,15 +37,15 @@ def test_poly_multiple_holes():
     assert poly.num_holes() == 2
     assert poly.hole(0).area() == pytest.approx(1.0)
     assert poly.hole(1).area() == pytest.approx(1.0)
-    assert poly.exterior().area() == pytest.approx(25.0)
+    assert poly.exterior.area() == pytest.approx(25.0)
 
 
 def test_poly_degenerate():
     exterior = Ring([(0, 0), (0, 0), (0, 0)])
     poly = Poly(exterior)
     assert poly.num_holes() == 0
-    assert poly.exterior().area() == 0
-    assert poly.exterior().perimeter() == 0
+    assert poly.exterior.area() == 0
+    assert poly.exterior.perimeter() == 0
     rect = poly.rect()
     assert rect.min.as_tuple() == (0, 0)
     assert rect.max.as_tuple() == (0, 0)

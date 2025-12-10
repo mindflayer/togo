@@ -105,7 +105,7 @@ print(f"  geom_type: {big_poly.geom_type}")
 print(f"  bounds: {big_poly.bounds}")
 print(f"  area: {big_poly.area}")
 print(f"  is_empty: {big_poly.is_empty}")
-print(f"  exterior points: {len(big_poly.exterior().coords)}")
+print(f"  exterior points: {len(big_poly.exterior.coords)}")
 print(f"  num holes: {len(big_poly.interiors)}")
 
 # Example 7: Coordinate access

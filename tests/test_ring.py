@@ -57,7 +57,7 @@ def test_ring_as_geometry():
     p = ring.as_poly()
     assert isinstance(p, Poly)
     assert p.num_holes() == 0
-    assert p.exterior().points() == points
+    assert p.exterior.points() == points
     assert p.num_holes() == 0
     g = p.as_geometry()
     assert isinstance(g, Geometry)

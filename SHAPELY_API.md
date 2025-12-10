@@ -98,7 +98,7 @@ poly.bounds      # (0, 0, 4, 4)
 poly.area        # 16.0
 poly.is_empty    # False
 poly.is_valid    # True
-poly.exterior()  # Ring object
+poly.exterior  # Ring object
 poly.interiors   # List of Ring objects (holes)
 poly.wkt         # 'POLYGON((0 0,4 0,4 4,0 4,0 0))'
 poly.wkb         # bytes object
@@ -172,7 +172,7 @@ line.length       # Float: length of line (property)
 
 # Polygon
 poly.area         # Float: area of polygon
-poly.exterior()   # Ring: exterior ring (method)
+poly.exterior   # Ring: exterior ring (method)
 poly.interiors    # List[Ring]: list of holes
 ```
 

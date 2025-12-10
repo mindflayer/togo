@@ -197,7 +197,7 @@ hole1 = Ring([(1,1), (2,1), (2,2), (1,2), (1,1)])
 poly = Poly(exterior, holes=[hole1])
 
 # Get the exterior ring
-ext_ring = poly.exterior()
+ext_ring = poly.exterior
 print(f"Exterior has {ext_ring.num_points} points")
 
 # Get number of holes

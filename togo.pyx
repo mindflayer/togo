@@ -1105,7 +1105,10 @@ cdef class Geometry:
         if g_simplified == NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
             GEOS_finish_r(ctx)
-            raise RuntimeError(f"Simplification failed with tolerance {tolerance} (preserve_topology={preserve_topology})")
+            raise RuntimeError(
+                f"Simplification failed with tolerance {tolerance}"
+                " (preserve_topology={preserve_topology})"
+            )
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_simplified)
         if g_tg == NULL:
@@ -1671,6 +1674,7 @@ cdef class Poly:
     def __repr__(self):
         return self.__str__()
 
+    @property
     def exterior(self):
         ext = tg_poly_exterior(self.poly)
         return Ring.from_ptr(<tg_ring *>ext)
@@ -1773,7 +1777,7 @@ cdef class Poly:
 
     def __geo_interface__(self):
         """Returns GeoJSON-like dict for Shapely compatibility"""
-        ext_coords = self.exterior().points()
+        ext_coords = self.exterior.points()
         if self.num_holes() == 0:
             return {"type": "Polygon", "coordinates": [ext_coords]}
         else:

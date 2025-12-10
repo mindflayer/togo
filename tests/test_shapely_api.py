@@ -215,7 +215,7 @@ class TestPolygonShapelyAPI:
         poly = Polygon(exterior, holes=[hole])
         assert poly is not None
         # Verify the exterior coordinates match the input
-        ext = poly.exterior()
+        ext = poly.exterior
         assert ext.coords == exterior
         # Verify there is exactly one hole
         assert len(poly.interiors) == 1
@@ -235,7 +235,7 @@ class TestPolygonShapelyAPI:
         poly = Polygon(exterior)
         assert poly is not None
         # Verify the exterior coordinates match the input
-        ext = poly.exterior()
+        ext = poly.exterior
         assert ext.coords == exterior
         # Also verify bounds as an additional check
         assert poly.bounds == (0, 0, 10, 10)
@@ -247,7 +247,7 @@ class TestPolygonShapelyAPI:
         poly = Polygon(exterior, holes=[])
         assert poly is not None
         # Verify the exterior coordinates match the input
-        ext = poly.exterior()
+        ext = poly.exterior
         assert ext.coords == exterior
         # Also verify bounds as an additional check
         assert poly.bounds == (0, 0, 10, 10)
@@ -293,7 +293,7 @@ class TestPolygonShapelyAPI:
 
         exterior = Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
         poly = Polygon(exterior)
-        ext = poly.exterior()
+        ext = poly.exterior
         assert ext is not None
         assert len(ext.coords) == 5
 
