@@ -596,6 +596,7 @@ cdef class Geometry:
         else:
             raise AttributeError(f"coords not available for {self.type_string()}")
 
+    @property
     def __geo_interface__(self):
         """Returns GeoJSON-like dict for Shapely compatibility"""
         import json
@@ -1190,6 +1191,7 @@ cdef class Point:
         """Returns WKB representation"""
         return self.as_geometry().to_wkb()
 
+    @property
     def __geo_interface__(self):
         """Returns GeoJSON-like dict for Shapely compatibility"""
         return {"type": "Point", "coordinates": [self.pt.x, self.pt.y]}
@@ -1569,6 +1571,7 @@ cdef class Line:
         """Returns WKB representation"""
         return self.as_geometry().to_wkb()
 
+    @property
     def __geo_interface__(self):
         """Returns GeoJSON-like dict for Shapely compatibility"""
         return {"type": "LineString", "coordinates": self.points()}
@@ -1784,6 +1787,7 @@ cdef class Poly:
         """Returns list of holes for Shapely compatibility"""
         return [self.hole(i) for i in range(self.num_holes())]
 
+    @property
     def __geo_interface__(self):
         """Returns GeoJSON-like dict for Shapely compatibility"""
         ext_coords = self.exterior.points()
