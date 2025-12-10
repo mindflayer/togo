@@ -241,7 +241,7 @@ def main():
     )
     bench_case(
         "polygon perimeter (square)",
-        lambda: poly.exterior.perimeter(),
+        lambda: poly.exterior.length,
         lambda: shp_poly.exterior.length,
         iters=5000,
     )

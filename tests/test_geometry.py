@@ -226,7 +226,7 @@ def test_unary_union_geos_polys():
     assert union_geom.type_string() == "Polygon"
     # Area should be 7 (each square is 4, overlap is 1)
     # So union area = 4 + 4 - 1 = 7
-    area = union_geom.poly().exterior.area()
+    area = union_geom.poly().exterior.area
     assert area == 7.0
     # Bounding box should be ((0,0),(3,3))
     assert union_geom.bounds == (0.0, 0.0, 3.0, 3.0)

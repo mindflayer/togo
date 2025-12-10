@@ -1364,19 +1364,23 @@ cdef class Ring:
         pts = tg_ring_points(self.ring)
         return [(pts[i].x, pts[i].y) for i in range(n)]
 
+    @property
     def area(self):
         return tg_ring_area(self.ring)
 
-    def perimeter(self):
+    @property
+    def length(self):
         return tg_ring_perimeter(self.ring)
 
     def rect(self):
         r = tg_ring_rect(self.ring)
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
 
+    @property
     def is_convex(self):
         return tg_ring_convex(self.ring)
 
+    @property
     def is_clockwise(self):
         return tg_ring_clockwise(self.ring)
 
@@ -1725,6 +1729,11 @@ cdef class Poly:
     def area(self):
         """Returns the area of the polygon"""
         return tg_ring_area(tg_poly_exterior(self.poly))
+
+    @property
+    def length(self):
+        """Returns the perimeter (length of exterior ring) for Shapely compatibility"""
+        return tg_ring_perimeter(tg_poly_exterior(self.poly))
 
     @property
     def is_empty(self):
