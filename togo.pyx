@@ -1107,7 +1107,7 @@ cdef class Geometry:
             GEOS_finish_r(ctx)
             raise RuntimeError(
                 f"Simplification failed with tolerance {tolerance}"
-                " (preserve_topology={preserve_topology})"
+                f" (preserve_topology={preserve_topology})"
             )
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_simplified)
