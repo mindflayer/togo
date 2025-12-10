@@ -12,7 +12,6 @@ def _platform_id():
 extra_compile_args = [
     "-ffunction-sections",  # Enable function-level sections
     "-fdata-sections",  # Enable data-level sections
-    "-Wno-int-in-bool-context",  # Suppress Cython-generated code warnings (PyLong_As_bool)
 ]
 # Avoid gc-sections when statically linking C++ libs with RTTI/vtables
 extra_link_args = [
