@@ -172,7 +172,7 @@ line.length       # Float: length of line (property)
 
 # Polygon
 poly.area         # Float: area of polygon
-poly.exterior   # Ring: exterior ring (method)
+poly.exterior   # Ring: exterior ring
 poly.interiors    # List[Ring]: list of holes
 ```
 
