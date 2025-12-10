@@ -1105,7 +1105,10 @@ cdef class Geometry:
         if g_simplified == NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
             GEOS_finish_r(ctx)
-            raise RuntimeError(f"Simplification failed with tolerance {tolerance} (preserve_topology={preserve_topology})")
+            raise RuntimeError(
+                f"Simplification failed with tolerance {tolerance}"
+                f" (preserve_topology={preserve_topology})"
+            )
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_simplified)
         if g_tg == NULL:
@@ -1361,19 +1364,23 @@ cdef class Ring:
         pts = tg_ring_points(self.ring)
         return [(pts[i].x, pts[i].y) for i in range(n)]
 
+    @property
     def area(self):
         return tg_ring_area(self.ring)
 
-    def perimeter(self):
+    @property
+    def length(self):
         return tg_ring_perimeter(self.ring)
 
     def rect(self):
         r = tg_ring_rect(self.ring)
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
 
+    @property
     def is_convex(self):
         return tg_ring_convex(self.ring)
 
+    @property
     def is_clockwise(self):
         return tg_ring_clockwise(self.ring)
 
@@ -1671,6 +1678,7 @@ cdef class Poly:
     def __repr__(self):
         return self.__str__()
 
+    @property
     def exterior(self):
         ext = tg_poly_exterior(self.poly)
         return Ring.from_ptr(<tg_ring *>ext)
@@ -1723,6 +1731,11 @@ cdef class Poly:
         return tg_ring_area(tg_poly_exterior(self.poly))
 
     @property
+    def length(self):
+        """Returns the perimeter (length of exterior ring) for Shapely compatibility"""
+        return tg_ring_perimeter(tg_poly_exterior(self.poly))
+
+    @property
     def is_empty(self):
         """Check if Polygon is empty"""
         ext = tg_poly_exterior(self.poly)
@@ -1773,7 +1786,7 @@ cdef class Poly:
 
     def __geo_interface__(self):
         """Returns GeoJSON-like dict for Shapely compatibility"""
-        ext_coords = self.exterior().points()
+        ext_coords = self.exterior.points()
         if self.num_holes() == 0:
             return {"type": "Polygon", "coordinates": [ext_coords]}
         else:

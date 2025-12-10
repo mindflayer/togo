@@ -47,7 +47,7 @@ poly = Polygon(exterior, holes=[hole])
 # Properties
 poly.area          # Polygon area
 poly.bounds        # Bounding box
-poly.exterior()    # Get exterior Ring
+poly.exterior    # Get exterior Ring
 poly.interiors     # List of holes
 poly.geom_type     # 'Polygon'
 ```

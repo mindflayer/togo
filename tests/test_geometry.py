@@ -180,7 +180,7 @@ def test_geometry_poly_accessor():
     wkt = "POLYGON((0 0,1 0,1 1,0 1,0 0))"
     g = Geometry(wkt, fmt="wkt")
     poly = g.poly()
-    ext = poly.exterior()
+    ext = poly.exterior
     assert ext.num_points == 5
 
 
@@ -226,7 +226,7 @@ def test_unary_union_geos_polys():
     assert union_geom.type_string() == "Polygon"
     # Area should be 7 (each square is 4, overlap is 1)
     # So union area = 4 + 4 - 1 = 7
-    area = union_geom.poly().exterior().area()
+    area = union_geom.poly().exterior.area
     assert area == 7.0
     # Bounding box should be ((0,0),(3,3))
     assert union_geom.bounds == (0.0, 0.0, 3.0, 3.0)

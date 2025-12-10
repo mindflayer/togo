@@ -174,8 +174,8 @@ from togo import Ring
 ring = Ring([(0,0), (10,0), (10,10), (0,10), (0,0)])
 
 # Get area and perimeter
-print(f"Area: {ring.area()}")
-print(f"Perimeter: {ring.perimeter()}")
+print(f"Area: {ring.area}")
+print(f"Perimeter: {ring.length}")
 
 # Check if it's convex or clockwise
 print(f"Is convex: {ring.is_convex()}")
@@ -197,7 +197,7 @@ hole1 = Ring([(1,1), (2,1), (2,2), (1,2), (1,1)])
 poly = Poly(exterior, holes=[hole1])
 
 # Get the exterior ring
-ext_ring = poly.exterior()
+ext_ring = poly.exterior
 print(f"Exterior has {ext_ring.num_points} points")
 
 # Get number of holes

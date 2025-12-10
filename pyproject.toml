@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "togo"
-version = "0.2.3"
+version = "0.2.4"
 description = "Lightweight Python bindings for the TG geometry library"
 readme = "README.md"
 authors = [
