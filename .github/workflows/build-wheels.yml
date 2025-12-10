@@ -14,7 +14,7 @@ jobs:
       id-token: write  # This enables OIDC token creation
     env:
       # Keep this in sync with tools/prepare_vendor.sh default or override as needed
-      GEOS_VERSION: '3.14.0'
+      GEOS_VERSION: '3.14.1'
 
     steps:
       - uses: actions/checkout@v3

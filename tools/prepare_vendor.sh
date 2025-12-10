@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 VENDOR_DIR="${REPO_ROOT}/vendor/geos"
 
 # GEOS version to build (allow override from environment)
-GEOS_VERSION="${GEOS_VERSION:-3.14.0}"
+GEOS_VERSION="${GEOS_VERSION:-3.14.1}"
 GEOS_DIR="geos-${GEOS_VERSION}"
 TARBALL="${GEOS_VERSION}.tar.gz"
 TARBALL_URL="https://github.com/libgeos/geos/archive/refs/tags/${GEOS_VERSION}.tar.gz"
