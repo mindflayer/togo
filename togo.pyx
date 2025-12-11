@@ -226,7 +226,7 @@ cdef extern from "tgx.h":
 
 
 from libc.stdlib cimport malloc, free
-from typing import Optional, Union, Sequence, Tuple
+
 
 cdef Geometry _geometry_from_ptr(tg_geom *ptr) noexcept:
     cdef Geometry g = Geometry.__new__(Geometry)
@@ -1910,6 +1910,7 @@ cdef class Segment:
 
 
 import enum
+from typing import Optional, Union, Sequence
 
 
 class TGIndex(enum.IntEnum):
