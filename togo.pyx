@@ -1952,8 +1952,8 @@ class Polygon(Poly):
 
     def __init__(
         self,
-        exterior: Union[Ring, Sequence[tuple[float, float]]],
-        holes: Optional[Sequence[Union[Ring, Sequence[tuple[float, float]]]]] = None
+        exterior: Union[Ring, Sequence[Tuple[float, float]]],
+        holes: Optional[Sequence[Union[Ring, Sequence[Tuple[float, float]]]]] = None
     ) -> None:
         """Initialize Polygon from exterior ring and optional holes.
 
