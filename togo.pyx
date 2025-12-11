@@ -227,13 +227,13 @@ cdef extern from "tgx.h":
 
 from libc.stdlib cimport malloc, free
 
-cdef Geometry _geometry_from_ptr(tg_geom *ptr):
+cdef Geometry _geometry_from_ptr(tg_geom *ptr) noexcept:
     cdef Geometry g = Geometry.__new__(Geometry)
     g.geom = ptr
     return g
 
 
-cdef Line _line_from_ptr(tg_line *ptr):
+cdef Line _line_from_ptr(tg_line *ptr) noexcept:
     cdef Line line_obj = Line.__new__(Line)
     line_obj.line = ptr
     line_obj.owns_pointer = False
@@ -284,10 +284,10 @@ cdef class Geometry:
     def __repr__(self):
         return self.__str__()
 
-    def type(self):
+    def type(self) -> int:
         return tg_geom_typeof(self.geom)
 
-    def type_string(self):
+    def type_string(self) -> str:
         return tg_geom_type_string(tg_geom_typeof(self.geom)).decode("utf-8")
 
     @property
@@ -297,10 +297,10 @@ cdef class Geometry:
         r = tg_geom_rect(self.geom)
         return (r.min.x, r.min.y, r.max.x, r.max.y)
 
-    def is_feature(self):
+    def is_feature(self) -> bool:
         return tg_geom_is_feature(self.geom) != 0
 
-    def is_featurecollection(self):
+    def is_featurecollection(self) -> bool:
         return tg_geom_is_featurecollection(self.geom) != 0
 
     @property
@@ -333,70 +333,72 @@ cdef class Geometry:
         return result == 1
 
     @property
-    def dims(self):
+    def dims(self) -> int:
         return tg_geom_dims(self.geom)
 
     @property
-    def has_z(self):
+    def has_z(self) -> bool:
         return tg_geom_has_z(self.geom) != 0
 
     @property
-    def has_m(self):
+    def has_m(self) -> bool:
         return tg_geom_has_m(self.geom) != 0
 
     @property
-    def z(self):
+    def z(self) -> float:
         return tg_geom_z(self.geom)
 
     @property
-    def m(self):
+    def m(self) -> float:
         return tg_geom_m(self.geom)
 
     @property
-    def memsize(self):
+    def memsize(self) -> int:
         return tg_geom_memsize(self.geom)
 
     @property
-    def num_points(self):
+    def num_points(self) -> int:
         return tg_geom_num_points(self.geom)
 
     @property
-    def num_lines(self):
+    def num_lines(self) -> int:
         return tg_geom_num_lines(self.geom)
 
     @property
-    def num_polys(self):
+    def num_polys(self) -> int:
         return tg_geom_num_polys(self.geom)
 
     @property
-    def num_geometries(self):
+    def num_geometries(self) -> int:
         return tg_geom_num_geometries(self.geom)
 
-    def equals(self, other: Geometry):
+    def equals(self, other: Geometry) -> bool:
         return tg_geom_equals(self.geom, other.geom) != 0
 
-    def disjoint(self, other: Geometry):
+    def disjoint(self, other: Geometry) -> bool:
         return tg_geom_disjoint(self.geom, other.geom) != 0
 
-    def contains(self, other: Geometry):
+    def contains(self, other: Geometry) -> bool:
         return tg_geom_contains(self.geom, other.geom) != 0
 
-    def within(self, other: Geometry):
+    def within(self, other: Geometry) -> bool:
         return tg_geom_within(self.geom, other.geom) != 0
 
-    def covers(self, other: Geometry):
+    def covers(self, other: Geometry) -> bool:
         return tg_geom_covers(self.geom, other.geom) != 0
 
-    def coveredby(self, other: Geometry):
+    def coveredby(self, other: Geometry) -> bool:
         return tg_geom_coveredby(self.geom, other.geom) != 0
 
-    def touches(self, other: Geometry):
+    def touches(self, other: Geometry) -> bool:
         return tg_geom_touches(self.geom, other.geom) != 0
 
-    def intersects(self, other: Geometry):
+    def intersects(self, other: Geometry) -> bool:
         return tg_geom_intersects(self.geom, other.geom) != 0
 
-    cdef _to_string(self, size_t (*writer_func)(const tg_geom*, char*, size_t), format_name):
+    cdef str _to_string(
+        self, size_t (*writer_func)(const tg_geom*, char*, size_t), str format_name
+    ):
         # First call to get the required buffer size
         cdef size_t required_size = writer_func(self.geom, NULL, 0)
         if required_size == 0:
@@ -416,16 +418,16 @@ cdef class Geometry:
         free(buf)
         return result
 
-    def to_wkt(self):
+    def to_wkt(self) -> str:
         return self._to_string(tg_geom_wkt, "WKT")
 
-    def to_geojson(self):
+    def to_geojson(self) -> str:
         return self._to_string(tg_geom_geojson, "GeoJSON")
 
-    cdef _to_binary(
+    cdef bytes _to_binary(
         self,
         size_t (*writer_func)(const tg_geom*, unsigned char*, size_t),
-        format_name
+        str format_name
     ):
         # First call to get the required buffer size
         cdef size_t required_size = writer_func(self.geom, NULL, 0)
@@ -447,47 +449,50 @@ cdef class Geometry:
         free(buf)
         return result
 
-    def to_wkb(self):
+    def to_wkb(self) -> bytes:
         return self._to_binary(tg_geom_wkb, "WKB")
 
-    def to_hex(self):
+    def to_hex(self) -> str:
         return self._to_string(tg_geom_hex, "HEX")
 
-    def to_geobin(self):
+    def to_geobin(self) -> bytes:
         return self._to_binary(tg_geom_geobin, "Geobin")
 
-    def to_meters_grid(self, origin: Point):
+    def to_meters_grid(self, origin: Point) -> Geometry:
         """Convert geometry to meters grid using tgx."""
         cdef tg_geom *g2 = tg_geom_to_meters_grid(self.geom, origin._get_c_point())
         if not g2:
             raise ValueError("tgx meters grid conversion failed")
         return _geometry_from_ptr(g2)
 
-    def from_meters_grid(self, origin: Point):
+    def from_meters_grid(self, origin: Point) -> Geometry:
         """Convert geometry from meters grid using tgx."""
         cdef tg_geom *g2 = tg_geom_from_meters_grid(self.geom, origin._get_c_point())
         if not g2:
             raise ValueError("tgx from meters grid conversion failed")
         return _geometry_from_ptr(g2)
 
-    cpdef point(self):
+    cpdef Point point(self):
         """Get point from Point geometry"""
         cdef tg_point pt = tg_geom_point(self.geom)
         return Point(pt.x, pt.y)
 
-    cpdef line(self):
+    cpdef Line line(self):
         """Get line from LineString geometry"""
         cdef const tg_line *ln = tg_geom_line(self.geom)
         return _line_from_ptr(<tg_line *>ln)
 
-    cpdef poly(self):
+    cpdef Poly poly(self):
         """Get polygon from Polygon geometry"""
         cdef const tg_poly *p = tg_geom_poly(self.geom)
         return Poly._from_c_poly(<tg_poly *>p)  # Cast away const
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Geometry:
         cdef const tg_geom *g
-        t = tg_geom_typeof(self.geom)
+        cdef int t = tg_geom_typeof(self.geom)
+        cdef int n
+        cdef const tg_line *ln
+        cdef const tg_poly *poly
         # 1: Point, 2: LineString, 3: Polygon, 4: MultiPoint,
         # 5: MultiLineString, 6: MultiPolygon, 7: GeometryCollection
         if t == 5:  # MultiLineString
@@ -511,7 +516,7 @@ cdef class Geometry:
             raise IndexError("Indexing not supported for this geometry type")
 
     @staticmethod
-    def from_linestring(points):
+    def from_linestring(points) -> Geometry:
         """Create LineString geometry from points"""
         line = Line(points)
         return _geometry_from_ptr(tg_geom_new_linestring(line._get_c_line()))
@@ -521,7 +526,7 @@ cdef class Geometry:
             tg_geom_free(self.geom)
 
     # internal accessor for C pointer
-    cdef tg_geom *_get_c_geom(self):
+    cdef tg_geom *_get_c_geom(self) noexcept:
         return self.geom
 
     # Shapely-compatible properties
@@ -537,9 +542,12 @@ cdef class Geometry:
         return (r.min.x, r.min.y, r.max.x, r.max.y)
 
     @property
-    def area(self):
+    def area(self) -> float:
         """Returns area for Polygon geometries"""
-        t = tg_geom_typeof(self.geom)
+        cdef int t = tg_geom_typeof(self.geom)
+        cdef const tg_poly *poly
+        cdef double total
+        cdef int n, i
         if t == 3:  # Polygon
             poly = tg_geom_poly(self.geom)
             return tg_ring_area(tg_poly_exterior(poly))
@@ -553,9 +561,13 @@ cdef class Geometry:
         return 0.0
 
     @property
-    def length(self):
+    def length(self) -> float:
         """Returns length for LineString geometries"""
-        t = tg_geom_typeof(self.geom)
+        cdef int t = tg_geom_typeof(self.geom)
+        cdef const tg_line *line
+        cdef const tg_poly *poly
+        cdef double total
+        cdef int n, i
         if t == 2:  # LineString
             line = tg_geom_line(self.geom)
             return tg_line_length(line)
@@ -572,19 +584,23 @@ cdef class Geometry:
         return 0.0
 
     @property
-    def wkt(self):
+    def wkt(self) -> str:
         """Returns WKT representation"""
         return self.to_wkt()
 
     @property
-    def wkb(self):
+    def wkb(self) -> bytes:
         """Returns WKB representation"""
         return self.to_wkb()
 
     @property
-    def coords(self):
+    def coords(self) -> list:
         """Returns coordinate sequence for Point/LineString geometries"""
-        t = tg_geom_typeof(self.geom)
+        cdef int t = tg_geom_typeof(self.geom)
+        cdef tg_point pt
+        cdef const tg_line *line
+        cdef int n, i
+        cdef const tg_point *pts
         if t == 1:  # Point
             pt = tg_geom_point(self.geom)
             return [(pt.x, pt.y)]
@@ -597,7 +613,7 @@ cdef class Geometry:
             raise AttributeError(f"coords not available for {self.type_string()}")
 
     @property
-    def __geo_interface__(self):
+    def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
         import json
         geojson_str = self.to_geojson()
@@ -605,7 +621,7 @@ cdef class Geometry:
 
     # --- Factory methods ---
     @staticmethod
-    def from_multipoint(points):
+    def from_multipoint(points) -> Geometry:
         """
         Create a MultiPoint geometry from an iterable of Point or (x, y) tuples.
         """
@@ -635,7 +651,7 @@ cdef class Geometry:
         return _geometry_from_ptr(gptr)
 
     @staticmethod
-    def from_multilinestring(lines):
+    def from_multilinestring(lines) -> Geometry:
         """
         Create a MultiLineString from an iterable of Line or sequences of (x,y).
         """
@@ -667,7 +683,7 @@ cdef class Geometry:
         return _geometry_from_ptr(gptr)
 
     @staticmethod
-    def from_multipolygon(polys):
+    def from_multipolygon(polys) -> Geometry:
         """Create a MultiPolygon from an iterable of Poly objects."""
         cdef int n = len(polys)
         cdef tg_geom *gptr
@@ -693,7 +709,7 @@ cdef class Geometry:
         return _geometry_from_ptr(gptr)
 
     @staticmethod
-    def from_geometrycollection(geoms):
+    def from_geometrycollection(geoms) -> Geometry:
         """
         Create a GeometryCollection from an iterable of Geometry, Point, Line,
         Ring, or Poly. For Point or (x,y) input, temporary tg_geom objects are
@@ -848,7 +864,7 @@ cdef class Geometry:
         return _geometry_from_ptr(gptr)
 
     @staticmethod
-    def unary_union(geoms):
+    def unary_union(geoms) -> Geometry:
         """Return the unary union of a sequence of geometries using GEOS."""
         cdef int n = len(geoms)
         if n == 0:
@@ -1139,60 +1155,60 @@ cdef class Point:
         return self.__str__()
 
     @property
-    def x(self):
+    def x(self) -> float:
         return self.pt.x
 
     @property
-    def y(self):
+    def y(self) -> float:
         return self.pt.y
 
-    def as_tuple(self):
+    def as_tuple(self) -> tuple:
         return (self.pt.x, self.pt.y)
 
-    cdef tg_point _get_c_point(self):
+    cdef tg_point _get_c_point(self) noexcept:
         return self.pt
 
-    def as_geometry(self):
+    def as_geometry(self) -> Geometry:
         return _geometry_from_ptr(tg_geom_new_point(self.pt))
 
     # Shapely-compatible properties
     @property
-    def geom_type(self):
+    def geom_type(self) -> str:
         """Returns 'Point' for Shapely compatibility"""
         return "Point"
 
     @property
-    def coords(self):
+    def coords(self) -> list:
         """Returns coordinate sequence for Shapely compatibility"""
         return [(self.pt.x, self.pt.y)]
 
     @property
-    def bounds(self):
+    def bounds(self) -> tuple:
         """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
         return (self.pt.x, self.pt.y, self.pt.x, self.pt.y)
 
     @property
-    def is_empty(self):
+    def is_empty(self) -> bool:
         """Always False for non-null Point"""
         return False
 
     @property
-    def is_valid(self):
+    def is_valid(self) -> bool:
         """A Point is always valid."""
         return True
 
     @property
-    def wkt(self):
+    def wkt(self) -> str:
         """Returns WKT representation"""
         return self.as_geometry().to_wkt()
 
     @property
-    def wkb(self):
+    def wkb(self) -> bytes:
         """Returns WKB representation"""
         return self.as_geometry().to_wkb()
 
     @property
-    def __geo_interface__(self):
+    def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
         return {"type": "Point", "coordinates": [self.pt.x, self.pt.y]}
 
@@ -1261,21 +1277,21 @@ cdef class Rect:
         return self.__str__()
 
     @property
-    def min(self):
+    def min(self) -> Point:
         return Point(self.rect.min.x, self.rect.min.y)
 
     @property
-    def max(self):
+    def max(self) -> Point:
         return Point(self.rect.max.x, self.rect.max.y)
 
-    def center(self):
+    def center(self) -> Point:
         cdef tg_point c = tg_rect_center(self.rect)
         return Point(c.x, c.y)
 
-    cdef tg_rect _get_c_rect(self):
+    cdef tg_rect _get_c_rect(self) noexcept:
         return self.rect
 
-    def expand(self, other):
+    def expand(self, other) -> Rect:
         cdef tg_rect r
         if isinstance(other, Rect):
             r = tg_rect_expand(self.rect, (<Rect>other)._get_c_rect())
@@ -1286,7 +1302,7 @@ cdef class Rect:
         else:
             raise TypeError("expand expects Rect or Point")
 
-    def intersects(self, other):
+    def intersects(self, other) -> bool:
         if isinstance(other, Rect):
             return tg_rect_intersects_rect(
                 self.rect, (<Rect>other)._get_c_rect()
@@ -1298,7 +1314,7 @@ cdef class Rect:
         else:
             raise TypeError("intersects expects Rect or Point")
 
-    def as_geometry(self):
+    def as_geometry(self) -> Geometry:
         minx, miny = self.rect.min.x, self.rect.min.y
         maxx, maxy = self.rect.max.x, self.rect.max.y
         corners = [
@@ -1319,6 +1335,7 @@ cdef class Ring:
 
     def __init__(self, points):
         cdef int n = len(points)
+        cdef int i
         cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for Ring")
@@ -1350,7 +1367,7 @@ cdef class Ring:
         r.owns_pointer = False  # Don't free this pointer
         return r
 
-    cdef tg_ring *_get_c_ring(self):
+    cdef tg_ring *_get_c_ring(self) noexcept:
         return self.ring
 
     def __dealloc__(self):
@@ -1358,35 +1375,35 @@ cdef class Ring:
             tg_ring_free(self.ring)
 
     @property
-    def num_points(self):
+    def num_points(self) -> int:
         return tg_ring_num_points(self.ring)
 
-    def points(self):
-        n = tg_ring_num_points(self.ring)
-        pts = tg_ring_points(self.ring)
+    def points(self) -> list:
+        cdef int n = tg_ring_num_points(self.ring)
+        cdef const tg_point *pts = tg_ring_points(self.ring)
         return [(pts[i].x, pts[i].y) for i in range(n)]
 
     @property
-    def area(self):
+    def area(self) -> float:
         return tg_ring_area(self.ring)
 
     @property
-    def length(self):
+    def length(self) -> float:
         return tg_ring_perimeter(self.ring)
 
-    def rect(self):
-        r = tg_ring_rect(self.ring)
+    def rect(self) -> Rect:
+        cdef tg_rect r = tg_ring_rect(self.ring)
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
 
     @property
-    def is_convex(self):
+    def is_convex(self) -> bool:
         return tg_ring_convex(self.ring)
 
     @property
-    def is_clockwise(self):
+    def is_clockwise(self) -> bool:
         return tg_ring_clockwise(self.ring)
 
-    def as_geometry(self):
+    def as_geometry(self) -> Geometry:
         # Convert the ring to a Polygon geometry with this ring as exterior
         cdef tg_poly *p = tg_poly_new(self.ring, NULL, 0)
         if not p:
@@ -1397,7 +1414,7 @@ cdef class Ring:
             raise ValueError("Failed to create Geometry from Ring")
         return _geometry_from_ptr(g)
 
-    def as_poly(self):
+    def as_poly(self) -> Poly:
         # Build a new Poly object from this Ring
         return Poly(self)
 
@@ -1470,6 +1487,7 @@ cdef class Line:
 
     def __init__(self, points):
         cdef int n = len(points)
+        cdef int i
         cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for Line")
@@ -1499,35 +1517,35 @@ cdef class Line:
         return self.__str__()
 
     @property
-    def num_points(self):
+    def num_points(self) -> int:
         return tg_line_num_points(self.line)
 
-    def points(self):
-        n = tg_line_num_points(self.line)
-        pts = tg_line_points(self.line)
+    def points(self) -> list:
+        cdef int n = tg_line_num_points(self.line)
+        cdef const tg_point *pts = tg_line_points(self.line)
         return [(pts[i].x, pts[i].y) for i in range(n)]
 
     @property
-    def length(self):
+    def length(self) -> float:
         return tg_line_length(self.line)
 
-    def rect(self):
-        r = tg_line_rect(self.line)
+    def rect(self) -> Rect:
+        cdef tg_rect r = tg_line_rect(self.line)
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
 
-    def is_clockwise(self):
+    def is_clockwise(self) -> bool:
         return tg_line_clockwise(self.line)
 
-    def as_geometry(self):
+    def as_geometry(self) -> Geometry:
         cdef tg_geom *g = tg_geom_new_linestring(self.line)
         if not g:
             raise ValueError("Failed to create Geometry from LineString")
         return _geometry_from_ptr(g)
 
-    cdef tg_line *_get_c_line(self):
+    cdef tg_line *_get_c_line(self) noexcept:
         return self.line
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> Point:
         n = self.num_points
         if not (0 <= idx < n):
             raise IndexError("Line index out of range")
@@ -1536,43 +1554,43 @@ cdef class Line:
 
     # Shapely-compatible properties
     @property
-    def geom_type(self):
+    def geom_type(self) -> str:
         """Returns 'LineString' for Shapely compatibility"""
         return "LineString"
 
     @property
-    def coords(self):
+    def coords(self) -> list:
         """Returns coordinate sequence for Shapely compatibility"""
         return self.points()
 
     @property
-    def bounds(self):
+    def bounds(self) -> tuple:
         """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
-        r = tg_line_rect(self.line)
+        cdef tg_rect r = tg_line_rect(self.line)
         return (r.min.x, r.min.y, r.max.x, r.max.y)
 
     @property
-    def is_empty(self):
+    def is_empty(self) -> bool:
         """Check if LineString is empty"""
         return tg_line_num_points(self.line) == 0
 
     @property
-    def is_valid(self):
+    def is_valid(self) -> bool:
         """A LineString is always valid."""
         return True
 
     @property
-    def wkt(self):
+    def wkt(self) -> str:
         """Returns WKT representation"""
         return self.as_geometry().to_wkt()
 
     @property
-    def wkb(self):
+    def wkb(self) -> bytes:
         """Returns WKB representation"""
         return self.as_geometry().to_wkb()
 
     @property
-    def __geo_interface__(self):
+    def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
         return {"type": "LineString", "coordinates": self.points()}
 
@@ -1629,9 +1647,11 @@ cdef class Poly:
 
     def __init__(self, exterior, holes=None):
         cdef int nholes = 0
+        cdef int i
         cdef tg_ring **hole_ptrs = NULL
         cdef tg_ring **holes_arr = NULL
         cdef tg_ring *ext_ring
+        cdef tg_ring *hole_ptr
         if not isinstance(exterior, Ring):
             raise TypeError("exterior must be a Ring")
         ext_ring = (<Ring>exterior)._get_c_ring()
@@ -1682,70 +1702,70 @@ cdef class Poly:
         return self.__str__()
 
     @property
-    def exterior(self):
-        ext = tg_poly_exterior(self.poly)
+    def exterior(self) -> Ring:
+        cdef const tg_ring *ext = tg_poly_exterior(self.poly)
         return Ring.from_ptr(<tg_ring *>ext)
 
-    def num_holes(self):
+    def num_holes(self) -> int:
         return tg_poly_num_holes(self.poly)
 
     @staticmethod
-    cdef _from_c_poly(tg_poly *ptr):
+    cdef Poly _from_c_poly(tg_poly *ptr):
         cdef Poly poly = Poly.__new__(Poly)
         poly.poly = ptr
         poly.owns_pointer = False
         return poly
 
-    def hole(self, idx):
-        h = tg_poly_hole_at(self.poly, idx)
+    def hole(self, idx: int) -> Ring:
+        cdef const tg_ring *h = tg_poly_hole_at(self.poly, idx)
         return Ring.from_ptr(<tg_ring *>h)
 
-    def rect(self):
-        r = tg_poly_rect(self.poly)
+    def rect(self) -> Rect:
+        cdef tg_rect r = tg_poly_rect(self.poly)
         return Rect(Point(r.min.x, r.min.y), Point(r.max.x, r.max.y))
 
-    def is_clockwise(self):
+    def is_clockwise(self) -> bool:
         return tg_poly_clockwise(self.poly)
 
-    def as_geometry(self):
+    def as_geometry(self) -> Geometry:
         cdef tg_geom *g = tg_geom_new_polygon(self.poly)
         if not g:
             raise ValueError("Failed to create Geometry from Polygon")
         return _geometry_from_ptr(g)
 
-    cdef tg_poly *_get_c_poly(self):
+    cdef tg_poly *_get_c_poly(self) noexcept:
         return self.poly
 
     # Shapely-compatible properties
     @property
-    def geom_type(self):
+    def geom_type(self) -> str:
         """Returns 'Polygon' for Shapely compatibility"""
         return "Polygon"
 
     @property
-    def bounds(self):
+    def bounds(self) -> tuple:
         """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
-        r = tg_poly_rect(self.poly)
+        cdef tg_rect r = tg_poly_rect(self.poly)
         return (r.min.x, r.min.y, r.max.x, r.max.y)
 
     @property
-    def area(self):
+    def area(self) -> float:
         """Returns the area of the polygon"""
         return tg_ring_area(tg_poly_exterior(self.poly))
 
     @property
-    def length(self):
+    def length(self) -> float:
         """Returns the perimeter (length of exterior ring) for Shapely compatibility"""
         return tg_ring_perimeter(tg_poly_exterior(self.poly))
 
     @property
-    def is_empty(self):
+    def is_empty(self) -> bool:
         """Check if Polygon is empty"""
-        ext = tg_poly_exterior(self.poly)
+        cdef const tg_ring *ext = tg_poly_exterior(self.poly)
         return tg_ring_num_points(ext) == 0
 
     @property
-    def is_valid(self):
+    def is_valid(self) -> bool:
         """Check if the polygon is valid using GEOS.
 
         A polygon is valid if it satisfies geometric constraints,
@@ -1773,22 +1793,22 @@ cdef class Poly:
         return result == 1
 
     @property
-    def wkt(self):
+    def wkt(self) -> str:
         """Returns WKT representation"""
         return self.as_geometry().to_wkt()
 
     @property
-    def wkb(self):
+    def wkb(self) -> bytes:
         """Returns WKB representation"""
         return self.as_geometry().to_wkb()
 
     @property
-    def interiors(self):
+    def interiors(self) -> list:
         """Returns list of holes for Shapely compatibility"""
         return [self.hole(i) for i in range(self.num_holes())]
 
     @property
-    def __geo_interface__(self):
+    def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
         ext_coords = self.exterior.points()
         if self.num_holes() == 0:
@@ -1870,21 +1890,21 @@ cdef class Segment:
     def __repr__(self):
         return self.__str__()
 
-    def rect(self):
+    def rect(self) -> tuple:
         cdef tg_rect r = tg_segment_rect(self.seg)
         return ((r.min.x, r.min.y), (r.max.x, r.max.y))
 
-    def intersects(self, other):
+    def intersects(self, other) -> bool:
         if isinstance(other, Segment):
             return tg_segment_intersects_segment(self.seg, other.seg)
         raise TypeError("Expected Segment")
 
     @property
-    def a(self):
+    def a(self) -> Point:
         return Point(self.seg.a.x, self.seg.a.y)
 
     @property
-    def b(self):
+    def b(self) -> Point:
         return Point(self.seg.b.x, self.seg.b.y)
 
 
@@ -1908,7 +1928,7 @@ class TGIndex(enum.IntEnum):
     YSTRIPES = TG_YSTRIPES
 
 
-def set_polygon_indexing_mode(ix: TGIndex):
+def set_polygon_indexing_mode(ix: TGIndex) -> None:
     """
     Set the polygon indexing mode. Accepts values from TGIndex enum.
     Internally it changes the global tg_index.
@@ -1922,7 +1942,7 @@ def set_polygon_indexing_mode(ix: TGIndex):
 LineString = Line
 
 
-def Polygon(exterior, holes=None):
+def Polygon(exterior, holes=None) -> Poly:
     """Create a Polygon geometry from an exterior ring (list of coordinates or Ring object)
     and optional holes (list of lists of coordinates or Ring objects)"""
     exterior = Ring(exterior) if not isinstance(exterior, Ring) else exterior
@@ -1933,22 +1953,22 @@ def Polygon(exterior, holes=None):
     return Poly(exterior, holes)
 
 
-def MultiPoint(points):
+def MultiPoint(points) -> Geometry:
     """Create a MultiPoint geometry from a list of points"""
     return Geometry.from_multipoint(points)
 
 
-def MultiLineString(lines):
+def MultiLineString(lines) -> Geometry:
     """Create a MultiLineString geometry from a list of lines"""
     return Geometry.from_multilinestring(lines)
 
 
-def MultiPolygon(polys):
+def MultiPolygon(polys) -> Geometry:
     """Create a MultiPolygon geometry from a list of polygons"""
     return Geometry.from_multipolygon(polys)
 
 
-def GeometryCollection(geoms):
+def GeometryCollection(geoms) -> Geometry:
     """Create a GeometryCollection from a list of geometries"""
     return Geometry.from_geometrycollection(geoms)
 
