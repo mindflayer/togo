@@ -226,6 +226,7 @@ cdef extern from "tgx.h":
 
 
 from libc.stdlib cimport malloc, free
+from typing import Optional, Union, Sequence
 
 cdef Geometry _geometry_from_ptr(tg_geom *ptr) noexcept:
     cdef Geometry g = Geometry.__new__(Geometry)
@@ -1942,15 +1943,37 @@ def set_polygon_indexing_mode(ix: TGIndex) -> None:
 LineString = Line
 
 
-def Polygon(exterior, holes=None) -> Poly:
-    """Create a Polygon geometry from an exterior ring (list of coordinates or Ring object)
-    and optional holes (list of lists of coordinates or Ring objects)"""
-    exterior = Ring(exterior) if not isinstance(exterior, Ring) else exterior
-    holes = (
-        [Ring(h) if not isinstance(h, Ring) else h for h in holes]
-        if holes is not None else None
-    )
-    return Poly(exterior, holes)
+class Polygon(Poly):
+    """Shapely-compatible Polygon class that extends Poly.
+
+    Create a Polygon geometry from an exterior ring (list of coordinates or Ring object)
+    and optional holes (list of lists of coordinates or Ring objects).
+    """
+
+    def __init__(
+        self,
+        exterior: Union[Ring, Sequence[tuple[float, float]]],
+        holes: Optional[Sequence[Union[Ring, Sequence[tuple[float, float]]]]] = None
+    ) -> None:
+        """Initialize Polygon from exterior ring and optional holes.
+
+        Parameters:
+        -----------
+        exterior : Ring or list of coordinates
+            The exterior ring. If a list, will be converted to Ring.
+        holes : list of Ring or list of coordinate lists, optional
+            List of hole rings. Each hole will be converted to Ring if needed.
+        """
+        # Convert exterior to Ring if needed
+        if not isinstance(exterior, Ring):
+            exterior = Ring(exterior)
+
+        # Convert holes to Ring objects if needed
+        if holes:
+            holes = [Ring(h) if not isinstance(h, Ring) else h for h in holes]
+
+        # Call parent Poly.__init__
+        super().__init__(exterior, holes)
 
 
 def MultiPoint(points) -> Geometry:
