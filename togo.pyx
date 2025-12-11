@@ -1545,7 +1545,7 @@ cdef class Line:
     cdef tg_line *_get_c_line(self) noexcept:
         return self.line
 
-    def __getitem__(self, idx) -> Point:
+    def __getitem__(self, idx: int) -> Point:
         n = self.num_points
         if not (0 <= idx < n):
             raise IndexError("Line index out of range")
