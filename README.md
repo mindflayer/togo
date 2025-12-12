@@ -1,4 +1,4 @@
-<img src="togo.png" width="256px">
+<img src="https://github.com/mindflayer/togo/blob/main/togo.png?raw=true" width="256px">
 
 Python bindings for [TG](https://github.com/tidwall/tg)
 (Geometry library for C - Fast point-in-polygon)
