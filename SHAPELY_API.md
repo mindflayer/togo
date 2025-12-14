@@ -359,7 +359,7 @@ print(f"GeoJSON: {point.__geo_interface__}")
 The `transform` function applies a coordinate transformation function to all coordinates in a geometry. This is similar to `shapely.ops.transform` and is useful for coordinate system transformations, scaling, rotations, and other operations.
 
 ```python
-from togo import transform, Point, LineString
+from togo import transform, Point, LineString, Polygon
 
 # Simple translation
 def translate(x, y):
