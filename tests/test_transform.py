@@ -1,3 +1,5 @@
+import json
+
 import pytest
 import togo as tg
 
@@ -55,8 +57,6 @@ def test_transform_multipoint_translate():
     t = tg.transform(translate(1, 2), mp)
     assert t.type_string() == "MultiPoint"
     # convert to geojson and check coords
-    import json
-
     coords = json.loads(t.to_geojson())["coordinates"]
     assert coords == [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]]
 
@@ -112,8 +112,6 @@ def test_transform_empty_multipoint():
     t = tg.transform(translate(1, 2), mp)
     assert t.type_string() == "MultiPoint"
     # Convert to geojson and verify it's empty
-    import json
-
     coords = json.loads(t.to_geojson())["coordinates"]
     assert coords == []
     assert t.num_points == 0
