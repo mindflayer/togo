@@ -35,6 +35,7 @@ try:
         from_geojson,
         to_geojson,
         Geometry,
+        transform,
     )
 except Exception as e:
     print("ERROR: Failed to import togo:", e)
@@ -43,7 +44,7 @@ except Exception as e:
 # Import Shapely with compatibility across 1.x/2.x
 try:
     import shapely
-    from shapely.ops import unary_union
+    from shapely.ops import unary_union, transform as shp_transform
 
     try:
         # Shapely 2.x preferred API
@@ -355,6 +356,57 @@ def main():
         lambda: simplify_poly.simplify(0.1, preserve_topology=False),
         lambda: shp_simplify_poly.simplify(0.1, preserve_topology=False),
         iters=500,
+    )
+
+    # Transform operations
+    import math
+
+    # Simple translation function
+    def translate(x, y):
+        return x + 1.5, y + 2.5
+
+    # Scaling function
+    def scale(x, y):
+        return x * 2.0, y * 3.0
+
+    # Rotation function
+    def rotate_45(x, y):
+        angle = math.pi / 4
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        return (x * cos_a - y * sin_a), (x * sin_a + y * cos_a)
+
+    transform_point = from_wkt("POINT (0 0)")
+    shp_transform_point = shp_from_wkt("POINT (0 0)")
+
+    transform_line = from_wkt(
+        "LINESTRING (0 0, 1 1, 2 2, 3 3, 4 4, 5 5, 6 6, 7 7, 8 8, 9 9)"
+    )
+    shp_transform_line = shp_from_wkt(
+        "LINESTRING (0 0, 1 1, 2 2, 3 3, 4 4, 5 5, 6 6, 7 7, 8 8, 9 9)"
+    )
+
+    transform_poly = from_geojson(TOGO_JSON)
+    shp_transform_poly = shp_from_geojson(TOGO_JSON)
+
+    bench_case(
+        "transform point (translate)",
+        lambda: transform(translate, transform_point),
+        lambda: shp_transform(translate, shp_transform_point),
+        iters=1000,
+    )
+
+    bench_case(
+        "transform linestring (scale)",
+        lambda: transform(scale, transform_line),
+        lambda: shp_transform(scale, shp_transform_line),
+        iters=500,
+    )
+
+    bench_case(
+        "transform polygon (rotate 45°)",
+        lambda: transform(rotate_45, transform_poly),
+        lambda: shp_transform(rotate_45, shp_transform_poly),
+        iters=200,
     )
 
     print("\nNote: Results are rough microbenchmarks. Real-world performance can vary.")
