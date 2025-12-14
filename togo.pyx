@@ -2090,6 +2090,29 @@ def transform(func, geometry) -> Geometry:
     return _transform_recursive(func, geom)
 
 
+cdef tuple _validate_transform_result(object result):
+    """
+    Validate and convert the result from a transform function.
+    
+    Args:
+        result: The return value from the transform function
+        
+    Returns:
+        A tuple of (x, y) as floats
+        
+    Raises:
+        TypeError: If the result is not a valid tuple of two numbers
+    """
+    if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
+        raise TypeError("Transform function must return a tuple of (x, y)")
+    try:
+        x_new = float(result[0])
+        y_new = float(result[1])
+    except (TypeError, ValueError):
+        raise TypeError("Transform function must return a tuple of two numbers")
+    return (x_new, y_new)
+
+
 cdef Geometry _transform_recursive(object func, Geometry geom):
     """Internal recursive function to transform a geometry"""
     cdef int geom_type = tg_geom_typeof(geom.geom)
@@ -2110,13 +2133,9 @@ cdef Geometry _transform_recursive(object func, Geometry geom):
     if geom_type == 1:
         pt = tg_geom_point(geom.geom)
         result = func(pt.x, pt.y)
-        if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
-            raise TypeError("Transform function must return a tuple of (x, y)")
-        try:
-            transformed_pt.x = float(result[0])
-            transformed_pt.y = float(result[1])
-        except (TypeError, ValueError):
-            raise TypeError("Transform function must return a tuple of two numbers")
+        x_new, y_new = _validate_transform_result(result)
+        transformed_pt.x = x_new
+        transformed_pt.y = y_new
         return _geometry_from_ptr(tg_geom_new_point(transformed_pt))
 
     # LineString (type 2)
@@ -2127,13 +2146,7 @@ cdef Geometry _transform_recursive(object func, Geometry geom):
         transformed_coords = []
         for i in range(n):
             result = func(pts[i].x, pts[i].y)
-            if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
-                raise TypeError("Transform function must return a tuple of (x, y)")
-            try:
-                x_new = float(result[0])
-                y_new = float(result[1])
-            except (TypeError, ValueError):
-                raise TypeError("Transform function must return a tuple of two numbers")
+            x_new, y_new = _validate_transform_result(result)
             transformed_coords.append((x_new, y_new))
         return _geometry_from_ptr(tg_geom_new_linestring(
             (<Line>Line(transformed_coords))._get_c_line())
@@ -2165,13 +2178,7 @@ cdef Geometry _transform_recursive(object func, Geometry geom):
         for i in range(n):
             pt = tg_geom_point_at(geom.geom, i)
             result = func(pt.x, pt.y)
-            if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
-                raise TypeError("Transform function must return a tuple of (x, y)")
-            try:
-                x_new = float(result[0])
-                y_new = float(result[1])
-            except (TypeError, ValueError):
-                raise TypeError("Transform function must return a tuple of two numbers")
+            x_new, y_new = _validate_transform_result(result)
             transformed_coords.append((x_new, y_new))
         return Geometry.from_multipoint(transformed_coords)
 
@@ -2186,13 +2193,7 @@ cdef Geometry _transform_recursive(object func, Geometry geom):
             transformed_coords = []
             for j in range(line_num_pts):
                 result = func(line_pts[j].x, line_pts[j].y)
-                if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
-                    raise TypeError("Transform function must return a tuple of (x, y)")
-                try:
-                    x_new = float(result[0])
-                    y_new = float(result[1])
-                except (TypeError, ValueError):
-                    raise TypeError("Transform function must return a tuple of two numbers")
+                x_new, y_new = _validate_transform_result(result)
                 transformed_coords.append((x_new, y_new))
             transformed_lines.append(transformed_coords)
         return Geometry.from_multilinestring(transformed_lines)
@@ -2245,13 +2246,7 @@ cdef list _transform_ring_coords(object func, Ring ring):
 
     for i in range(n):
         result = func(pts[i].x, pts[i].y)
-        if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
-            raise TypeError("Transform function must return a tuple of (x, y)")
-        try:
-            x_new = float(result[0])
-            y_new = float(result[1])
-        except (TypeError, ValueError):
-            raise TypeError("Transform function must return a tuple of two numbers")
+        x_new, y_new = _validate_transform_result(result)
         transformed_coords.append((x_new, y_new))
 
     return transformed_coords
