@@ -32,6 +32,21 @@ def test_transform_linestring_scale():
     assert t.coords == [(0.0, 0.0), (2.0, 6.0), (6.0, 12.0)]
 
 
+def test_transform_polygon_translate():
+    ext = tg.Ring([(0, 0), (3, 0), (3, 3), (0, 3), (0, 0)])
+    poly = tg.Poly(ext)
+    g = poly.as_geometry()
+    t = tg.transform(translate(2, 1), g)
+    assert t.type_string() == "Polygon"
+    # check exterior first and last points
+    pg = t.poly()
+    ext2 = pg.exterior.points()
+    assert ext2[0] == (2.0, 1.0)
+    assert ext2[-1] == (2.0, 1.0)
+    # no holes
+    assert pg.num_holes() == 0
+
+
 def test_transform_polygon_translate_with_holes():
     ext = tg.Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
     hole = tg.Ring([(1, 1), (2, 1), (2, 2), (1, 2), (1, 1)])
