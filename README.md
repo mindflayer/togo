@@ -5,6 +5,8 @@ Python bindings for [TG](https://github.com/tidwall/tg)
 
 ToGo is a high-performance Python library for computational geometry, providing a Cython wrapper around the above-mentioned C library.
 
+Note on pronunciation: "ToGo" is pronounced like the country Togo ("TOH-go"), not like "to go".
+
 The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient library for geometric operations, including spatial predicates, format conversions, and spatial indexing. ToGo's API is flexible and allows you to reason in either TG concepts (if you're familiar with the TG library) or Shapely conventions (the de facto standard for geospatial work in Python)—whichever fits your workflow best.
 
 See [SHAPELY_API.md](SHAPELY_API.md) for more details on Shapely compatibility.
