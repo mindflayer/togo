@@ -192,6 +192,7 @@ cdef extern from "tg.h":
     tg_geom *tg_geom_new_geometrycollection_empty()
     tg_geom *tg_geom_new_linestring(const tg_line *line)
     tg_point tg_geom_point(const tg_geom *geom)
+    tg_point tg_geom_point_at(const tg_geom *geom, int index)
     const tg_line *tg_geom_line(const tg_geom *geom)
     const tg_poly *tg_geom_poly(const tg_geom *geom)
     const tg_geom *tg_geom_geometry_at(const tg_geom *geom, int index)
@@ -2045,11 +2046,223 @@ def to_wkb(geom) -> bytes:
         raise TypeError("Object must be a togo geometry")
 
 
+def transform(func, geometry) -> Geometry:
+    """
+    Apply a transformation function to all coordinates in a geometry.
+
+    Similar to shapely.ops.transform, applies a callable to every coordinate
+    in the geometry, recursively handling multi-geometries and geometry collections.
+
+    Parameters:
+    -----------
+    func : callable
+        A function that takes (x, y) and returns a tuple (x', y').
+        Must return a tuple of two numbers.
+    geometry : Geometry, Point, Line, Ring, Poly, or other geometry type
+        The geometry to transform. If it has an as_geometry() method,
+        that will be called to get the base Geometry.
+
+    Returns:
+    --------
+    Geometry
+        A new transformed Geometry
+
+    Raises:
+    -------
+    TypeError
+        If func doesn't return a valid (x, y) tuple or if geometry is invalid.
+
+    Examples:
+    ---------
+    >>> def translate(x, y):
+    ...     return x + 1, y + 2
+    >>> point = Point(0, 0)
+    >>> transformed = transform(translate, point)
+    """
+    # Convert to Geometry if needed
+    if hasattr(geometry, "as_geometry"):
+        geom = geometry.as_geometry()
+    elif isinstance(geometry, Geometry):
+        geom = geometry
+    else:
+        raise TypeError("geometry must be a togo geometry type")
+
+    return _transform_recursive(func, geom)
+
+
+cdef Geometry _transform_recursive(object func, Geometry geom):
+    """Internal recursive function to transform a geometry"""
+    cdef int geom_type = tg_geom_typeof(geom.geom)
+    cdef int i, n, j, nholes, line_num_pts
+    cdef tg_point transformed_pt
+    cdef list transformed_coords
+    cdef list transformed_lines
+    cdef list transformed_polys
+    cdef list transformed_geoms
+    cdef const tg_line *line
+    cdef const tg_poly *poly
+    cdef const tg_geom *child_geom
+    cdef tg_point pt
+    cdef const tg_point *pts
+    cdef const tg_point *line_pts
+
+    # Point (type 1)
+    if geom_type == 1:
+        pt = tg_geom_point(geom.geom)
+        result = func(pt.x, pt.y)
+        if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
+            raise TypeError("Transform function must return a tuple of (x, y)")
+        try:
+            transformed_pt.x = float(result[0])
+            transformed_pt.y = float(result[1])
+        except (TypeError, ValueError):
+            raise TypeError("Transform function must return a tuple of two numbers")
+        return _geometry_from_ptr(tg_geom_new_point(transformed_pt))
+
+    # LineString (type 2)
+    elif geom_type == 2:
+        line = tg_geom_line(geom.geom)
+        n = tg_line_num_points(line)
+        pts = tg_line_points(line)
+        transformed_coords = []
+        for i in range(n):
+            result = func(pts[i].x, pts[i].y)
+            if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
+                raise TypeError("Transform function must return a tuple of (x, y)")
+            try:
+                x_new = float(result[0])
+                y_new = float(result[1])
+            except (TypeError, ValueError):
+                raise TypeError("Transform function must return a tuple of two numbers")
+            transformed_coords.append((x_new, y_new))
+        return _geometry_from_ptr(tg_geom_new_linestring(
+            (<Line>Line(transformed_coords))._get_c_line())
+        )
+
+    # Polygon (type 3)
+    elif geom_type == 3:
+        poly = tg_geom_poly(geom.geom)
+        # Transform exterior ring
+        ext_ring = Ring.from_ptr(<tg_ring *>tg_poly_exterior(poly))
+        transformed_ext_coords = _transform_ring_coords(func, ext_ring)
+        transformed_ext = Ring(transformed_ext_coords)
+
+        # Transform holes
+        n = tg_poly_num_holes(poly)
+        transformed_holes = []
+        for i in range(n):
+            hole_ring = Ring.from_ptr(<tg_ring *>tg_poly_hole_at(poly, i))
+            transformed_hole_coords = _transform_ring_coords(func, hole_ring)
+            transformed_holes.append(Ring(transformed_hole_coords))
+
+        transformed_poly = Poly(transformed_ext, transformed_holes if transformed_holes else None)
+        return _geometry_from_ptr(tg_geom_new_polygon(transformed_poly._get_c_poly()))
+
+    # MultiPoint (type 4)
+    elif geom_type == 4:
+        n = tg_geom_num_points(geom.geom)
+        transformed_coords = []
+        for i in range(n):
+            pt = tg_geom_point_at(geom.geom, i)
+            result = func(pt.x, pt.y)
+            if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
+                raise TypeError("Transform function must return a tuple of (x, y)")
+            try:
+                x_new = float(result[0])
+                y_new = float(result[1])
+            except (TypeError, ValueError):
+                raise TypeError("Transform function must return a tuple of two numbers")
+            transformed_coords.append((x_new, y_new))
+        return Geometry.from_multipoint(transformed_coords)
+
+    # MultiLineString (type 5)
+    elif geom_type == 5:
+        n = tg_geom_num_lines(geom.geom)
+        transformed_lines = []
+        for i in range(n):
+            line = tg_geom_line_at(geom.geom, i)
+            line_num_pts = tg_line_num_points(line)
+            line_pts = tg_line_points(line)
+            transformed_coords = []
+            for j in range(line_num_pts):
+                result = func(line_pts[j].x, line_pts[j].y)
+                if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
+                    raise TypeError("Transform function must return a tuple of (x, y)")
+                try:
+                    x_new = float(result[0])
+                    y_new = float(result[1])
+                except (TypeError, ValueError):
+                    raise TypeError("Transform function must return a tuple of two numbers")
+                transformed_coords.append((x_new, y_new))
+            transformed_lines.append(transformed_coords)
+        return Geometry.from_multilinestring(transformed_lines)
+
+    # MultiPolygon (type 6)
+    elif geom_type == 6:
+        n = tg_geom_num_polys(geom.geom)
+        transformed_polys = []
+        for i in range(n):
+            poly = tg_geom_poly_at(geom.geom, i)
+            # Transform exterior ring
+            ext_ring = Ring.from_ptr(<tg_ring *>tg_poly_exterior(poly))
+            transformed_ext_coords = _transform_ring_coords(func, ext_ring)
+            transformed_ext = Ring(transformed_ext_coords)
+
+            # Transform holes
+            nholes = tg_poly_num_holes(poly)
+            transformed_holes = []
+            for j in range(nholes):
+                hole_ring = Ring.from_ptr(<tg_ring *>tg_poly_hole_at(poly, j))
+                transformed_hole_coords = _transform_ring_coords(func, hole_ring)
+                transformed_holes.append(Ring(transformed_hole_coords))
+
+            transformed_polys.append(
+                Poly(transformed_ext, transformed_holes if transformed_holes else None)
+            )
+        return Geometry.from_multipolygon(transformed_polys)
+
+    # GeometryCollection (type 7)
+    elif geom_type == 7:
+        n = tg_geom_num_geometries(geom.geom)
+        transformed_geoms = []
+        for i in range(n):
+            child_geom = tg_geom_geometry_at(geom.geom, i)
+            child_geom_obj = _geometry_from_ptr(tg_geom_clone(child_geom))
+            transformed_child = _transform_recursive(func, child_geom_obj)
+            transformed_geoms.append(transformed_child)
+        return Geometry.from_geometrycollection(transformed_geoms)
+
+    else:
+        raise ValueError(f"Unknown geometry type: {geom_type}")
+
+
+cdef list _transform_ring_coords(object func, Ring ring):
+    """Helper function to transform all coordinates in a ring"""
+    cdef int n = tg_ring_num_points(ring.ring)
+    cdef const tg_point *pts = tg_ring_points(ring.ring)
+    cdef list transformed_coords = []
+    cdef int i
+
+    for i in range(n):
+        result = func(pts[i].x, pts[i].y)
+        if result is None or not isinstance(result, (tuple, list)) or len(result) != 2:
+            raise TypeError("Transform function must return a tuple of (x, y)")
+        try:
+            x_new = float(result[0])
+            y_new = float(result[1])
+        except (TypeError, ValueError):
+            raise TypeError("Transform function must return a tuple of two numbers")
+        transformed_coords.append((x_new, y_new))
+
+    return transformed_coords
+
+
 __all__ = [
     "Geometry", "Point", "Rect", "Ring", "Line", "Poly", "Segment",
     "LineString", "Polygon",
     "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection",
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
+    "transform",
     "set_polygon_indexing_mode", "TGIndex"
 ]

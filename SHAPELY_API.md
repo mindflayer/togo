@@ -354,6 +354,46 @@ print(f"WKT: {point.wkt}")
 print(f"GeoJSON: {point.__geo_interface__}")
 ```
 
+## Coordinate Transformation
+
+The `transform` function applies a coordinate transformation function to all coordinates in a geometry. This is similar to `shapely.ops.transform` and is useful for coordinate system transformations, scaling, rotations, and other operations.
+
+```python
+from togo import transform, Point, LineString
+
+# Simple translation
+def translate(x, y):
+    return x + 10, y + 20
+
+point = Point(0, 0)
+translated = transform(translate, point)
+print(translated.coords)  # [(10.0, 20.0)]
+
+# Scaling
+def scale(x, y):
+    return x * 2, y * 3
+
+line = LineString([(0, 0), (1, 1), (2, 2)])
+scaled = transform(scale, line)
+print(scaled.coords)  # [(0.0, 0.0), (2.0, 3.0), (4.0, 6.0)]
+
+# More complex transformations (e.g., rotation)
+import math
+
+def rotate_45(x, y):
+    angle = math.pi / 4
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    return (x * cos_a - y * sin_a), (x * sin_a + y * cos_a)
+
+poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+rotated = transform(rotate_45, poly)
+```
+
+The `transform` function works with:
+- Simple geometries: `Point`, `LineString`, `Polygon`
+- Multi-geometries: `MultiPoint`, `MultiLineString`, `MultiPolygon`
+- Geometry collections with mixed types
+
 ## API Reference Summary
 
 | Shapely API | ToGo API | Status |
@@ -379,7 +419,8 @@ print(f"GeoJSON: {point.__geo_interface__}")
 | `within()` | `within()` | ✅ Supported |
 | `buffer()` | `buffer()` | ✅ Supported (via GEOS) |
 | `simplify()` | `simplify()` | ✅ Supported (via GEOS) |
-| `union()` | `unary_union()` | ✅ Supported (via GEOS) |
+| `unary_union()` | `unary_union()` | ✅ Supported (via GEOS) |
+| `transform()` | `transform()` | ✅ Supported |
 | `intersection()` | - | ❌ Not yet (use GEOS via tgx) |
 
 ## Conclusion
