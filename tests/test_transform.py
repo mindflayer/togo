@@ -1,3 +1,5 @@
+import json
+
 import pytest
 import togo as tg
 
@@ -70,8 +72,6 @@ def test_transform_multipoint_translate():
     t = tg.transform(translate(1, 2), mp)
     assert t.type_string() == "MultiPoint"
     # convert to geojson and check coords
-    import json
-
     coords = json.loads(t.to_geojson())["coordinates"]
     assert coords == [[1.0, 2.0], [2.0, 3.0], [3.0, 4.0]]
 
@@ -119,6 +119,44 @@ def test_transform_bad_callable():
 
     with pytest.raises(TypeError):
         tg.transform(bad, tg.Point(1, 2))
+
+
+def test_transform_empty_multipoint():
+    """Test that transforming an empty MultiPoint returns an empty MultiPoint."""
+    mp = tg.MultiPoint([])
+    t = tg.transform(translate(1, 2), mp)
+    assert t.type_string() == "MultiPoint"
+    # Convert to geojson and verify it's empty
+    coords = json.loads(t.to_geojson())["coordinates"]
+    assert coords == []
+    assert t.num_points == 0
+
+
+def test_transform_empty_multilinestring():
+    """Test that transforming an empty MultiLineString returns an empty MultiLineString."""
+    mls = tg.MultiLineString([])
+    t = tg.transform(scale(2, 2), mls)
+    assert t.type_string() == "MultiLineString"
+    # Verify it has no lines
+    assert t.num_lines == 0
+
+
+def test_transform_empty_multipolygon():
+    """Test that transforming an empty MultiPolygon returns an empty MultiPolygon."""
+    mp = tg.MultiPolygon([])
+    t = tg.transform(translate(-1, -1), mp)
+    assert t.type_string() == "MultiPolygon"
+    # Verify it has no polygons
+    assert t.num_polys == 0
+
+
+def test_transform_empty_geometrycollection():
+    """Test that transforming an empty GeometryCollection returns an empty GeometryCollection."""
+    gc = tg.GeometryCollection([])
+    t = tg.transform(translate(1, 0), gc)
+    assert t.type_string() == "GeometryCollection"
+    # Verify it has no child geometries
+    assert t.num_geometries == 0
 
 
 def test_transform_non_callable():
