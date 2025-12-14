@@ -119,3 +119,72 @@ def test_transform_bad_callable():
 
     with pytest.raises(TypeError):
         tg.transform(bad, tg.Point(1, 2))
+
+
+def test_transform_non_callable():
+    """Test that non-callable objects raise TypeError when used as func"""
+    with pytest.raises(TypeError):
+        tg.transform("not a function", tg.Point(1, 2))
+    
+    with pytest.raises(TypeError):
+        tg.transform(42, tg.Point(1, 2))
+    
+    with pytest.raises(TypeError):
+        tg.transform(None, tg.Point(1, 2))
+
+
+def test_transform_function_raises_exception():
+    """Test that exceptions raised by the transform function are propagated"""
+    def raises_error(x, y):
+        raise ValueError("Something went wrong")
+    
+    with pytest.raises(ValueError, match="Something went wrong"):
+        tg.transform(raises_error, tg.Point(1, 2))
+
+
+def test_transform_incorrect_tuple_length():
+    """Test that functions returning incorrect tuple lengths raise TypeError"""
+    # Function returning 3 elements instead of 2
+    def returns_three(x, y):
+        return x, y, 0
+    
+    with pytest.raises(TypeError, match="must return a tuple of \\(x, y\\)"):
+        tg.transform(returns_three, tg.Point(1, 2))
+    
+    # Function returning 1 element
+    def returns_one(x, y):
+        return (x,)
+    
+    with pytest.raises(TypeError, match="must return a tuple of \\(x, y\\)"):
+        tg.transform(returns_one, tg.Point(1, 2))
+    
+    # Function returning empty tuple
+    def returns_empty(x, y):
+        return ()
+    
+    with pytest.raises(TypeError, match="must return a tuple of \\(x, y\\)"):
+        tg.transform(returns_empty, tg.Point(1, 2))
+
+
+def test_transform_non_numeric_values():
+    """Test that functions returning non-numeric values raise TypeError"""
+    # Function returning strings
+    def returns_strings(x, y):
+        return "a", "b"
+    
+    with pytest.raises(TypeError, match="must return a tuple of two numbers"):
+        tg.transform(returns_strings, tg.Point(1, 2))
+    
+    # Function returning None values
+    def returns_nones(x, y):
+        return None, None
+    
+    with pytest.raises(TypeError, match="must return a tuple of two numbers"):
+        tg.transform(returns_nones, tg.Point(1, 2))
+    
+    # Function returning mixed types
+    def returns_mixed(x, y):
+        return 1, "not a number"
+    
+    with pytest.raises(TypeError, match="must return a tuple of two numbers"):
+        tg.transform(returns_mixed, tg.Point(1, 2))
