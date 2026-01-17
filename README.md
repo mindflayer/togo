@@ -317,7 +317,7 @@ Like `unary_union`, buffer operations automatically handle TG ↔ GEOS conversio
 The `nearest_points()` and `shortest_line()` methods find the closest points between geometries:
 
 ```python
-from togo import Point, LineString, Polygon, Ring
+from togo import Point, LineString, Polygon, Ring, shortest_line, from_wkt
 
 # Find nearest points between geometries
 point = Point(0, 0)
@@ -326,19 +326,38 @@ pt1, pt2 = point.nearest_points(line)
 print(f"Nearest on point: ({pt1.x}, {pt1.y})")  # (0.0, 0.0)
 print(f"Nearest on line: ({pt2.x}, {pt2.y})")   # (10.0, 0.0)
 
-# Get the connecting line (Shapely v2 API)
-shortest = point.shortest_line(line)
+# Get the connecting line (Shapely v2 API - module-level function)
+shortest = shortest_line(point, line)
 print(f"Distance: {shortest.length}")  # 10.0
 print(f"Connecting line: {shortest.coords}")  # [(0.0, 0.0), (10.0, 0.0)]
+
+# Method style also works
+shortest = point.shortest_line(line)
 
 # Measure gap between polygons
 poly1 = Polygon(Ring([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)]))
 poly2 = Polygon(Ring([(10, 0), (15, 0), (15, 5), (10, 5), (10, 0)]))
-gap_line = poly1.shortest_line(poly2)
+gap_line = shortest_line(poly1, poly2)
 print(f"Gap between polygons: {gap_line.length}")  # 5.0
+
+# Practical use case: Check if features are within distance
+def within_distance(geom1, geom2, max_dist):
+    return shortest_line(geom1, geom2).length <= max_dist
+
+building1 = Polygon(Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]))
+building2 = Polygon(Ring([(20, 0), (30, 0), (30, 10), (20, 10), (20, 0)]))
+
+if within_distance(building1, building2, 15):
+    print("Buildings meet separation requirement")
+
+# Works with WKT geometries
+g1 = from_wkt("POINT(0 0)")
+g2 = from_wkt("LINESTRING(5 5, 10 10)")
+connecting = shortest_line(g1, g2)
+print(f"Distance: {connecting.length:.2f}")
 ```
 
-For detailed documentation, see [SHORTEST_LINE_QUICK_REFERENCE.md](SHORTEST_LINE_QUICK_REFERENCE.md).
+For detailed documentation, see [SHORTEST_LINE_QUICK_REFERENCE.md](SHORTEST_LINE_QUICK_REFERENCE.md). For more examples, see `examples/shortest_line_demo.py`.
 
 ## Performance Considerations
 
