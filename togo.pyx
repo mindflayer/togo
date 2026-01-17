@@ -1482,8 +1482,7 @@ cdef class Point:
         elif hasattr(other, "as_geometry"):
             # Assume it's another geometry type with as_geometry method
             return self.as_geometry().nearest_points(other.as_geometry())
-        else:
-            raise ValueError(f"other must be a Geometry object, got {type(other)}")
+        raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
     def shortest_line(self, other):
         """
