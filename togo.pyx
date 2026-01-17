@@ -1375,6 +1375,7 @@ cdef class Geometry:
 
 cdef class Point:
     cdef tg_point pt
+    cdef object _cached_geometry
 
     def __init__(self, x: float, y: float):
         self.pt.x = x
@@ -1401,6 +1402,12 @@ cdef class Point:
         return self.pt
 
     def as_geometry(self) -> Geometry:
+        # Cache geometry result since Point is immutable
+        if self._cached_geometry is None:
+            self._cached_geometry = self._as_geometry()
+        return self._cached_geometry
+
+    cdef Geometry _as_geometry(self):
         return _geometry_from_ptr(tg_geom_new_point(self.pt))
 
     # Shapely-compatible properties
@@ -1556,6 +1563,7 @@ cdef class Point:
 
 cdef class Rect:
     cdef tg_rect rect
+    cdef object _cached_geometry
 
     def __init__(self, min_pt: Point, max_pt: Point):
         self.rect.min = min_pt.pt
@@ -1609,6 +1617,12 @@ cdef class Rect:
             raise TypeError("intersects expects Rect or Point")
 
     def as_geometry(self) -> Geometry:
+        # Cache geometry result since Rect is immutable
+        if self._cached_geometry is None:
+            self._cached_geometry = self._as_geometry()
+        return self._cached_geometry
+
+    cdef Geometry _as_geometry(self):
         minx, miny = self.rect.min.x, self.rect.min.y
         maxx, maxy = self.rect.max.x, self.rect.max.y
         corners = [
@@ -1626,6 +1640,7 @@ cdef class Rect:
 cdef class Ring:
     cdef tg_ring *ring
     cdef bint owns_pointer
+    cdef object _cached_geometry
 
     def __init__(self, points):
         cdef int n = len(points)
@@ -1701,7 +1716,12 @@ cdef class Ring:
         return tg_ring_clockwise(self.ring)
 
     def as_geometry(self) -> Geometry:
-        # Convert the ring to a Polygon geometry with this ring as exterior
+        # Cache geometry result since Ring is immutable
+        if self._cached_geometry is None:
+            self._cached_geometry = self._as_geometry()
+        return self._cached_geometry
+
+    cdef Geometry _as_geometry(self):
         cdef tg_poly *p = tg_poly_new(self.ring, NULL, 0)
         if not p:
             raise ValueError("Failed to create Poly from Ring")
@@ -1846,6 +1866,7 @@ cdef class Ring:
 cdef class Line:
     cdef tg_line *line
     cdef bint owns_pointer
+    cdef object _cached_geometry
 
     def __init__(self, points):
         cdef int n = len(points)
@@ -1902,6 +1923,12 @@ cdef class Line:
         return tg_line_clockwise(self.line)
 
     def as_geometry(self) -> Geometry:
+        # Cache geometry result since Line is immutable
+        if self._cached_geometry is None:
+            self._cached_geometry = self._as_geometry()
+        return self._cached_geometry
+
+    cdef Geometry _as_geometry(self):
         cdef tg_geom *g = tg_geom_new_linestring(self.line)
         if not g:
             raise ValueError("Failed to create Geometry from LineString")
@@ -2013,7 +2040,7 @@ cdef class Line:
 
         Parameters:
         -----------
-        other : Geometry, Point, LineString, Polygon, or other geometry
+        other : Geometry, Point, Line, Ring, Poly, or other geometry
             The other geometry to find the nearest point to
 
         Returns:
@@ -2032,10 +2059,8 @@ cdef class Line:
         if isinstance(other, Geometry):
             return self.as_geometry().nearest_points(other)
         elif hasattr(other, "as_geometry"):
-            # Assume it's another geometry type with as_geometry method
             return self.as_geometry().nearest_points(other.as_geometry())
-        else:
-            raise ValueError(f"other must be a Geometry object, got {type(other)}")
+        raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
     def shortest_line(self, other):
         """
@@ -2046,7 +2071,7 @@ cdef class Line:
 
         Parameters:
         -----------
-        other : Geometry, Point, LineString, Polygon, or other geometry
+        other : Geometry, Point, Line, Ring, Poly, or other geometry
             The other geometry to find the shortest line to
 
         Returns:
@@ -2073,6 +2098,7 @@ cdef class Line:
 cdef class Poly:
     cdef tg_poly *poly
     cdef bint owns_pointer
+    cdef object _cached_geometry
 
     def __init__(self, exterior, holes=None):
         cdef int nholes = 0
@@ -2157,6 +2183,12 @@ cdef class Poly:
         return tg_poly_clockwise(self.poly)
 
     def as_geometry(self) -> Geometry:
+        # Cache geometry result since Poly is immutable
+        if self._cached_geometry is None:
+            self._cached_geometry = self._as_geometry()
+        return self._cached_geometry
+
+    cdef Geometry _as_geometry(self):
         cdef tg_geom *g = tg_geom_new_polygon(self.poly)
         if not g:
             raise ValueError("Failed to create Geometry from Polygon")
