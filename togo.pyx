@@ -1514,8 +1514,7 @@ cdef class Point:
             return self.as_geometry().shortest_line(other)
         elif hasattr(other, "as_geometry"):
             return self.as_geometry().shortest_line(other.as_geometry())
-        else:
-            raise ValueError(f"other must be a Geometry object, got {type(other)}")
+        raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
 
 cdef class Rect:
