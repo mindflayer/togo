@@ -356,8 +356,6 @@ def main():
         iters=500,
     )
 
-    # ...existing code...
-
     bench_case(
         "simplify polygon (tolerance=0.1, preserve_topology=False)",
         lambda: simplify_poly.simplify(0.1, preserve_topology=False),
