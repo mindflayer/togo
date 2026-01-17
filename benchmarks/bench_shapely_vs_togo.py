@@ -418,9 +418,6 @@ def main():
         iters=500,
     )
 
-    # shortest_line operations (Shapely v2 API)
-    print("\n=== Shortest Line (Shapely v2 API) ===")
-
     # Point to linestring
     sl_point = from_wkt("POINT (0 0)")
     shp_sl_point = shp_from_wkt("POINT (0 0)")
