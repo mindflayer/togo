@@ -1625,10 +1625,13 @@ cdef class Ring:
     def num_points(self) -> int:
         return tg_ring_num_points(self.ring)
 
-    def points(self) -> list:
+    def points(self, as_tuples=False) -> list[tuple] | list[Point]:
         cdef int n = tg_ring_num_points(self.ring)
         cdef const tg_point *pts = tg_ring_points(self.ring)
-        return [(pts[i].x, pts[i].y) for i in range(n)]
+        if as_tuples:
+            return [(pts[i].x, pts[i].y) for i in range(n)]
+        else:
+            return [Point(pts[i].x, pts[i].y) for i in range(n)]
 
     @property
     def area(self) -> float:
@@ -1669,7 +1672,7 @@ cdef class Ring:
     @property
     def coords(self):
         """Returns coordinate sequence for Shapely compatibility"""
-        return self.points()
+        return self.points(as_tuples=True)
 
     @property
     def is_empty(self):
@@ -1832,10 +1835,13 @@ cdef class Line:
     def num_points(self) -> int:
         return tg_line_num_points(self.line)
 
-    def points(self) -> list:
+    def points(self, as_tuples=False) -> list[tuple] | list[Point]:
         cdef int n = tg_line_num_points(self.line)
         cdef const tg_point *pts = tg_line_points(self.line)
-        return [(pts[i].x, pts[i].y) for i in range(n)]
+        if as_tuples:
+            return [(pts[i].x, pts[i].y) for i in range(n)]
+        else:
+            return [Point(pts[i].x, pts[i].y) for i in range(n)]
 
     @property
     def length(self) -> float:
@@ -1873,7 +1879,7 @@ cdef class Line:
     @property
     def coords(self) -> list:
         """Returns coordinate sequence for Shapely compatibility"""
-        return self.points()
+        return self.points(as_tuples=True)
 
     @property
     def bounds(self) -> tuple:
@@ -1904,7 +1910,7 @@ cdef class Line:
     @property
     def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
-        return {"type": "LineString", "coordinates": self.points()}
+        return {"type": "LineString", "coordinates": self.points(as_tuples=True)}
 
     def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
@@ -2187,11 +2193,11 @@ cdef class Poly:
     @property
     def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
-        ext_coords = self.exterior.points()
+        ext_coords = self.exterior.points(as_tuples=True)
         if self.num_holes() == 0:
             return {"type": "Polygon", "coordinates": [ext_coords]}
         else:
-            hole_coords = [self.hole(i).points() for i in range(self.num_holes())]
+            hole_coords = [self.hole(i).points(as_tuples=True) for i in range(self.num_holes())]
             return {"type": "Polygon", "coordinates": [ext_coords] + hole_coords}
 
     def buffer(self, distance: float, quad_segs: int = 16,
@@ -2692,6 +2698,58 @@ cdef list _transform_ring_coords(object func, Ring ring):
     return transformed_coords
 
 
+def nearest_points(geom1, geom2) -> tuple:
+    """
+    Return a tuple of the nearest points between two geometries.
+
+    This is a module-level function compatible with Shapely's nearest_points.
+    Returns a tuple of two Point objects: (point_from_geom1, point_from_geom2).
+
+    Parameters:
+    -----------
+    geom1 : Geometry, Point, Line, Ring, Poly, or other geometry type
+        The first geometry
+    geom2 : Geometry, Point, Line, Ring, Poly, or other geometry type
+        The second geometry
+
+    Returns:
+    --------
+    tuple
+        A tuple of (Point, Point) representing the nearest points between the two geometries
+
+    Raises:
+    -------
+    TypeError
+        If either geometry is None or invalid
+
+    Examples:
+    ---------
+    >>> from togo import nearest_points, Point, LineString
+    >>> p = Point(0, 0)
+    >>> line = LineString([(10, 0), (10, 10)])
+    >>> pt1, pt2 = nearest_points(p, line)
+    >>> print(f"Distance: {((pt2.x - pt1.x)**2 + (pt2.y - pt1.y)**2)**0.5:.1f}")
+    10.0
+    """
+    # Convert to Geometry if needed
+    if hasattr(geom1, "as_geometry"):
+        g1 = geom1.as_geometry()
+    elif isinstance(geom1, Geometry):
+        g1 = geom1
+    else:
+        raise TypeError("geom1 must be a togo geometry type")
+
+    if hasattr(geom2, "as_geometry"):
+        g2 = geom2.as_geometry()
+    elif isinstance(geom2, Geometry):
+        g2 = geom2
+    else:
+        raise TypeError("geom2 must be a togo geometry type")
+
+    # Use the Geometry.nearest_points method
+    return g1.nearest_points(g2)
+
+
 def shortest_line(geom1, geom2):
     """
     Return the shortest LineString connecting two geometries.
@@ -2750,6 +2808,6 @@ __all__ = [
     "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection",
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
-    "transform", "shortest_line",
+    "nearest_points", "shortest_line", "transform",
     "set_polygon_indexing_mode", "TGIndex"
 ]

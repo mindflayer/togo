@@ -36,6 +36,7 @@ try:
         to_geojson,
         Geometry,
         transform,
+        nearest_points,
         shortest_line,
     )
 except Exception as e:
@@ -374,8 +375,10 @@ def main():
 
     bench_case(
         "nearest_points (point to point)",
-        lambda: np_point1.nearest_points(np_point2),
-        lambda: shp_nearest_points(shp_np_point1, shp_np_point2),
+        lambda: nearest_points(np_point1, np_point2),
+        lambda: shp_nearest_points(shp_np_point1, shp_np_point2)
+        if shp_nearest_points
+        else None,
         iters=1000,
     )
 
@@ -387,8 +390,10 @@ def main():
 
     bench_case(
         "nearest_points (point to linestring)",
-        lambda: np_point.nearest_points(np_line),
-        lambda: shp_nearest_points(shp_np_point, shp_np_line),
+        lambda: nearest_points(np_point, np_line),
+        lambda: shp_nearest_points(shp_np_point, shp_np_line)
+        if shp_nearest_points
+        else None,
         iters=500,
     )
 
@@ -400,8 +405,10 @@ def main():
 
     bench_case(
         "nearest_points (point to polygon)",
-        lambda: np_point_poly.nearest_points(np_poly),
-        lambda: shp_nearest_points(shp_np_point_poly, shp_np_poly),
+        lambda: nearest_points(np_point_poly, np_poly),
+        lambda: shp_nearest_points(shp_np_point_poly, shp_np_poly)
+        if shp_nearest_points
+        else None,
         iters=500,
     )
 
@@ -413,8 +420,10 @@ def main():
 
     bench_case(
         "nearest_points (polygon to polygon)",
-        lambda: np_poly1.nearest_points(np_poly2),
-        lambda: shp_nearest_points(shp_np_poly1, shp_np_poly2),
+        lambda: nearest_points(np_poly1, np_poly2),
+        lambda: shp_nearest_points(shp_np_poly1, shp_np_poly2)
+        if shp_nearest_points
+        else None,
         iters=500,
     )
 

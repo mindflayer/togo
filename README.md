@@ -314,15 +314,15 @@ Like `unary_union`, buffer operations automatically handle TG ↔ GEOS conversio
 
 ### Example: Distance and Proximity Operations (GEOS integration)
 
-The `nearest_points()` and `shortest_line()` methods find the closest points between geometries:
+The `nearest_points()` and `shortest_line()` functions find the closest points between geometries:
 
 ```python
-from togo import Point, LineString, Polygon, Ring, shortest_line, from_wkt
+from togo import Point, LineString, Polygon, Ring, nearest_points, shortest_line, from_wkt
 
-# Find nearest points between geometries
+# Find nearest points between geometries (module-level function)
 point = Point(0, 0)
 line = LineString([(10, 0), (10, 10)])
-pt1, pt2 = point.nearest_points(line)
+pt1, pt2 = nearest_points(point, line)
 print(f"Nearest on point: ({pt1.x}, {pt1.y})")  # (0.0, 0.0)
 print(f"Nearest on line: ({pt2.x}, {pt2.y})")   # (10.0, 0.0)
 
@@ -333,6 +333,7 @@ print(f"Connecting line: {shortest.coords}")  # [(0.0, 0.0), (10.0, 0.0)]
 
 # Method style also works
 shortest = point.shortest_line(line)
+pt1, pt2 = point.nearest_points(line)
 
 # Measure gap between polygons
 poly1 = Polygon(Ring([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)]))

@@ -3,7 +3,7 @@ Test suite for nearest_points method
 """
 
 import pytest
-from togo import Geometry, Point, LineString, Polygon
+from togo import Geometry, Point, LineString, Polygon, nearest_points
 
 
 class TestNearestPoints:
@@ -147,3 +147,52 @@ class TestNearestPoints:
         # The nearest point on the polygon to an interior point should be on the boundary
         assert isinstance(np[0], Point)
         assert isinstance(np[1], Point)
+
+    def test_nearest_points_module_level_point_to_point(self):
+        """Test module-level nearest_points function (Shapely v2 API)"""
+        p1 = Point(0, 0)
+        p2 = Point(3, 4)
+
+        # Module-level function
+        result = nearest_points(p1, p2)
+        assert result is not None
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert abs(result[0].x - 0.0) < 1e-10
+        assert abs(result[0].y - 0.0) < 1e-10
+        assert abs(result[1].x - 3.0) < 1e-10
+        assert abs(result[1].y - 4.0) < 1e-10
+
+        # Should give same result as method
+        result_method = p1.nearest_points(p2)
+        assert abs(result[0].x - result_method[0].x) < 1e-10
+        assert abs(result[1].x - result_method[1].x) < 1e-10
+
+    def test_nearest_points_module_level_point_to_line(self):
+        """Test module-level nearest_points with point to line"""
+        point = Point(0, 0)
+        line = LineString([(10, 0), (10, 10)])
+
+        result = nearest_points(point, line)
+        assert result is not None
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        # First point should be from point
+        assert abs(result[0].x - 0.0) < 1e-10
+        assert abs(result[0].y - 0.0) < 1e-10
+        # Second point should be on line
+        assert abs(result[1].x - 10.0) < 1e-10
+        assert abs(result[1].y - 0.0) < 1e-10
+
+    def test_nearest_points_module_level_with_wkt(self):
+        """Test module-level nearest_points with WKT geometries"""
+        from togo import from_wkt
+
+        g1 = from_wkt("POINT(0 0)")
+        g2 = from_wkt("LINESTRING(10 0, 10 10)")
+
+        result = nearest_points(g1, g2)
+        assert result is not None
+        assert len(result) == 2
+        assert abs(result[0].x - 0.0) < 1e-10
+        assert abs(result[1].x - 10.0) < 1e-10
