@@ -1465,12 +1465,15 @@ cdef class Point:
         ValueError
             If other is None or not a valid geometry
         """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
         if isinstance(other, Geometry):
             return self.as_geometry().nearest_points(other)
         elif hasattr(other, "as_geometry"):
             # Assume it's another geometry type with as_geometry method
             return self.as_geometry().nearest_points(other.as_geometry())
-        raise ValueError(f"other must be a geometry, got {type(other)}")
+        raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
     def shortest_line(self, other):
         """
@@ -1494,11 +1497,14 @@ cdef class Point:
         ValueError
             If other is None or not a valid geometry
         """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
         if isinstance(other, Geometry):
             return self.as_geometry().shortest_line(other)
         elif hasattr(other, "as_geometry"):
             return self.as_geometry().shortest_line(other.as_geometry())
-        raise ValueError(f"other must be a geometry, got {type(other)}")
+        raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
 
 cdef class Rect:
