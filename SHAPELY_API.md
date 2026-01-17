@@ -491,7 +491,7 @@ The `transform` function works with:
 | `unary_union()` | `unary_union()` | ✅ Supported (via GEOS) |
 | `transform()` | `transform()` | ✅ Supported |
 | `nearest_points()` | `nearest_points()` | ✅ Supported (via GEOS) |
-| `geom.shortest_line()` | `geom.shortest_line()` | ✅ Supported (via GEOS, v2 API) |
+| `shortest_line()` | `shortest_line()` | ✅ Supported (via GEOS, v2 API) |
 | `intersection()` | - | ❌ Not yet (use GEOS via tgx) |
 
 ## Conclusion
