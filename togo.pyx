@@ -241,13 +241,13 @@ cdef extern from "tgx.h":
 from libc.stdlib cimport malloc, free
 
 
-cdef Geometry _geometry_from_ptr(tg_geom *ptr) noexcept:
+cdef Geometry _geometry_from_ptr(tg_geom *ptr):
     cdef Geometry g = Geometry.__new__(Geometry)
     g.geom = ptr
     return g
 
 
-cdef Line _line_from_ptr(tg_line *ptr) noexcept:
+cdef Line _line_from_ptr(tg_line *ptr):
     cdef Line line_obj = Line.__new__(Line)
     line_obj.line = ptr
     line_obj.owns_pointer = False
