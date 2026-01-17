@@ -364,6 +364,47 @@ def main():
         iters=500,
     )
 
+    # Centroid operations
+    centroid_point = from_wkt("POINT (1 2)")
+    shp_centroid_point = shp_from_wkt("POINT (1 2)")
+
+    centroid_line = from_wkt("LINESTRING (0 0, 10 0, 10 10)")
+    shp_centroid_line = shp_from_wkt("LINESTRING (0 0, 10 0, 10 10)")
+
+    centroid_poly = from_wkt("POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))")
+    shp_centroid_poly = shp_from_wkt("POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))")
+
+    centroid_big_poly = from_geojson(TOGO_JSON)
+    shp_centroid_big_poly = shp_from_geojson(TOGO_JSON)
+
+    bench_case(
+        "centroid (point)",
+        lambda: centroid_point.centroid,
+        lambda: shp_centroid_point.centroid,
+        iters=2000,
+    )
+
+    bench_case(
+        "centroid (linestring)",
+        lambda: centroid_line.centroid,
+        lambda: shp_centroid_line.centroid,
+        iters=1500,
+    )
+
+    bench_case(
+        "centroid (polygon - square)",
+        lambda: centroid_poly.centroid,
+        lambda: shp_centroid_poly.centroid,
+        iters=1000,
+    )
+
+    bench_case(
+        "centroid (polygon - country-scale)",
+        lambda: centroid_big_poly.centroid,
+        lambda: shp_centroid_big_poly.centroid,
+        iters=500,
+    )
+
     # Nearest points operations
     from shapely.ops import nearest_points as shp_nearest_points
 

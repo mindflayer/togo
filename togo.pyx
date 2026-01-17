@@ -230,6 +230,9 @@ cdef extern from "geos_c.h":
         GEOSContextHandle_t handle, const GEOSCoordSequence *seq, unsigned int i,
         double *x, double *y
     )
+    GEOSGeometry *GEOSGetCentroid_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g
+    )
 
 cdef extern from "tgx.h":
     GEOSGeometry *tg_geom_to_geos(GEOSContextHandle_t handle, const tg_geom *geom)
@@ -1154,6 +1157,52 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
+    @property
+    def centroid(self) -> Geometry:
+        """
+        Return the centroid of the geometry.
+
+        The centroid is the geometric center of mass of the geometry.
+        For polygons, this may lie outside the polygon.
+
+        Returns:
+        --------
+        Geometry
+            A Point geometry representing the centroid
+
+        Raises:
+        -------
+        RuntimeError
+            If the centroid calculation fails
+        """
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
+        if g_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert TG geometry to GEOS")
+
+        cdef GEOSGeometry *g_centroid = GEOSGetCentroid_r(ctx, g_geos)
+        if g_centroid == NULL:
+            GEOSGeom_destroy_r(ctx, g_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("GEOSGetCentroid failed")
+
+        cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_centroid)
+        if g_tg == NULL:
+            GEOSGeom_destroy_r(ctx, g_centroid)
+            GEOSGeom_destroy_r(ctx, g_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+
+        GEOSGeom_destroy_r(ctx, g_centroid)
+        GEOSGeom_destroy_r(ctx, g_geos)
+        GEOS_finish_r(ctx)
+
+        return _geometry_from_ptr(g_tg)
+
     cdef tuple _get_nearest_point_coords(self, Geometry other):
         """
         Private helper method to extract nearest point coordinates using GEOS.
@@ -1247,8 +1296,7 @@ cdef class Geometry:
         Returns:
         --------
         tuple
-            A tuple of (Point, Point) representing the nearest points between the two
-            geometries
+            A tuple of (Point, Point) representing the nearest points between the two geometries
 
         Raises:
         -------
@@ -1457,8 +1505,7 @@ cdef class Point:
         Returns:
         --------
         tuple
-            A tuple of (Point, Point) representing the nearest points between the two
-            geometries
+            A tuple of (Point, Point) representing the nearest points between the two geometries
 
         Raises:
         -------
@@ -1972,8 +2019,7 @@ cdef class Line:
         Returns:
         --------
         tuple
-            A tuple of (Point, Point) representing the nearest points between the two
-            geometries
+            A tuple of (Point, Point) representing the nearest points between the two geometries
 
         Raises:
         -------
@@ -2260,8 +2306,7 @@ cdef class Poly:
         Returns:
         --------
         tuple
-            A tuple of (Point, Point) representing the nearest points between the two
-            geometries
+            A tuple of (Point, Point) representing the nearest points between the two geometries
 
         Raises:
         -------

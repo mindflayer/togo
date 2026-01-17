@@ -233,3 +233,76 @@ def test_unary_union_geos_polys():
     # WKT should represent the merged polygon
     wkt = union_geom.to_wkt()
     assert wkt == "POLYGON((2 0,0 0,0 2,1 2,1 3,3 3,3 1,2 1,2 0))"
+
+
+def test_centroid_point():
+    """Test centroid of a Point (should return the same point)"""
+    g = Geometry("POINT(1 2)", fmt="wkt")
+    centroid = g.centroid
+    assert centroid.type_string() == "Point"
+    assert centroid.to_wkt() == "POINT(1 2)"
+
+
+def test_centroid_linestring():
+    """Test centroid of a LineString"""
+    g = Geometry("LINESTRING(0 0, 10 0, 10 10)", fmt="wkt")
+    centroid = g.centroid
+    assert centroid.type_string() == "Point"
+    # Centroid should be a Point geometry
+    wkt = centroid.to_wkt()
+    assert wkt.startswith("POINT(")
+
+
+def test_centroid_polygon_square():
+    """Test centroid of a square polygon"""
+    # Square from (0,0) to (10,10)
+    g = Geometry("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))", fmt="wkt")
+    centroid = g.centroid
+    assert centroid.type_string() == "Point"
+    # Centroid of square should be at (5, 5)
+    pt = centroid.point()
+    assert abs(pt.x - 5.0) < 0.01
+    assert abs(pt.y - 5.0) < 0.01
+
+
+def test_centroid_polygon_triangle():
+    """Test centroid of a triangle polygon"""
+    # Triangle with vertices at (0,0), (10,0), (5,10)
+    g = Geometry("POLYGON((0 0, 10 0, 5 10, 0 0))", fmt="wkt")
+    centroid = g.centroid
+    assert centroid.type_string() == "Point"
+    # Centroid of triangle should be at (5, 10/3) ≈ (5, 3.333)
+    pt = centroid.point()
+    assert abs(pt.x - 5.0) < 0.01
+    assert abs(pt.y - 3.333) < 0.01
+
+
+def test_centroid_polygon_with_hole():
+    """Test centroid of a polygon with a hole"""
+    # Square with a hole
+    outer = Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+    hole = Ring([(2, 2), (8, 2), (8, 8), (2, 8), (2, 2)])
+    poly = Poly(outer, [hole])
+    g = poly.as_geometry()
+    centroid = g.centroid
+    assert centroid.type_string() == "Point"
+    # Centroid should still be near the center
+    pt = centroid.point()
+    assert abs(pt.x - 5.0) < 0.5
+    assert abs(pt.y - 5.0) < 0.5
+
+
+def test_centroid_multipolygon():
+    """Test centroid of a MultiPolygon"""
+    g = Geometry(
+        "MULTIPOLYGON(((0 0, 5 0, 5 5, 0 5, 0 0)), ((10 10, 15 10, 15 15, 10 15, 10 10)))",
+        fmt="wkt",
+    )
+    centroid = g.centroid
+    assert centroid.type_string() == "Point"
+    # Centroid should be between the two squares
+    pt = centroid.point()
+    # The centroid should be somewhere between (2.5, 2.5) and (12.5, 12.5)
+    # For equal-sized squares, it should be roughly at (7.5, 7.5)
+    assert 5.0 < pt.x < 10.0
+    assert 5.0 < pt.y < 10.0
