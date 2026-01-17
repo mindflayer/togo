@@ -42,7 +42,7 @@ def test_transform_polygon_translate():
     assert t.type_string() == "Polygon"
     # check exterior first and last points
     pg = t.poly()
-    ext2 = pg.exterior.points()
+    ext2 = pg.exterior.points(as_tuples=True)
     assert ext2[0] == (2.0, 1.0)
     assert ext2[-1] == (2.0, 1.0)
     # no holes
@@ -58,12 +58,12 @@ def test_transform_polygon_translate_with_holes():
     assert t.type_string() == "Polygon"
     # check exterior first and last points
     pg = t.poly()
-    ext2 = pg.exterior.points()
+    ext2 = pg.exterior.points(as_tuples=True)
     assert ext2[0] == (5.0, -1.0)
     assert ext2[-1] == (5.0, -1.0)
     # hole preserved
     assert pg.num_holes() == 1
-    hole2 = pg.hole(0).points()
+    hole2 = pg.hole(0).points(as_tuples=True)
     assert hole2[0] == (6.0, 0.0)
 
 
@@ -93,7 +93,7 @@ def test_transform_multipolygon_translate():
     assert t.type_string() == "MultiPolygon"
     # check first polygon ext first point
     g0 = t[0]
-    ext0 = g0.poly().exterior.points()[0]
+    ext0 = g0.poly().exterior.points(as_tuples=True)[0]
     assert ext0 == (-1.0, -1.0)
 
 
@@ -163,66 +163,69 @@ def test_transform_non_callable():
     """Test that non-callable objects raise TypeError when used as func"""
     with pytest.raises(TypeError):
         tg.transform("not a function", tg.Point(1, 2))
-    
+
     with pytest.raises(TypeError):
         tg.transform(42, tg.Point(1, 2))
-    
+
     with pytest.raises(TypeError):
         tg.transform(None, tg.Point(1, 2))
 
 
 def test_transform_function_raises_exception():
     """Test that exceptions raised by the transform function are propagated"""
+
     def raises_error(x, y):
         raise ValueError("Something went wrong")
-    
+
     with pytest.raises(ValueError, match="Something went wrong"):
         tg.transform(raises_error, tg.Point(1, 2))
 
 
 def test_transform_incorrect_tuple_length():
     """Test that functions returning incorrect tuple lengths raise TypeError"""
+
     # Function returning 3 elements instead of 2
     def returns_three(x, y):
         return x, y, 0
-    
+
     with pytest.raises(TypeError, match="must return a tuple of \\(x, y\\)"):
         tg.transform(returns_three, tg.Point(1, 2))
-    
+
     # Function returning 1 element
     def returns_one(x, y):
         return (x,)
-    
+
     with pytest.raises(TypeError, match="must return a tuple of \\(x, y\\)"):
         tg.transform(returns_one, tg.Point(1, 2))
-    
+
     # Function returning empty tuple
     def returns_empty(x, y):
         return ()
-    
+
     with pytest.raises(TypeError, match="must return a tuple of \\(x, y\\)"):
         tg.transform(returns_empty, tg.Point(1, 2))
 
 
 def test_transform_non_numeric_values():
     """Test that functions returning non-numeric values raise TypeError"""
+
     # Function returning strings
     def returns_strings(x, y):
         return "a", "b"
-    
+
     with pytest.raises(TypeError, match="must return a tuple of two numbers"):
         tg.transform(returns_strings, tg.Point(1, 2))
-    
+
     # Function returning None values
     def returns_nones(x, y):
         return None, None
-    
+
     with pytest.raises(TypeError, match="must return a tuple of two numbers"):
         tg.transform(returns_nones, tg.Point(1, 2))
-    
+
     # Function returning mixed types
     def returns_mixed(x, y):
         return 1, "not a number"
-    
+
     with pytest.raises(TypeError, match="must return a tuple of two numbers"):
         tg.transform(returns_mixed, tg.Point(1, 2))

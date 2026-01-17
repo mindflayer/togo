@@ -36,6 +36,8 @@ try:
         to_geojson,
         Geometry,
         transform,
+        nearest_points,
+        shortest_line,
     )
 except Exception as e:
     print("ERROR: Failed to import togo:", e)
@@ -53,6 +55,7 @@ try:
             from_geojson as shp_from_geojson,
             to_geojson as shp_to_geojson,
         )
+        from shapely import shortest_line as shp_shortest_line
         from shapely.geometry import (
             Point as ShpPoint,
             LineString as ShpLineString,
@@ -84,6 +87,9 @@ try:
 
         def shp_to_geojson(geom) -> str:
             return json.dumps(shp_mapping(geom))
+
+        # Shapely 1.x doesn't have shortest_line
+        shp_shortest_line = None
 except Exception as e:
     print(
         "ERROR: Shapely is required for this benchmark. Install it with 'pip install shapely'."
@@ -355,6 +361,114 @@ def main():
         "simplify polygon (tolerance=0.1, preserve_topology=False)",
         lambda: simplify_poly.simplify(0.1, preserve_topology=False),
         lambda: shp_simplify_poly.simplify(0.1, preserve_topology=False),
+        iters=500,
+    )
+
+    # Nearest points operations
+    from shapely.ops import nearest_points as shp_nearest_points
+
+    # Point to point
+    np_point1 = from_wkt("POINT (0 0)")
+    shp_np_point1 = shp_from_wkt("POINT (0 0)")
+    np_point2 = from_wkt("POINT (10 10)")
+    shp_np_point2 = shp_from_wkt("POINT (10 10)")
+
+    bench_case(
+        "nearest_points (point to point)",
+        lambda: nearest_points(np_point1, np_point2),
+        lambda: shp_nearest_points(shp_np_point1, shp_np_point2)
+        if shp_nearest_points
+        else None,
+        iters=1000,
+    )
+
+    # Point to linestring
+    np_point = from_wkt("POINT (0 0)")
+    shp_np_point = shp_from_wkt("POINT (0 0)")
+    np_line = from_wkt("LINESTRING (1 1, 5 5, 10 1)")
+    shp_np_line = shp_from_wkt("LINESTRING (1 1, 5 5, 10 1)")
+
+    bench_case(
+        "nearest_points (point to linestring)",
+        lambda: nearest_points(np_point, np_line),
+        lambda: shp_nearest_points(shp_np_point, shp_np_line)
+        if shp_nearest_points
+        else None,
+        iters=500,
+    )
+
+    # Point to polygon
+    np_point_poly = from_wkt("POINT (0 0)")
+    shp_np_point_poly = shp_from_wkt("POINT (0 0)")
+    np_poly = from_wkt("POLYGON ((1 1, 5 1, 5 5, 1 5, 1 1))")
+    shp_np_poly = shp_from_wkt("POLYGON ((1 1, 5 1, 5 5, 1 5, 1 1))")
+
+    bench_case(
+        "nearest_points (point to polygon)",
+        lambda: nearest_points(np_point_poly, np_poly),
+        lambda: shp_nearest_points(shp_np_point_poly, shp_np_poly)
+        if shp_nearest_points
+        else None,
+        iters=500,
+    )
+
+    # Polygon to polygon
+    np_poly1 = from_wkt("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))")
+    shp_np_poly1 = shp_from_wkt("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))")
+    np_poly2 = from_wkt("POLYGON ((5 5, 8 5, 8 8, 5 8, 5 5))")
+    shp_np_poly2 = shp_from_wkt("POLYGON ((5 5, 8 5, 8 8, 5 8, 5 5))")
+
+    bench_case(
+        "nearest_points (polygon to polygon)",
+        lambda: nearest_points(np_poly1, np_poly2),
+        lambda: shp_nearest_points(shp_np_poly1, shp_np_poly2)
+        if shp_nearest_points
+        else None,
+        iters=500,
+    )
+
+    # Point to linestring
+    sl_point = from_wkt("POINT (0 0)")
+    shp_sl_point = shp_from_wkt("POINT (0 0)")
+    sl_line = from_wkt("LINESTRING (1 1, 5 5, 10 1)")
+    shp_sl_line = shp_from_wkt("LINESTRING (1 1, 5 5, 10 1)")
+
+    bench_case(
+        "shortest_line (point to linestring)",
+        lambda: shortest_line(sl_point, sl_line),
+        lambda: shp_shortest_line(shp_sl_point, shp_sl_line)
+        if shp_shortest_line
+        else None,
+        iters=500,
+    )
+
+    # Point to polygon
+    sl_point_poly = from_wkt("POINT (0 0)")
+    shp_sl_point_poly = shp_from_wkt("POINT (0 0)")
+    sl_poly = from_wkt("POLYGON ((1 1, 5 1, 5 5, 1 5, 1 1))")
+    shp_sl_poly = shp_from_wkt("POLYGON ((1 1, 5 1, 5 5, 1 5, 1 1))")
+
+    bench_case(
+        "shortest_line (point to polygon)",
+        lambda: shortest_line(sl_point_poly, sl_poly),
+        lambda: shp_shortest_line(shp_sl_point_poly, shp_sl_poly)
+        if shp_shortest_line
+        else None,
+        iters=500,
+    )
+
+    # Polygon to polygon
+    sl_poly1 = from_wkt("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))")
+    shp_sl_poly1 = shp_from_wkt("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))")
+    sl_poly2 = from_wkt("POLYGON ((5 5, 8 5, 8 8, 5 8, 5 5))")
+    shp_sl_poly2 = shp_from_wkt("POLYGON ((5 5, 8 5, 8 8, 5 8, 5 5))")
+
+    bench_case(
+        "shortest_line (polygon to polygon)",
+        lambda: shortest_line(sl_poly1, sl_poly2),
+        lambda: shp_shortest_line(shp_sl_poly1, shp_sl_poly2)
+        if shp_shortest_line
+        else None,
         iters=500,
     )
 

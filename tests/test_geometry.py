@@ -171,7 +171,7 @@ def test_geometry_line_accessor_and_from_linestring():
     points = [(0, 0), (1, 1), (2, 2)]
     g = Geometry.from_linestring(points)
     line = g.line()
-    pts = line.points()
+    pts = line.points(as_tuples=True)
     assert pts == points
 
 
