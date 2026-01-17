@@ -354,6 +354,76 @@ print(f"WKT: {point.wkt}")
 print(f"GeoJSON: {point.__geo_interface__}")
 ```
 
+## Nearest Points and Shortest Line (Shapely v2 API)
+
+### nearest_points()
+
+The `nearest_points()` method returns a tuple of the two nearest points between two geometries. This is compatible with Shapely's `nearest_points` function.
+
+```python
+from togo import Point, LineString, Polygon, Ring
+
+# Point to LineString
+point = Point(0, 0)
+line = LineString([(10, 0), (10, 10)])
+pt1, pt2 = point.nearest_points(line)
+print(f"Nearest on point: ({pt1.x}, {pt1.y})")  # (0.0, 0.0)
+print(f"Nearest on line: ({pt2.x}, {pt2.y})")   # (10.0, 0.0)
+
+# Point to Polygon
+point = Point(0, 0)
+exterior = Ring([(10, 0), (15, 0), (15, 5), (10, 5), (10, 0)])
+poly = Polygon(exterior)
+pt1, pt2 = point.nearest_points(poly)
+print(f"Distance: {((pt2.x - pt1.x)**2 + (pt2.y - pt1.y)**2)**0.5:.2f}")  # 10.0
+
+# Polygon to Polygon
+exterior1 = Ring([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)])
+poly1 = Polygon(exterior1)
+exterior2 = Ring([(10, 0), (15, 0), (15, 5), (10, 5), (10, 0)])
+poly2 = Polygon(exterior2)
+pt1, pt2 = poly1.nearest_points(poly2)
+print(f"Distance between polygons: {((pt2.x - pt1.x)**2 + (pt2.y - pt1.y)**2)**0.5:.2f}")  # 5.0
+```
+
+### shortest_line() (Shapely v2 API)
+
+The `shortest_line()` method returns a LineString connecting the two nearest points between two geometries. This is compatible with Shapely v2's `shortest_line` method and is essentially a convenience wrapper around `nearest_points()`.
+
+```python
+from togo import Point, LineString, Polygon, Ring
+
+# Point to LineString - returns the connecting line
+point = Point(0, 0)
+line = LineString([(10, 0), (10, 10)])
+shortest = point.shortest_line(line)
+print(f"Shortest line length: {shortest.length:.2f}")  # 10.0
+print(f"Connects: {shortest.coords}")  # [(0.0, 0.0), (10.0, 0.0)]
+
+# Point to Polygon
+point = Point(0, 0)
+exterior = Ring([(10, 0), (15, 0), (15, 5), (10, 5), (10, 0)])
+poly = Polygon(exterior)
+shortest = point.shortest_line(poly)
+print(f"Shortest distance: {shortest.length:.2f}")  # 10.0
+
+# Polygon to Polygon
+exterior1 = Ring([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)])
+poly1 = Polygon(exterior1)
+exterior2 = Ring([(10, 0), (15, 0), (15, 5), (10, 5), (10, 0)])
+poly2 = Polygon(exterior2)
+shortest = poly1.shortest_line(poly2)
+print(f"Gap between polygons: {shortest.length:.2f}")  # 5.0
+coords = shortest.coords
+print(f"Connects ({coords[0][0]:.1f}, {coords[0][1]:.1f}) to ({coords[1][0]:.1f}, {coords[1][1]:.1f})")
+
+# Works with intersecting geometries too (length = 0)
+line1 = LineString([(0, 0), (10, 10)])
+line2 = LineString([(0, 10), (10, 0)])
+shortest = line1.shortest_line(line2)
+print(f"Intersecting lines distance: {shortest.length:.10f}")  # ~0.0
+```
+
 ## Coordinate Transformation
 
 The `transform` function applies a coordinate transformation function to all coordinates in a geometry. This is similar to `shapely.ops.transform` and is useful for coordinate system transformations, scaling, rotations, and other operations.
@@ -379,7 +449,6 @@ print(scaled.coords)  # [(0.0, 0.0), (2.0, 3.0), (4.0, 6.0)]
 
 # More complex transformations (e.g., rotation)
 import math
-
 def rotate_45(x, y):
     angle = math.pi / 4
     cos_a, sin_a = math.cos(angle), math.sin(angle)
@@ -417,10 +486,12 @@ The `transform` function works with:
 | `intersects()` | `intersects()` | ✅ Supported |
 | `touches()` | `touches()` | ✅ Supported |
 | `within()` | `within()` | ✅ Supported |
-| `buffer()` | `buffer()` | ✅ Supported (via GEOS) |
-| `simplify()` | `simplify()` | ✅ Supported (via GEOS) |
+| `geom.buffer()` | `geom.buffer()` | ✅ Supported (via GEOS) |
+| `geom.simplify()` | `geom.simplify()` | ✅ Supported (via GEOS) |
 | `unary_union()` | `unary_union()` | ✅ Supported (via GEOS) |
 | `transform()` | `transform()` | ✅ Supported |
+| `nearest_points()` | `nearest_points()` | ✅ Supported (via GEOS) |
+| `geom.shortest_line()` | `geom.shortest_line()` | ✅ Supported (via GEOS, v2 API) |
 | `intersection()` | - | ❌ Not yet (use GEOS via tgx) |
 
 ## Conclusion

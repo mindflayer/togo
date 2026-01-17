@@ -202,9 +202,11 @@ cdef extern from "tg.h":
 cdef extern from "geos_c.h":
     ctypedef void *GEOSContextHandle_t
     ctypedef void *GEOSGeometry
+    ctypedef void *GEOSCoordSequence
     GEOSContextHandle_t GEOS_init_r()
     void GEOS_finish_r(GEOSContextHandle_t handle)
     void GEOSGeom_destroy_r(GEOSContextHandle_t handle, GEOSGeometry *g)
+    void GEOSCoordSeq_destroy_r(GEOSContextHandle_t handle, GEOSCoordSequence *seq)
     GEOSGeometry *GEOSUnaryUnion(const GEOSGeometry *g)
     GEOSGeometry *GEOSUnaryUnion_r(GEOSContextHandle_t handle, const GEOSGeometry *g)
     GEOSGeometry *GEOSBufferWithStyle_r(
@@ -217,6 +219,16 @@ cdef extern from "geos_c.h":
     )
     GEOSGeometry *GEOSTopologyPreserveSimplify_r(
         GEOSContextHandle_t handle, const GEOSGeometry *g, double tolerance
+    )
+    GEOSCoordSequence *GEOSNearestPoints_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g1, const GEOSGeometry *g2
+    )
+    int GEOSCoordSeq_getSize_r(
+        GEOSContextHandle_t handle, const GEOSCoordSequence *seq, unsigned int *size
+    )
+    int GEOSCoordSeq_getXY_r(
+        GEOSContextHandle_t handle, const GEOSCoordSequence *seq, unsigned int i,
+        double *x, double *y
     )
 
 cdef extern from "tgx.h":
@@ -1142,6 +1154,185 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
+    def nearest_points(self, other: Geometry) -> tuple:
+        """
+        Return a tuple of the nearest points between two geometries.
+
+        Returns a tuple of two Point objects: (point_from_self, point_from_other).
+        The first point is the nearest point in this geometry to the other geometry,
+        and the second point is the nearest point in the other geometry to this geometry.
+
+        This method is compatible with Shapely's nearest_points function.
+
+        Parameters:
+        -----------
+        other : Geometry
+            The other geometry to find the nearest point to
+
+        Returns:
+        --------
+        tuple
+            A tuple of (Point, Point) representing the nearest points between the two
+            geometries
+
+        Raises:
+        -------
+        ValueError
+            If the operation fails
+        """
+        if other is None or not isinstance(other, Geometry):
+            raise ValueError("other must be a Geometry object")
+
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef GEOSGeometry *g1_geos = tg_geom_to_geos(ctx, self.geom)
+        if g1_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert first TG geometry to GEOS")
+
+        cdef GEOSGeometry *g2_geos = tg_geom_to_geos(ctx, other.geom)
+        if g2_geos == NULL:
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert second TG geometry to GEOS")
+
+        cdef GEOSCoordSequence *coords = GEOSNearestPoints_r(ctx, g1_geos, g2_geos)
+        if coords == NULL:
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("GEOSNearestPoints failed")
+
+        # Extract the two coordinates directly (GEOS always returns exactly 2 points)
+        cdef double x1, y1, x2, y2
+        cdef int ret = GEOSCoordSeq_getXY_r(ctx, coords, 0, &x1, &y1)
+        if ret == -1:
+            GEOSCoordSeq_destroy_r(ctx, coords)
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to get first coordinate")
+
+        ret = GEOSCoordSeq_getXY_r(ctx, coords, 1, &x2, &y2)
+        if ret == -1:
+            GEOSCoordSeq_destroy_r(ctx, coords)
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to get second coordinate")
+
+        # Clean up GEOS resources
+        GEOSCoordSeq_destroy_r(ctx, coords)
+        GEOSGeom_destroy_r(ctx, g2_geos)
+        GEOSGeom_destroy_r(ctx, g1_geos)
+        GEOS_finish_r(ctx)
+
+        # Create Point objects efficiently using __new__ to avoid __init__ overhead
+        cdef Point pt1 = Point.__new__(Point)
+        pt1.pt.x = x1
+        pt1.pt.y = y1
+
+        cdef Point pt2 = Point.__new__(Point)
+        pt2.pt.x = x2
+        pt2.pt.y = y2
+
+        return (pt1, pt2)
+
+    def shortest_line(self, other: Geometry):
+        """
+        Return the shortest LineString connecting two geometries.
+
+        This is the line connecting the nearest points between two geometries.
+        This method is compatible with Shapely v2's shortest_line.
+
+        Parameters:
+        -----------
+        other : Geometry
+            The other geometry to find the shortest line to
+
+        Returns:
+        --------
+        Line
+            A LineString (Line) connecting the two nearest points
+
+        Raises:
+        -------
+        ValueError
+            If the operation fails
+        """
+        if other is None or not isinstance(other, Geometry):
+            raise ValueError("other must be a Geometry object")
+
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef GEOSGeometry *g1_geos = tg_geom_to_geos(ctx, self.geom)
+        if g1_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert first TG geometry to GEOS")
+
+        cdef GEOSGeometry *g2_geos = tg_geom_to_geos(ctx, other.geom)
+        if g2_geos == NULL:
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert second TG geometry to GEOS")
+
+        cdef GEOSCoordSequence *coords = GEOSNearestPoints_r(ctx, g1_geos, g2_geos)
+        if coords == NULL:
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("GEOSNearestPoints failed")
+
+        # Extract the two coordinates directly
+        cdef double x1, y1, x2, y2
+        cdef int ret = GEOSCoordSeq_getXY_r(ctx, coords, 0, &x1, &y1)
+        if ret == -1:
+            GEOSCoordSeq_destroy_r(ctx, coords)
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to get first coordinate")
+
+        ret = GEOSCoordSeq_getXY_r(ctx, coords, 1, &x2, &y2)
+        if ret == -1:
+            GEOSCoordSeq_destroy_r(ctx, coords)
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to get second coordinate")
+
+        # Clean up GEOS resources
+        GEOSCoordSeq_destroy_r(ctx, coords)
+        GEOSGeom_destroy_r(ctx, g2_geos)
+        GEOSGeom_destroy_r(ctx, g1_geos)
+        GEOS_finish_r(ctx)
+
+        # Create Line directly from coordinates using tg_line_new
+        cdef tg_point *pts = <tg_point *>malloc(2 * sizeof(tg_point))
+        if not pts:
+            raise MemoryError("Failed to allocate points for Line")
+
+        pts[0].x = x1
+        pts[0].y = y1
+        pts[1].x = x2
+        pts[1].y = y2
+
+        cdef tg_line *line_ptr = tg_line_new(pts, 2)
+        free(pts)
+
+        if not line_ptr:
+            raise ValueError("Failed to create Line")
+
+        # Create Line object and set ownership
+        cdef Line result = Line.__new__(Line)
+        result.line = line_ptr
+        result.owns_pointer = True
+        return result
+
 
 cdef class Point:
     cdef tg_point pt
@@ -1260,6 +1451,63 @@ cdef class Point:
             A new Geometry representing the simplified shape
         """
         return self.as_geometry().simplify(tolerance, preserve_topology)
+
+    def nearest_points(self, other) -> tuple:
+        """
+        Return a tuple of the nearest points between this point and another geometry.
+
+        Returns a tuple of two Point objects: (point_from_self, point_from_other).
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to find the nearest point to
+
+        Returns:
+        --------
+        tuple
+            A tuple of (Point, Point) representing the nearest points between the two
+            geometries
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        """
+        if isinstance(other, Geometry):
+            return self.as_geometry().nearest_points(other)
+        elif hasattr(other, "as_geometry"):
+            # Assume it's another geometry type with as_geometry method
+            return self.as_geometry().nearest_points(other.as_geometry())
+        raise ValueError(f"other must be a geometry, got {type(other)}")
+
+    def shortest_line(self, other):
+        """
+        Return the shortest LineString connecting this point to another geometry.
+
+        This is the line connecting the nearest points between two geometries.
+        This method is compatible with Shapely v2's shortest_line.
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to find the shortest line to
+
+        Returns:
+        --------
+        Line
+            A LineString (Line) connecting the two nearest points
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        """
+        if isinstance(other, Geometry):
+            return self.as_geometry().shortest_line(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().shortest_line(other.as_geometry())
+        raise ValueError(f"other must be a geometry, got {type(other)}")
 
 
 cdef class Rect:
@@ -1482,6 +1730,71 @@ cdef class Ring:
         """
         return self.as_geometry().simplify(tolerance, preserve_topology)
 
+    def nearest_points(self, other) -> tuple:
+        """
+        Return a tuple of the nearest points between this ring and another geometry.
+
+        Returns a tuple of two Point objects: (point_from_self, point_from_other).
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to find the nearest point to
+
+        Returns:
+        --------
+        tuple
+            A tuple of (Point, Point) representing the nearest points between the two
+            geometries
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().nearest_points(other)
+        elif hasattr(other, "as_geometry"):
+            # Assume it's another geometry type with as_geometry method
+            return self.as_geometry().nearest_points(other.as_geometry())
+        else:
+            raise ValueError(f"other must be a Geometry object, got {type(other)}")
+
+    def shortest_line(self, other):
+        """
+        Return the shortest LineString connecting this ring to another geometry.
+
+        This is the line connecting the nearest points between two geometries.
+        This method is compatible with Shapely v2's shortest_line.
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to find the shortest line to
+
+        Returns:
+        --------
+        Line
+            A LineString (Line) connecting the two nearest points
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().shortest_line(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().shortest_line(other.as_geometry())
+        else:
+            raise ValueError(f"other must be a Geometry object, got {type(other)}")
+
 
 cdef class Line:
     cdef tg_line *line
@@ -1641,6 +1954,71 @@ cdef class Line:
             A new Geometry representing the simplified shape
         """
         return self.as_geometry().simplify(tolerance, preserve_topology)
+
+    def nearest_points(self, other) -> tuple:
+        """
+        Return a tuple of the nearest points between this line and another geometry.
+
+        Returns a tuple of two Point objects: (point_from_self, point_from_other).
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to find the nearest point to
+
+        Returns:
+        --------
+        tuple
+            A tuple of (Point, Point) representing the nearest points between the two
+            geometries
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().nearest_points(other)
+        elif hasattr(other, "as_geometry"):
+            # Assume it's another geometry type with as_geometry method
+            return self.as_geometry().nearest_points(other.as_geometry())
+        else:
+            raise ValueError(f"other must be a Geometry object, got {type(other)}")
+
+    def shortest_line(self, other):
+        """
+        Return the shortest LineString connecting this line to another geometry.
+
+        This is the line connecting the nearest points between two geometries.
+        This method is compatible with Shapely v2's shortest_line.
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to find the shortest line to
+
+        Returns:
+        --------
+        Line
+            A LineString (Line) connecting the two nearest points
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().shortest_line(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().shortest_line(other.as_geometry())
+        else:
+            raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
 
 cdef class Poly:
@@ -1864,6 +2242,71 @@ cdef class Poly:
             A new Geometry representing the simplified shape
         """
         return self.as_geometry().simplify(tolerance, preserve_topology)
+
+    def nearest_points(self, other) -> tuple:
+        """
+        Return a tuple of the nearest points between this polygon and another geometry.
+
+        Returns a tuple of two Point objects: (point_from_self, point_from_other).
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to find the nearest point to
+
+        Returns:
+        --------
+        tuple
+            A tuple of (Point, Point) representing the nearest points between the two
+            geometries
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().nearest_points(other)
+        elif hasattr(other, "as_geometry"):
+            # Assume it's another geometry type with as_geometry method
+            return self.as_geometry().nearest_points(other.as_geometry())
+        else:
+            raise ValueError(f"other must be a Geometry object, got {type(other)}")
+
+    def shortest_line(self, other):
+        """
+        Return the shortest LineString connecting this polygon to another geometry.
+
+        This is the line connecting the nearest points between two geometries.
+        This method is compatible with Shapely v2's shortest_line.
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to find the shortest line to
+
+        Returns:
+        --------
+        Line
+            A LineString (Line) connecting the two nearest points
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().shortest_line(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().shortest_line(other.as_geometry())
+        else:
+            raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
 
 cdef class Segment:
@@ -2093,13 +2536,13 @@ def transform(func, geometry) -> Geometry:
 cdef tuple _validate_transform_result(object result):
     """
     Validate and convert the result from a transform function.
-    
+
     Args:
         result: The return value from the transform function
-        
+
     Returns:
         A tuple of (x, y) as floats
-        
+
     Raises:
         TypeError: If the result is not a valid tuple of two numbers
     """
@@ -2252,12 +2695,64 @@ cdef list _transform_ring_coords(object func, Ring ring):
     return transformed_coords
 
 
+def shortest_line(geom1, geom2):
+    """
+    Return the shortest LineString connecting two geometries.
+
+    This is a module-level function compatible with Shapely v2's shortest_line.
+    Returns a LineString connecting the nearest points between the two geometries.
+
+    Parameters:
+    -----------
+    geom1 : Geometry, Point, Line, Ring, Poly, or other geometry type
+        The first geometry
+    geom2 : Geometry, Point, Line, Ring, Poly, or other geometry type
+        The second geometry
+
+    Returns:
+    --------
+    Line
+        A LineString (Line) connecting the two nearest points
+
+    Raises:
+    -------
+    ValueError
+        If either geometry is None or invalid
+
+    Examples:
+    ---------
+    >>> from togo import shortest_line, Point, LineString
+    >>> p = Point(0, 0)
+    >>> line = LineString([(10, 0), (10, 10)])
+    >>> connecting = shortest_line(p, line)
+    >>> print(connecting.length)
+    10.0
+    """
+    # Convert to Geometry if needed
+    if hasattr(geom1, "as_geometry"):
+        g1 = geom1.as_geometry()
+    elif isinstance(geom1, Geometry):
+        g1 = geom1
+    else:
+        raise TypeError("geom1 must be a togo geometry type")
+
+    if hasattr(geom2, "as_geometry"):
+        g2 = geom2.as_geometry()
+    elif isinstance(geom2, Geometry):
+        g2 = geom2
+    else:
+        raise TypeError("geom2 must be a togo geometry type")
+
+    # Use the Geometry.shortest_line method
+    return g1.shortest_line(g2)
+
+
 __all__ = [
     "Geometry", "Point", "Rect", "Ring", "Line", "Poly", "Segment",
     "LineString", "Polygon",
     "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection",
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
-    "transform",
+    "transform", "shortest_line",
     "set_polygon_indexing_mode", "TGIndex"
 ]

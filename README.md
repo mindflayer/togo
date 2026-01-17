@@ -26,7 +26,8 @@ pip install togo
 - Format conversion between WKT, GeoJSON, WKB, and HEX
 - Spatial indexing for accelerated queries
 - Memory-efficient C implementation with Python-friendly interface
-- Advanced operations via libgeos integration (buffer, unary union, etc.)
+- Advanced operations via libgeos integration (buffer, unary union, simplify, etc.)
+- Distance and proximity operations (nearest_points, shortest_line)
 
 ## Basic Usage
 
@@ -310,6 +311,34 @@ buffered = geom.buffer(
 ```
 
 Like `unary_union`, buffer operations automatically handle TG ↔ GEOS conversions. For comprehensive buffer documentation, see [BUFFER_API.md](BUFFER_API.md).
+
+### Example: Distance and Proximity Operations (GEOS integration)
+
+The `nearest_points()` and `shortest_line()` methods find the closest points between geometries:
+
+```python
+from togo import Point, LineString, Polygon, Ring
+
+# Find nearest points between geometries
+point = Point(0, 0)
+line = LineString([(10, 0), (10, 10)])
+pt1, pt2 = point.nearest_points(line)
+print(f"Nearest on point: ({pt1.x}, {pt1.y})")  # (0.0, 0.0)
+print(f"Nearest on line: ({pt2.x}, {pt2.y})")   # (10.0, 0.0)
+
+# Get the connecting line (Shapely v2 API)
+shortest = point.shortest_line(line)
+print(f"Distance: {shortest.length}")  # 10.0
+print(f"Connecting line: {shortest.coords}")  # [(0.0, 0.0), (10.0, 0.0)]
+
+# Measure gap between polygons
+poly1 = Polygon(Ring([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)]))
+poly2 = Polygon(Ring([(10, 0), (15, 0), (15, 5), (10, 5), (10, 0)]))
+gap_line = poly1.shortest_line(poly2)
+print(f"Gap between polygons: {gap_line.length}")  # 5.0
+```
+
+For detailed documentation, see [SHORTEST_LINE_QUICK_REFERENCE.md](SHORTEST_LINE_QUICK_REFERENCE.md).
 
 ## Performance Considerations
 
