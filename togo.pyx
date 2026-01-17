@@ -1380,6 +1380,7 @@ cdef class Point:
     def __init__(self, x: float, y: float):
         self.pt.x = x
         self.pt.y = y
+        self._cached_geometry = None
 
     def __str__(self):
         return f"Point({self.pt.x}, {self.pt.y})"
@@ -1568,6 +1569,7 @@ cdef class Rect:
     def __init__(self, min_pt: Point, max_pt: Point):
         self.rect.min = min_pt.pt
         self.rect.max = max_pt.pt
+        self._cached_geometry = None
 
     def __str__(self):
         return (
@@ -1656,6 +1658,7 @@ cdef class Ring:
         if not self.ring:
             raise ValueError("Failed to create Ring")
         self.owns_pointer = True
+        self._cached_geometry = None
 
     def __str__(self):
         try:
@@ -1882,6 +1885,7 @@ cdef class Line:
         if not self.line:
             raise ValueError("Failed to create Line")
         self.owns_pointer = True
+        self._cached_geometry = None
 
     def __dealloc__(self):
         if self.line and self.owns_pointer:
@@ -2137,6 +2141,7 @@ cdef class Poly:
         if not self.poly:
             raise ValueError("Failed to create Poly")
         self.owns_pointer = True
+        self._cached_geometry = None
 
     def __dealloc__(self):
         if self.poly and self.owns_pointer:

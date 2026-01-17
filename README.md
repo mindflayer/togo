@@ -26,7 +26,7 @@ pip install togo
 - Format conversion between WKT, GeoJSON, WKB, and HEX
 - Spatial indexing for accelerated queries
 - Memory-efficient C implementation with Python-friendly interface
-- Advanced operations via libgeos integration (buffer, unary union, simplify, etc.)
+- Advanced operations via libgeos integration (buffer, unary union, simplify, centroid, etc.)
 - Distance and proximity operations (nearest_points, shortest_line)
 
 ## Basic Usage
@@ -73,6 +73,10 @@ print(point.to_geojson())  # '{"type":"Point","coordinates":[1.0,2.0]}'
 # Spatial predicates
 if poly.contains(point):
     print("Polygon contains point!")
+
+# Centroid (Shapely-compatible)
+centroid = poly.centroid  # Returns a Point geometry
+print(centroid.to_wkt())  # e.g., 'POINT (2 2)'
 ```
 
 

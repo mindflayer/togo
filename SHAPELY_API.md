@@ -18,6 +18,7 @@ print(point.geom_type)  # 'Point'
 print(point.bounds)     # (1.0, 2.0, 1.0, 2.0)
 print(line.length)      # 2.828...
 print(poly.area)        # 16.0
+print(poly.centroid)    # Point geometry (centroid)
 
 # Use module-level functions
 geom = from_wkt("POINT (1 2)")
@@ -96,6 +97,7 @@ poly_with_hole = Polygon(exterior, holes=[hole])
 poly.geom_type   # 'Polygon'
 poly.bounds      # (0, 0, 4, 4)
 poly.area        # 16.0
+poly.centroid    # Point geometry (center of mass)
 poly.is_empty    # False
 poly.is_valid    # True
 poly.exterior  # Ring object
@@ -174,6 +176,7 @@ line.length       # Float: length of line (property)
 poly.area         # Float: area of polygon
 poly.exterior   # Ring: exterior ring
 poly.interiors    # List[Ring]: list of holes
+poly.centroid     # Point: center of mass
 ```
 
 ## Spatial Predicates
@@ -474,6 +477,7 @@ The `transform` function works with:
 | `geom.bounds` | `geom.bounds` | ✅ Supported |
 | `geom.area` | `geom.area` | ✅ Supported |
 | `geom.length` | `geom.length` | ✅ Supported |
+| `geom.centroid` | `geom.centroid` | ✅ Supported (via GEOS) |
 | `geom.is_empty` | `geom.is_empty` | ✅ Supported |
 | `geom.coords` | `geom.coords` | ✅ Supported |
 | `geom.wkt` | `geom.wkt` | ✅ Supported |
