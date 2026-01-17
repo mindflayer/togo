@@ -1154,35 +1154,33 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
-    def nearest_points(self, other: Geometry) -> tuple:
+    cdef tuple _get_nearest_point_coords(self, Geometry other):
         """
-        Return a tuple of the nearest points between two geometries.
+        Private helper method to extract nearest point coordinates using GEOS.
 
-        Returns a tuple of two Point objects: (point_from_self, point_from_other).
-        The first point is the nearest point in this geometry to the other geometry,
-        and the second point is the nearest point in the other geometry to this geometry.
+        Returns a tuple of (x1, y1, x2, y2) representing the two nearest points
+        between this geometry and the other geometry.
 
-        This method is compatible with Shapely's nearest_points function.
+        This method handles all GEOS initialization, conversion, calculation,
+        and cleanup, reducing code duplication between nearest_points() and
+        shortest_line().
 
         Parameters:
         -----------
         other : Geometry
-            The other geometry to find the nearest point to
+            The other geometry to find the nearest points to
 
         Returns:
         --------
         tuple
-            A tuple of (Point, Point) representing the nearest points between the two
-            geometries
+            A tuple of (x1, y1, x2, y2) representing coordinates of the two
+            nearest points
 
         Raises:
         -------
-        ValueError
-            If the operation fails
+        RuntimeError
+            If GEOS operations fail
         """
-        if other is None or not isinstance(other, Geometry):
-            raise ValueError("other must be a Geometry object")
-
         cdef GEOSContextHandle_t ctx = GEOS_init_r()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
@@ -1229,6 +1227,41 @@ cdef class Geometry:
         GEOSGeom_destroy_r(ctx, g1_geos)
         GEOS_finish_r(ctx)
 
+        return (x1, y1, x2, y2)
+
+    def nearest_points(self, other: Geometry) -> tuple:
+        """
+        Return a tuple of the nearest points between two geometries.
+
+        Returns a tuple of two Point objects: (point_from_self, point_from_other).
+        The first point is the nearest point in this geometry to the other geometry,
+        and the second point is the nearest point in the other geometry to this geometry.
+
+        This method is compatible with Shapely's nearest_points function.
+
+        Parameters:
+        -----------
+        other : Geometry
+            The other geometry to find the nearest point to
+
+        Returns:
+        --------
+        tuple
+            A tuple of (Point, Point) representing the nearest points between the two
+            geometries
+
+        Raises:
+        -------
+        ValueError
+            If the operation fails
+        """
+        if other is None or not isinstance(other, Geometry):
+            raise ValueError("other must be a Geometry object")
+
+        # Use helper method to get coordinates
+        cdef double x1, y1, x2, y2
+        x1, y1, x2, y2 = self._get_nearest_point_coords(other)
+
         # Create Point objects efficiently using __new__ to avoid __init__ overhead
         cdef Point pt1 = Point.__new__(Point)
         pt1.pt.x = x1
@@ -1265,51 +1298,9 @@ cdef class Geometry:
         if other is None or not isinstance(other, Geometry):
             raise ValueError("other must be a Geometry object")
 
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
-        if ctx == NULL:
-            raise RuntimeError("Failed to initialize GEOS context")
-
-        cdef GEOSGeometry *g1_geos = tg_geom_to_geos(ctx, self.geom)
-        if g1_geos == NULL:
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to convert first TG geometry to GEOS")
-
-        cdef GEOSGeometry *g2_geos = tg_geom_to_geos(ctx, other.geom)
-        if g2_geos == NULL:
-            GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to convert second TG geometry to GEOS")
-
-        cdef GEOSCoordSequence *coords = GEOSNearestPoints_r(ctx, g1_geos, g2_geos)
-        if coords == NULL:
-            GEOSGeom_destroy_r(ctx, g2_geos)
-            GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("GEOSNearestPoints failed")
-
-        # Extract the two coordinates directly
+        # Use helper method to get coordinates
         cdef double x1, y1, x2, y2
-        cdef int ret = GEOSCoordSeq_getXY_r(ctx, coords, 0, &x1, &y1)
-        if ret == -1:
-            GEOSCoordSeq_destroy_r(ctx, coords)
-            GEOSGeom_destroy_r(ctx, g2_geos)
-            GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to get first coordinate")
-
-        ret = GEOSCoordSeq_getXY_r(ctx, coords, 1, &x2, &y2)
-        if ret == -1:
-            GEOSCoordSeq_destroy_r(ctx, coords)
-            GEOSGeom_destroy_r(ctx, g2_geos)
-            GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to get second coordinate")
-
-        # Clean up GEOS resources
-        GEOSCoordSeq_destroy_r(ctx, coords)
-        GEOSGeom_destroy_r(ctx, g2_geos)
-        GEOSGeom_destroy_r(ctx, g1_geos)
-        GEOS_finish_r(ctx)
+        x1, y1, x2, y2 = self._get_nearest_point_coords(other)
 
         # Create Line directly from coordinates using tg_line_new
         cdef tg_point *pts = <tg_point *>malloc(2 * sizeof(tg_point))
