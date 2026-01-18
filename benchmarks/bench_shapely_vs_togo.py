@@ -420,28 +420,28 @@ def main():
 
     bench_case(
         "convex_hull (point)",
-        lambda: convex_point.convex_hull(),
+        lambda: convex_point.convex_hull,
         lambda: shp_convex_point.convex_hull,
         iters=2000,
     )
 
     bench_case(
         "convex_hull (linestring)",
-        lambda: convex_line.convex_hull(),
+        lambda: convex_line.convex_hull,
         lambda: shp_convex_line.convex_hull,
         iters=1000,
     )
 
     bench_case(
         "convex_hull (concave polygon)",
-        lambda: convex_concave_poly.convex_hull(),
+        lambda: convex_concave_poly.convex_hull,
         lambda: shp_convex_concave_poly.convex_hull,
         iters=1000,
     )
 
     bench_case(
         "convex_hull (polygon - country-scale)",
-        lambda: convex_big_poly.convex_hull(),
+        lambda: convex_big_poly.convex_hull,
         lambda: shp_convex_big_poly.convex_hull,
         iters=500,
     )
