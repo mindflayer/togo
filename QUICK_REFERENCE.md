@@ -148,6 +148,39 @@ geom.wkb           # Bytes: WKB representation
 geom.__geo_interface__  # Dict: GeoJSON-like
 ```
 
+## Geometric Operations
+
+```python
+from togo import convex_hull, nearest_points, shortest_line
+
+# Centroid - center of mass
+poly = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
+center = poly.centroid
+print(center.to_wkt())  # 'POINT(2 2)'
+
+# Convex Hull - smallest convex geometry enclosing all points
+from togo import MultiPoint
+points = MultiPoint([(0, 0), (1, 1), (0, 2), (2, 2), (3, 1), (1, 0)])
+hull = points.convex_hull()  # Direct method call
+# Or: hull = convex_hull(points)  # Module-level function
+
+# Buffer - expand/shrink geometry
+line = LineString([(0, 0), (10, 10)])
+buffered = line.buffer(2.0)
+
+# Simplify - reduce complexity
+complex_line = LineString([(0, 0), (0.1, 0.1), (1, 1), (2, 2)])
+simple = complex_line.simplify(0.5)
+
+# Nearest points between geometries
+p1 = Point(0, 0)
+p2 = Point(10, 10)
+pt1, pt2 = nearest_points(p1, p2)
+
+# Shortest line connecting geometries
+line = shortest_line(p1, p2)
+```
+
 ## Migration from Shapely
 
 ### Before (Shapely)

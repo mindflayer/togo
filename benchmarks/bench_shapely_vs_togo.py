@@ -405,6 +405,47 @@ def main():
         iters=500,
     )
 
+    # Convex hull operations
+    convex_point = from_wkt("POINT (1 2)")
+    shp_convex_point = shp_from_wkt("POINT (1 2)")
+
+    convex_line = from_wkt("LINESTRING (0 0, 1 2, 2 0, 3 1, 4 0)")
+    shp_convex_line = shp_from_wkt("LINESTRING (0 0, 1 2, 2 0, 3 1, 4 0)")
+
+    convex_concave_poly = from_wkt("POLYGON ((0 0, 2 0, 2 2, 1 1, 0 2, 0 0))")
+    shp_convex_concave_poly = shp_from_wkt("POLYGON ((0 0, 2 0, 2 2, 1 1, 0 2, 0 0))")
+
+    convex_big_poly = from_geojson(TOGO_JSON)
+    shp_convex_big_poly = shp_from_geojson(TOGO_JSON)
+
+    bench_case(
+        "convex_hull (point)",
+        lambda: convex_point.convex_hull(),
+        lambda: shp_convex_point.convex_hull,
+        iters=2000,
+    )
+
+    bench_case(
+        "convex_hull (linestring)",
+        lambda: convex_line.convex_hull(),
+        lambda: shp_convex_line.convex_hull,
+        iters=1000,
+    )
+
+    bench_case(
+        "convex_hull (concave polygon)",
+        lambda: convex_concave_poly.convex_hull(),
+        lambda: shp_convex_concave_poly.convex_hull,
+        iters=1000,
+    )
+
+    bench_case(
+        "convex_hull (polygon - country-scale)",
+        lambda: convex_big_poly.convex_hull(),
+        lambda: shp_convex_big_poly.convex_hull,
+        iters=500,
+    )
+
     # Nearest points operations
     from shapely.ops import nearest_points as shp_nearest_points
 

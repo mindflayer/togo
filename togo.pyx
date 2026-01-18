@@ -233,6 +233,9 @@ cdef extern from "geos_c.h":
     GEOSGeometry *GEOSGetCentroid_r(
         GEOSContextHandle_t handle, const GEOSGeometry *g
     )
+    GEOSGeometry *GEOSConvexHull_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g
+    )
 
 cdef extern from "tgx.h":
     GEOSGeometry *tg_geom_to_geos(GEOSContextHandle_t handle, const tg_geom *geom)
@@ -1203,6 +1206,61 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
+    def convex_hull(self) -> Geometry:
+        """
+        Return the convex hull of the geometry.
+
+        The convex hull is the smallest convex geometry that encloses all points
+        in the input geometry. It is equivalent to the geometry you would get by
+        stretching a rubber band around the points.
+
+        Returns:
+        --------
+        Geometry
+            A Polygon (or Point/LineString for degenerate cases) representing
+            the convex hull
+
+        Raises:
+        -------
+        RuntimeError
+            If the convex hull calculation fails
+
+        Examples:
+        ---------
+        >>> from togo import Polygon
+        >>> poly = Polygon([(0, 0), (2, 0), (2, 2), (1, 1), (0, 2), (0, 0)])
+        >>> hull = poly.convex_hull()
+        >>> print(hull.to_wkt())
+        POLYGON((0 0,2 0,2 2,0 2,0 0))
+        """
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
+        if g_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert TG geometry to GEOS")
+
+        cdef GEOSGeometry *g_hull = GEOSConvexHull_r(ctx, g_geos)
+        if g_hull == NULL:
+            GEOSGeom_destroy_r(ctx, g_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("GEOSConvexHull failed")
+
+        cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_hull)
+        if g_tg == NULL:
+            GEOSGeom_destroy_r(ctx, g_hull)
+            GEOSGeom_destroy_r(ctx, g_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+
+        GEOSGeom_destroy_r(ctx, g_hull)
+        GEOSGeom_destroy_r(ctx, g_geos)
+        GEOS_finish_r(ctx)
+
+        return _geometry_from_ptr(g_tg)
+
     cdef tuple _get_nearest_point_coords(self, Geometry other):
         """
         Private helper method to extract nearest point coordinates using GEOS.
@@ -1561,6 +1619,29 @@ cdef class Point:
             return self.as_geometry().shortest_line(other.as_geometry())
         raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
+    @property
+    def centroid(self) -> Geometry:
+        """
+        Return the centroid of the point (which is the point itself).
+
+        Returns:
+        --------
+        Geometry
+            A Point geometry representing the centroid
+        """
+        return self.as_geometry().centroid
+
+    def convex_hull(self) -> Geometry:
+        """
+        Return the convex hull of the point (which is the point itself).
+
+        Returns:
+        --------
+        Geometry
+            A Point geometry representing the convex hull
+        """
+        return self.as_geometry().convex_hull()
+
 
 cdef class Rect:
     cdef tg_rect rect
@@ -1865,6 +1946,29 @@ cdef class Ring:
         else:
             raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
+    @property
+    def centroid(self) -> Geometry:
+        """
+        Return the centroid of the ring.
+
+        Returns:
+        --------
+        Geometry
+            A Point geometry representing the centroid
+        """
+        return self.as_geometry().centroid
+
+    def convex_hull(self) -> Geometry:
+        """
+        Return the convex hull of the ring.
+
+        Returns:
+        --------
+        Geometry
+            A Polygon geometry representing the convex hull
+        """
+        return self.as_geometry().convex_hull()
+
 
 cdef class Line:
     cdef tg_line *line
@@ -2097,6 +2201,29 @@ cdef class Line:
             return self.as_geometry().shortest_line(other.as_geometry())
         else:
             raise ValueError(f"other must be a Geometry object, got {type(other)}")
+
+    @property
+    def centroid(self) -> Geometry:
+        """
+        Return the centroid of the linestring.
+
+        Returns:
+        --------
+        Geometry
+            A Point geometry representing the centroid
+        """
+        return self.as_geometry().centroid
+
+    def convex_hull(self) -> Geometry:
+        """
+        Return the convex hull of the linestring.
+
+        Returns:
+        --------
+        Geometry
+            A Polygon (or LineString for collinear points) representing the convex hull
+        """
+        return self.as_geometry().convex_hull()
 
 
 cdef class Poly:
@@ -2392,6 +2519,35 @@ cdef class Poly:
             return self.as_geometry().shortest_line(other.as_geometry())
         else:
             raise ValueError(f"other must be a Geometry object, got {type(other)}")
+
+    @property
+    def centroid(self) -> Geometry:
+        """
+        Return the centroid of the polygon.
+
+        The centroid is the geometric center of mass of the polygon.
+        For polygons, this may lie outside the polygon if it is concave.
+
+        Returns:
+        --------
+        Geometry
+            A Point geometry representing the centroid
+        """
+        return self.as_geometry().centroid
+
+    def convex_hull(self) -> Geometry:
+        """
+        Return the convex hull of the polygon.
+
+        The convex hull is the smallest convex geometry that encloses all points
+        in the polygon.
+
+        Returns:
+        --------
+        Geometry
+            A Polygon geometry representing the convex hull
+        """
+        return self.as_geometry().convex_hull()
 
 
 cdef class Segment:
@@ -2884,12 +3040,56 @@ def shortest_line(geom1, geom2):
     return g1.shortest_line(g2)
 
 
+def convex_hull(geom):
+    """
+    Return the convex hull of a geometry.
+
+    This is a module-level function compatible with Shapely's convex_hull.
+    The convex hull is the smallest convex geometry that encloses all points
+    in the input geometry.
+
+    Parameters:
+    -----------
+    geom : Geometry, Point, Line, Ring, Poly, or other geometry type
+        The geometry to compute the convex hull for
+
+    Returns:
+    --------
+    Geometry
+        A Polygon (or Point/LineString for degenerate cases) representing
+        the convex hull
+
+    Raises:
+    -------
+    TypeError
+        If the geometry is None or invalid
+
+    Examples:
+    ---------
+    >>> from togo import convex_hull, MultiPoint
+    >>> points = MultiPoint([(0, 0), (1, 1), (0, 2), (2, 2), (3, 1), (1, 0)])
+    >>> hull = convex_hull(points)
+    >>> print(hull.geom_type)
+    Polygon
+    """
+    # Convert to Geometry if needed
+    if hasattr(geom, "as_geometry"):
+        g = geom.as_geometry()
+    elif isinstance(geom, Geometry):
+        g = geom
+    else:
+        raise TypeError("geom must be a togo geometry type")
+
+    # Use the Geometry.convex_hull method
+    return g.convex_hull()
+
+
 __all__ = [
     "Geometry", "Point", "Rect", "Ring", "Line", "Poly", "Segment",
     "LineString", "Polygon",
     "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection",
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
-    "nearest_points", "shortest_line", "transform",
+    "nearest_points", "shortest_line", "convex_hull", "transform",
     "set_polygon_indexing_mode", "TGIndex"
 ]
