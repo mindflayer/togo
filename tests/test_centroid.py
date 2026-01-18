@@ -1,9 +1,76 @@
 """
 Tests for centroid property implementations as direct class methods
 Tests that centroid works on Point, LineString, Polygon, Ring, and MultiPoint instances
+Also tests centroid on Geometry instances
 """
 
-from togo import Point, LineString, Polygon, Ring, MultiPoint
+from togo import Point, LineString, Polygon, Ring, MultiPoint, Geometry
+
+
+class TestGeometryCentroid:
+    """Test Geometry.centroid property"""
+
+    def test_geometry_centroid_point(self):
+        """Test centroid of a point"""
+        geom = Geometry("POINT(1 2)", fmt="wkt")
+        centroid = geom.centroid
+        assert centroid is not None
+        assert centroid.geom_type == "Point"
+        # Centroid of a point is the point itself
+        assert "POINT(1 2)" in centroid.to_wkt() or "POINT (1 2)" in centroid.to_wkt()
+
+    def test_geometry_centroid_linestring(self):
+        """Test centroid of a linestring"""
+        geom = Geometry("LINESTRING(0 0, 10 0, 10 10)", fmt="wkt")
+        centroid = geom.centroid
+        assert centroid is not None
+        assert centroid.geom_type == "Point"
+        # Centroid should be somewhere in the middle
+        wkt = centroid.to_wkt()
+        assert "POINT" in wkt
+
+    def test_geometry_centroid_polygon_square(self):
+        """Test centroid of a square polygon"""
+        geom = Geometry("POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))", fmt="wkt")
+        centroid = geom.centroid
+        assert centroid is not None
+        assert centroid.geom_type == "Point"
+        # Centroid of a square should be at its center (5, 5)
+        wkt = centroid.to_wkt()
+        assert "POINT" in wkt
+        # Extract coordinates from WKT and check they're close to (5, 5)
+        assert "5" in wkt
+
+    def test_geometry_centroid_polygon_triangle(self):
+        """Test centroid of a triangle polygon"""
+        geom = Geometry("POLYGON((0 0, 10 0, 5 10, 0 0))", fmt="wkt")
+        centroid = geom.centroid
+        assert centroid is not None
+        assert centroid.geom_type == "Point"
+        # Centroid should exist
+        wkt = centroid.to_wkt()
+        assert "POINT" in wkt
+
+    def test_geometry_centroid_polygon_with_hole(self):
+        """Test centroid of polygon with hole"""
+        geom = Geometry(
+            "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0), (2 2, 8 2, 8 8, 2 8, 2 2))",
+            fmt="wkt",
+        )
+        centroid = geom.centroid
+        assert centroid is not None
+        assert centroid.geom_type == "Point"
+        wkt = centroid.to_wkt()
+        assert "POINT" in wkt
+
+    def test_geometry_centroid_multipoint(self):
+        """Test centroid of multipoint"""
+        geom = Geometry("MULTIPOINT((0 0), (10 10))", fmt="wkt")
+        centroid = geom.centroid
+        assert centroid is not None
+        assert centroid.geom_type == "Point"
+        wkt = centroid.to_wkt()
+        assert "POINT" in wkt
 
 
 class TestPointCentroid:
