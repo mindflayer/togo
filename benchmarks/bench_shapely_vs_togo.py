@@ -38,6 +38,7 @@ try:
         transform,
         nearest_points,
         shortest_line,
+        intersection,
     )
 except Exception as e:
     print("ERROR: Failed to import togo:", e)
@@ -444,6 +445,73 @@ def main():
         lambda: convex_big_poly.convex_hull,
         lambda: shp_convex_big_poly.convex_hull,
         iters=500,
+    )
+
+    # Intersection operations
+    # Overlapping polygons (typical use case)
+    int_poly1 = from_wkt("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))")
+    shp_int_poly1 = shp_from_wkt("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))")
+    int_poly2 = from_wkt("POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))")
+    shp_int_poly2 = shp_from_wkt("POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))")
+
+    bench_case(
+        "intersection (overlapping polygons)",
+        lambda: intersection(int_poly1, int_poly2),
+        lambda: shp_int_poly1.intersection(shp_int_poly2),
+        iters=1000,
+    )
+
+    # Line crossing polygon
+    int_line = from_wkt("LINESTRING (0 1, 3 1)")
+    shp_int_line = shp_from_wkt("LINESTRING (0 1, 3 1)")
+    int_poly = from_wkt("POLYGON ((1 0, 2 0, 2 2, 1 2, 1 0))")
+    shp_int_poly = shp_from_wkt("POLYGON ((1 0, 2 0, 2 2, 1 2, 1 0))")
+
+    bench_case(
+        "intersection (line crossing polygon)",
+        lambda: intersection(int_line, int_poly),
+        lambda: shp_int_line.intersection(shp_int_poly),
+        iters=1000,
+    )
+
+    # Point in polygon
+    int_point = from_wkt("POINT (1.5 1.5)")
+    shp_int_point = shp_from_wkt("POINT (1.5 1.5)")
+    int_square = from_wkt("POLYGON ((0 0, 3 0, 3 3, 0 3, 0 0))")
+    shp_int_square = shp_from_wkt("POLYGON ((0 0, 3 0, 3 3, 0 3, 0 0))")
+
+    bench_case(
+        "intersection (point in polygon)",
+        lambda: intersection(int_point, int_square),
+        lambda: shp_int_point.intersection(shp_int_square),
+        iters=2000,
+    )
+
+    # Complex polygons (country-scale)
+    int_big_poly1 = from_geojson(TOGO_JSON)
+    shp_int_big_poly1 = shp_from_geojson(TOGO_JSON)
+    # Create a box that overlaps with Togo
+    int_big_box = from_wkt("POLYGON ((0 6, 2 6, 2 11, 0 11, 0 6))")
+    shp_int_big_box = shp_from_wkt("POLYGON ((0 6, 2 6, 2 11, 0 11, 0 6))")
+
+    bench_case(
+        "intersection (complex polygon - country-scale)",
+        lambda: intersection(int_big_poly1, int_big_box),
+        lambda: shp_int_big_poly1.intersection(shp_int_big_box),
+        iters=200,
+    )
+
+    # Crossing lines
+    int_line1 = from_wkt("LINESTRING (0 0, 2 2)")
+    shp_int_line1 = shp_from_wkt("LINESTRING (0 0, 2 2)")
+    int_line2 = from_wkt("LINESTRING (0 2, 2 0)")
+    shp_int_line2 = shp_from_wkt("LINESTRING (0 2, 2 0)")
+
+    bench_case(
+        "intersection (crossing lines)",
+        lambda: intersection(int_line1, int_line2),
+        lambda: shp_int_line1.intersection(shp_int_line2),
+        iters=2000,
     )
 
     # Nearest points operations
