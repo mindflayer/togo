@@ -3,7 +3,7 @@ Tests for convex_hull() method and function implementations in togo
 """
 
 import pytest
-from togo import Point, LineString, Polygon, Geometry, MultiPoint, convex_hull
+from togo import Point, LineString, Polygon, Ring, Geometry, MultiPoint, convex_hull
 
 
 class TestGeometryConvexHull:
@@ -152,6 +152,70 @@ class TestPolygonConvexHull:
         assert hull.geom_type == "Polygon"
         # Rectangle is already convex, so areas should match
         assert abs(hull.area - poly.area) < 0.0001
+
+
+class TestRingConvexHull:
+    """Test Ring.convex_hull() method"""
+
+    def test_ring_convex_hull_square(self):
+        """Test convex hull of a square ring (already convex)"""
+        points = [(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]
+        ring = Ring(points)
+        hull = ring.convex_hull()
+        assert hull is not None
+        assert hull.geom_type == "Polygon"
+        # Square is already convex, so areas should match
+        assert abs(hull.area - ring.area) < 0.0001
+
+    def test_ring_convex_hull_concave(self):
+        """Test convex hull of a concave ring (L-shaped)"""
+        # L-shaped ring (concave)
+        points = [(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2), (0, 0)]
+        ring = Ring(points)
+        hull = ring.convex_hull()
+        assert hull is not None
+        assert hull.geom_type == "Polygon"
+        # Convex hull should have greater or equal area
+        assert hull.area >= ring.area
+        # Original ring should be contained within or touch the hull
+        ring_geom = ring.as_geometry()
+        assert hull.contains(ring_geom) or hull.touches(ring_geom)
+
+    def test_ring_convex_hull_triangle(self):
+        """Test convex hull of a triangular ring"""
+        points = [(0, 0), (3, 0), (1.5, 3), (0, 0)]
+        ring = Ring(points)
+        hull = ring.convex_hull()
+        assert hull is not None
+        assert hull.geom_type == "Polygon"
+        # Triangle is already convex, areas should match
+        assert abs(hull.area - ring.area) < 0.0001
+
+    def test_ring_convex_hull_star_shape(self):
+        """Test convex hull of a star-shaped ring"""
+        # Star-like polygon (highly concave)
+        points = [
+            (0, 0),
+            (1, 0),
+            (1.5, -1),
+            (2, 0),
+            (3, 0),
+            (2, 1),
+            (2.5, 2),
+            (1.5, 1),
+            (1, 2),
+            (0.5, 1),
+            (0, 0),
+        ]
+        ring = Ring(points)
+        hull = ring.convex_hull()
+        assert hull is not None
+        assert hull.geom_type == "Polygon"
+        # Hull should have greater area than the concave shape
+        assert hull.area >= ring.area
+        # Verify hull contains the ring geometry
+        ring_geom = ring.as_geometry()
+        assert hull.contains(ring_geom) or hull.touches(ring_geom)
 
 
 class TestModuleLevelConvexHull:
