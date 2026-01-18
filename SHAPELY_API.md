@@ -519,7 +519,7 @@ The `transform` function works with:
 | `geom.area` | `geom.area` | ✅ Supported |
 | `geom.length` | `geom.length` | ✅ Supported |
 | `geom.centroid` | `geom.centroid` | ✅ Supported (via GEOS) |
-| `geom.convex_hull` | `geom.convex_hull` | ✅ Supported (via GEOS) |
+| `geom.convex_hull` | `geom.convex_hull()` | ✅ Supported (via GEOS) |
 | `geom.is_empty` | `geom.is_empty` | ✅ Supported |
 | `geom.coords` | `geom.coords` | ✅ Supported |
 | `geom.wkt` | `geom.wkt` | ✅ Supported |
