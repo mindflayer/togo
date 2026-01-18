@@ -1265,7 +1265,7 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
-    def intersection(self, other: Geometry) -> Geometry:
+    def intersection(self, other) -> Geometry:
         """
         Return the geometric intersection of this geometry with another.
 
@@ -1289,8 +1289,6 @@ cdef class Geometry:
 
         Raises:
         -------
-        ValueError
-            If other is None or not a Geometry
         RuntimeError
             If the intersection calculation fails
 
@@ -1303,34 +1301,46 @@ cdef class Geometry:
         >>> print(result.geom_type)
         Polygon
         """
-        if other is None:
-            raise ValueError("other must be a Geometry object, not None")
-        if not isinstance(other, Geometry):
-            raise ValueError(f"other must be a Geometry, got {type(other)}")
+        cdef GEOSContextHandle_t ctx
+        cdef GEOSGeometry *g1_geos
+        cdef GEOSGeometry *g2_geos
+        cdef GEOSGeometry *g_intersection
+        cdef tg_geom *g_tg
+        cdef tg_geom *empty
+        cdef Geometry other_geom
 
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        # Return empty geometry for None or non-Geometry objects (Shapely-compatible behavior)
+        if other is None or not isinstance(other, Geometry):
+            # Return empty geometry collection
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
+        # Cast to Geometry for safe access to .geom attribute
+        other_geom = <Geometry>other
+
+        ctx = GEOS_init_r()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
-        cdef GEOSGeometry *g1_geos = tg_geom_to_geos(ctx, self.geom)
+        g1_geos = tg_geom_to_geos(ctx, self.geom)
         if g1_geos == NULL:
             GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert first geometry to GEOS")
 
-        cdef GEOSGeometry *g2_geos = tg_geom_to_geos(ctx, other.geom)
+        g2_geos = tg_geom_to_geos(ctx, other_geom.geom)
         if g2_geos == NULL:
             GEOSGeom_destroy_r(ctx, g1_geos)
             GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert second geometry to GEOS")
 
-        cdef GEOSGeometry *g_intersection = GEOSIntersection_r(ctx, g1_geos, g2_geos)
+        g_intersection = GEOSIntersection_r(ctx, g1_geos, g2_geos)
         if g_intersection == NULL:
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
             GEOS_finish_r(ctx)
             raise RuntimeError("GEOSIntersection failed")
 
-        cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_intersection)
+        g_tg = tg_geom_from_geos(ctx, g_intersection)
         if g_tg == NULL:
             GEOSGeom_destroy_r(ctx, g_intersection)
             GEOSGeom_destroy_r(ctx, g2_geos)
@@ -1745,13 +1755,6 @@ cdef class Point:
             A Geometry representing the intersection. May be empty if geometries
             do not intersect.
 
-        Raises:
-        -------
-        ValueError
-            If other is None or not a valid geometry
-        TypeError
-            If other is not a geometry object
-
         Examples:
         ---------
         >>> from togo import Point, LineString
@@ -1761,14 +1764,21 @@ cdef class Point:
         >>> print(result.geom_type)
         Point
         """
+        cdef tg_geom *empty
+
         if other is None:
-            raise ValueError("other must be a Geometry object, not None")
+            # Return empty geometry (Shapely-compatible)
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
 
         if isinstance(other, Geometry):
             return self.as_geometry().intersection(other)
         elif hasattr(other, "as_geometry"):
             return self.as_geometry().intersection(other.as_geometry())
-        raise TypeError(f"other must be a geometry object, got {type(other)}")
+
+        # Return empty for unrecognized types (Shapely-compatible)
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
 
 
 cdef class Rect:
@@ -2116,13 +2126,6 @@ cdef class Ring:
             A Geometry representing the intersection. May be empty if geometries
             do not intersect.
 
-        Raises:
-        -------
-        ValueError
-            If other is None or not a valid geometry
-        TypeError
-            If other is not a geometry object
-
         Examples:
         ---------
         >>> from togo import Ring, Point
@@ -2132,14 +2135,21 @@ cdef class Ring:
         >>> print(result.geom_type)
         Point
         """
+        cdef tg_geom *empty
+
         if other is None:
-            raise ValueError("other must be a Geometry object, not None")
+            # Return empty geometry (Shapely-compatible)
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
 
         if isinstance(other, Geometry):
             return self.as_geometry().intersection(other)
         elif hasattr(other, "as_geometry"):
             return self.as_geometry().intersection(other.as_geometry())
-        raise TypeError(f"other must be a geometry object, got {type(other)}")
+
+        # Return empty for unrecognized types (Shapely-compatible)
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
 
 
 cdef class Line:
@@ -2416,13 +2426,6 @@ cdef class Line:
             A Geometry representing the intersection. May be empty if geometries
             do not intersect.
 
-        Raises:
-        -------
-        ValueError
-            If other is None or not a valid geometry
-        TypeError
-            If other is not a geometry object
-
         Examples:
         ---------
         >>> from togo import LineString, Polygon
@@ -2432,14 +2435,21 @@ cdef class Line:
         >>> print(result.geom_type)
         LineString
         """
+        cdef tg_geom *empty
+
         if other is None:
-            raise ValueError("other must be a Geometry object, not None")
+            # Return empty geometry (Shapely-compatible)
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
 
         if isinstance(other, Geometry):
             return self.as_geometry().intersection(other)
         elif hasattr(other, "as_geometry"):
             return self.as_geometry().intersection(other.as_geometry())
-        raise TypeError(f"other must be a geometry object, got {type(other)}")
+
+        # Return empty for unrecognized types (Shapely-compatible)
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
 
 
 cdef class Poly:
@@ -2784,13 +2794,6 @@ cdef class Poly:
             A Geometry representing the intersection. May be empty if geometries
             do not intersect.
 
-        Raises:
-        -------
-        ValueError
-            If other is None or not a valid geometry
-        TypeError
-            If other is not a geometry object
-
         Examples:
         ---------
         >>> from togo import Polygon
@@ -2800,14 +2803,21 @@ cdef class Poly:
         >>> print(result.geom_type)
         Polygon
         """
+        cdef tg_geom *empty
+
         if other is None:
-            raise ValueError("other must be a Geometry object, not None")
+            # Return empty geometry (Shapely-compatible)
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
 
         if isinstance(other, Geometry):
             return self.as_geometry().intersection(other)
         elif hasattr(other, "as_geometry"):
             return self.as_geometry().intersection(other.as_geometry())
-        raise TypeError(f"other must be a geometry object, got {type(other)}")
+
+        # Return empty for unrecognized types (Shapely-compatible)
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
 
 
 cdef class Segment:
@@ -3326,8 +3336,6 @@ def intersection(geom1, geom2) -> Geometry:
 
     Raises:
     -------
-    TypeError
-        If either geometry is None or not a valid geometry type
     RuntimeError
         If the intersection calculation fails
 
@@ -3342,20 +3350,34 @@ def intersection(geom1, geom2) -> Geometry:
     >>> print(f"{result.area:.1f}")
     1.0
     """
-    # Convert to Geometry if needed
+    cdef tg_geom *empty
+
+    # Convert to Geometry if needed, return empty for None/invalid (Shapely-compatible)
+    if geom1 is None:
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+
     if hasattr(geom1, "as_geometry"):
         g1 = geom1.as_geometry()
     elif isinstance(geom1, Geometry):
         g1 = geom1
     else:
-        raise TypeError("geom1 must be a togo geometry type")
+        # Return empty for invalid type (Shapely-compatible)
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+
+    if geom2 is None:
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
 
     if hasattr(geom2, "as_geometry"):
         g2 = geom2.as_geometry()
     elif isinstance(geom2, Geometry):
         g2 = geom2
     else:
-        raise TypeError("geom2 must be a togo geometry type")
+        # Return empty for invalid type (Shapely-compatible)
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
 
     # Use the Geometry.intersection method
     return g1.intersection(g2)

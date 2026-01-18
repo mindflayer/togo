@@ -2,7 +2,6 @@
 Tests for intersection() method and function implementations in togo
 """
 
-import pytest
 from togo import (
     Point,
     LineString,
@@ -84,16 +83,18 @@ class TestGeometryIntersection:
         assert abs(result.area - poly.area) < 0.0001
 
     def test_geometry_intersection_none_raises_error(self):
-        """Test that intersection with None raises ValueError"""
+        """Test that intersection with None returns empty geometry (Shapely-compatible)"""
         geom = Geometry("POINT(0 0)", fmt="wkt")
-        with pytest.raises(ValueError):
-            geom.intersection(None)
+        result = geom.intersection(None)
+        assert result is not None
+        assert result.is_empty
 
     def test_geometry_intersection_invalid_type_raises_error(self):
-        """Test that intersection with invalid type raises ValueError"""
+        """Test that intersection with invalid type returns empty geometry (Shapely-compatible)"""
         geom = Geometry("POINT(0 0)", fmt="wkt")
-        with pytest.raises(ValueError):
-            geom.intersection("not a geometry")
+        result = geom.intersection("not a geometry")
+        assert result is not None
+        assert result.is_empty
 
 
 class TestPointIntersection:
@@ -141,10 +142,11 @@ class TestPointIntersection:
         assert result.geom_type == "Point"
 
     def test_point_intersection_none_raises_error(self):
-        """Test that intersection with None raises ValueError"""
+        """Test that intersection with None returns empty geometry (Shapely-compatible)"""
         p = Point(0, 0)
-        with pytest.raises(ValueError):
-            p.intersection(None)
+        result = p.intersection(None)
+        assert result is not None
+        assert result.is_empty
 
 
 class TestLineStringIntersection:
@@ -188,10 +190,11 @@ class TestLineStringIntersection:
         assert abs(result.length - 1.0) < 0.0001
 
     def test_linestring_intersection_none_raises_error(self):
-        """Test that intersection with None raises ValueError"""
+        """Test that intersection with None returns empty geometry (Shapely-compatible)"""
         line = LineString([(0, 0), (1, 1)])
-        with pytest.raises(ValueError):
-            line.intersection(None)
+        result = line.intersection(None)
+        assert result is not None
+        assert result.is_empty
 
 
 class TestPolygonIntersection:
@@ -251,10 +254,11 @@ class TestPolygonIntersection:
         assert result.area < 8.0  # Less than full 2x4 rectangle
 
     def test_polygon_intersection_none_raises_error(self):
-        """Test that intersection with None raises ValueError"""
+        """Test that intersection with None returns empty geometry (Shapely-compatible)"""
         poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
-        with pytest.raises(ValueError):
-            poly.intersection(None)
+        result = poly.intersection(None)
+        assert result is not None
+        assert result.is_empty
 
 
 class TestRingIntersection:
@@ -279,10 +283,11 @@ class TestRingIntersection:
         assert result.geom_type == "Point"
 
     def test_ring_intersection_none_raises_error(self):
-        """Test that intersection with None raises ValueError"""
+        """Test that intersection with None returns empty geometry (Shapely-compatible)"""
         ring = Ring([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
-        with pytest.raises(ValueError):
-            ring.intersection(None)
+        result = ring.intersection(None)
+        assert result is not None
+        assert result.is_empty
 
 
 class TestModuleLevelIntersection:
@@ -331,20 +336,26 @@ class TestModuleLevelIntersection:
         assert result.geom_type == "LineString"
 
     def test_intersection_function_none_raises_error(self):
-        """Test that intersection with None raises TypeError"""
+        """Test that intersection with None returns empty geometry (Shapely-compatible)"""
         poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
-        with pytest.raises(TypeError):
-            intersection(None, poly)
-        with pytest.raises(TypeError):
-            intersection(poly, None)
+        result1 = intersection(None, poly)
+        assert result1 is not None
+        assert result1.is_empty
+
+        result2 = intersection(poly, None)
+        assert result2 is not None
+        assert result2.is_empty
 
     def test_intersection_function_invalid_type_raises_error(self):
-        """Test that intersection with invalid type raises TypeError"""
+        """Test that intersection with invalid type returns empty geometry (Shapely-compatible)"""
         poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
-        with pytest.raises(TypeError):
-            intersection(poly, "not a geometry")
-        with pytest.raises(TypeError):
-            intersection("not a geometry", poly)
+        result1 = intersection(poly, "not a geometry")
+        assert result1 is not None
+        assert result1.is_empty
+
+        result2 = intersection("not a geometry", poly)
+        assert result2 is not None
+        assert result2.is_empty
 
     def test_intersection_function_empty_result(self):
         """Test intersection that results in empty geometry"""
