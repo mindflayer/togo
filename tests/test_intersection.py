@@ -84,15 +84,15 @@ class TestGeometryIntersection:
         assert abs(result.area - poly.area) < 0.0001
 
     def test_geometry_intersection_none_raises_error(self):
-        """Test that intersection with None raises TypeError"""
+        """Test that intersection with None raises ValueError"""
         geom = Geometry("POINT(0 0)", fmt="wkt")
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             geom.intersection(None)
 
     def test_geometry_intersection_invalid_type_raises_error(self):
-        """Test that intersection with invalid type raises TypeError"""
+        """Test that intersection with invalid type raises ValueError"""
         geom = Geometry("POINT(0 0)", fmt="wkt")
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             geom.intersection("not a geometry")
 
 

@@ -1289,7 +1289,7 @@ cdef class Geometry:
 
         Raises:
         -------
-        TypeError
+        ValueError
             If other is None or not a Geometry
         RuntimeError
             If the intersection calculation fails
@@ -1304,9 +1304,9 @@ cdef class Geometry:
         Polygon
         """
         if other is None:
-            raise TypeError("other must be a Geometry object, not None")
+            raise ValueError("other must be a Geometry object, not None")
         if not isinstance(other, Geometry):
-            raise TypeError(f"other must be a Geometry, got {type(other)}")
+            raise ValueError(f"other must be a Geometry, got {type(other)}")
 
         cdef GEOSContextHandle_t ctx = GEOS_init_r()
         if ctx == NULL:
