@@ -7,13 +7,13 @@ from togo import Point, LineString, Polygon, Ring, Geometry, MultiPoint, convex_
 
 
 class TestGeometryConvexHull:
-    """Test Geometry.convex_hull() method"""
+    """Test Geometry.convex_hull method"""
 
     def test_geometry_convex_hull_polygon(self):
         """Test convex hull of a concave polygon"""
         # Create a concave polygon (star-like shape)
         geom = Geometry("POLYGON((0 0, 2 0, 2 2, 1 1, 0 2, 0 0))", fmt="wkt")
-        hull = geom.convex_hull()
+        hull = geom.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Convex hull should contain the original geometry
@@ -25,7 +25,7 @@ class TestGeometryConvexHull:
         """Test convex hull of an already convex polygon"""
         # Square is already convex
         geom = Geometry("POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))", fmt="wkt")
-        hull = geom.convex_hull()
+        hull = geom.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Convex hull of convex polygon should have same area
@@ -34,7 +34,7 @@ class TestGeometryConvexHull:
     def test_geometry_convex_hull_point(self):
         """Test convex hull of a point"""
         geom = Geometry("POINT(1 2)", fmt="wkt")
-        hull = geom.convex_hull()
+        hull = geom.convex_hull
         assert hull is not None
         assert hull.geom_type == "Point"
         # Should return the same point
@@ -43,7 +43,7 @@ class TestGeometryConvexHull:
     def test_geometry_convex_hull_linestring(self):
         """Test convex hull of a linestring"""
         geom = Geometry("LINESTRING(0 0, 1 1, 2 0)", fmt="wkt")
-        hull = geom.convex_hull()
+        hull = geom.convex_hull
         assert hull is not None
         # Convex hull of 3 non-collinear points should be a polygon (triangle)
         assert hull.geom_type == "Polygon"
@@ -53,7 +53,7 @@ class TestGeometryConvexHull:
     def test_geometry_convex_hull_collinear_points(self):
         """Test convex hull of collinear points"""
         geom = Geometry("LINESTRING(0 0, 1 1, 2 2)", fmt="wkt")
-        hull = geom.convex_hull()
+        hull = geom.convex_hull
         assert hull is not None
         # Convex hull of collinear points is a line
         assert hull.geom_type == "LineString"
@@ -62,7 +62,7 @@ class TestGeometryConvexHull:
         """Test convex hull of scattered points"""
         points = [(0, 0), (1, 1), (0, 2), (2, 2), (3, 1), (1, 0)]
         geom = MultiPoint(points)
-        hull = geom.convex_hull()
+        hull = geom.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # All original points should be on or inside the hull
@@ -72,12 +72,12 @@ class TestGeometryConvexHull:
 
 
 class TestPointConvexHull:
-    """Test Point.convex_hull() method"""
+    """Test Point.convex_hull method"""
 
     def test_point_convex_hull(self):
         """Test convex hull of a Point"""
         p = Point(3.5, 4.5)
-        hull = p.convex_hull()
+        hull = p.convex_hull
         assert hull is not None
         assert hull.geom_type == "Point"
         # Check WKT representation contains correct coordinates
@@ -87,12 +87,12 @@ class TestPointConvexHull:
 
 
 class TestLineStringConvexHull:
-    """Test LineString.convex_hull() method"""
+    """Test LineString.convex_hull method"""
 
     def test_linestring_convex_hull_triangle(self):
         """Test convex hull of a triangle-like linestring"""
         line = LineString([(0, 0), (2, 0), (1, 2)])
-        hull = line.convex_hull()
+        hull = line.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Should form a triangle
@@ -101,7 +101,7 @@ class TestLineStringConvexHull:
     def test_linestring_convex_hull_straight(self):
         """Test convex hull of a straight line"""
         line = LineString([(0, 0), (1, 1), (2, 2)])
-        hull = line.convex_hull()
+        hull = line.convex_hull
         assert hull is not None
         # Collinear points result in a linestring
         assert hull.geom_type == "LineString"
@@ -109,7 +109,7 @@ class TestLineStringConvexHull:
     def test_linestring_convex_hull_zigzag(self):
         """Test convex hull of a zigzag line"""
         line = LineString([(0, 0), (1, 1), (2, 0), (3, 1), (4, 0)])
-        hull = line.convex_hull()
+        hull = line.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Hull should have area greater than zero
@@ -117,14 +117,14 @@ class TestLineStringConvexHull:
 
 
 class TestPolygonConvexHull:
-    """Test Polygon.convex_hull() method"""
+    """Test Polygon.convex_hull method"""
 
     def test_polygon_convex_hull_concave(self):
         """Test convex hull of a concave polygon"""
         # L-shaped polygon (concave)
         exterior = [(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2), (0, 0)]
         poly = Polygon(exterior)
-        hull = poly.convex_hull()
+        hull = poly.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Hull should be larger than original
@@ -137,7 +137,7 @@ class TestPolygonConvexHull:
         exterior = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
         hole = [(2, 2), (8, 2), (8, 8), (2, 8), (2, 2)]
         poly = Polygon(exterior, holes=[hole])
-        hull = poly.convex_hull()
+        hull = poly.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Convex hull should only consider the outer boundary
@@ -147,7 +147,7 @@ class TestPolygonConvexHull:
     def test_polygon_convex_hull_rectangle(self):
         """Test convex hull of a rectangle (already convex)"""
         poly = Polygon([(0, 0), (5, 0), (5, 3), (0, 3), (0, 0)])
-        hull = poly.convex_hull()
+        hull = poly.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Rectangle is already convex, so areas should match
@@ -291,7 +291,7 @@ class TestConvexHullEdgeCases:
     def test_convex_hull_two_points(self):
         """Test convex hull of exactly two points"""
         geom = Geometry("LINESTRING(0 0, 1 1)", fmt="wkt")
-        hull = geom.convex_hull()
+        hull = geom.convex_hull
         assert hull is not None
         # Two points should result in a linestring
         assert hull.geom_type == "LineString"
@@ -313,7 +313,7 @@ class TestConvexHullEdgeCases:
             (0, 0),
         ]
         poly = Polygon(exterior)
-        hull = poly.convex_hull()
+        hull = poly.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Hull should contain original polygon
@@ -324,7 +324,7 @@ class TestConvexHullEdgeCases:
     def test_convex_hull_preserves_type_for_point(self):
         """Test that convex hull of a single point is still a point"""
         geom = Geometry("POINT(5 5)", fmt="wkt")
-        hull = geom.convex_hull()
+        hull = geom.convex_hull
         assert hull.geom_type == "Point"
         # Verify coordinates are preserved
         assert "POINT(5 5)" in hull.to_wkt()
