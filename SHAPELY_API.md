@@ -282,19 +282,19 @@ The `simplify()` method:
 
 ### Convex Hull
 
-All geometry types support the `convex_hull()` method for computing the smallest convex geometry that encloses all points:
+All geometry types support the `convex_hull` property for computing the smallest convex geometry that encloses all points:
 
 ```python
 from togo import Point, LineString, Polygon, MultiPoint, convex_hull
 
-# Convex hull of a polygon - direct method call
+# Convex hull of a polygon - direct property access
 poly = Polygon([(0, 0), (2, 0), (2, 2), (1, 1), (0, 2), (0, 0)])
-hull = poly.convex_hull()
+hull = poly.convex_hull
 print(hull.geom_type)  # 'Polygon'
 
 # Convex hull of scattered points
 points = MultiPoint([(0, 0), (1, 1), (0, 2), (2, 2), (3, 1), (1, 0)])
-hull = points.convex_hull()
+hull = points.convex_hull
 print(hull.geom_type)  # 'Polygon'
 
 # Module-level function (Shapely-compatible)
@@ -309,11 +309,11 @@ print(hull.geom_type)  # 'Point'
 
 # Via Geometry object
 geom = from_wkt("MULTIPOINT((0 0), (3 0), (3 3), (0 3))")
-hull = geom.convex_hull()
+hull = geom.convex_hull
 print(hull.area)  # 9.0
 ```
 
-The `convex_hull()` method:
+The `convex_hull` property:
 - Returns the smallest convex geometry containing all points
 - Equivalent to stretching a rubber band around the geometry
 - For points: returns a Point
@@ -538,7 +538,7 @@ The `transform` function works with:
 | `transform()` | `transform()` | ✅ Supported |
 | `nearest_points()` | `nearest_points()` | ✅ Supported (via GEOS) |
 | `shortest_line()` | `shortest_line()` | ✅ Supported (via GEOS, v2 API) |
-| `convex_hull()` | `convex_hull()` | ✅ Supported (via GEOS) |
+| `convex_hull` | `convex_hull` | ✅ Supported (via GEOS) |
 | `intersection()` | - | ❌ Not yet (use GEOS via tgx) |
 
 ## Conclusion
