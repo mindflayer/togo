@@ -161,7 +161,7 @@ print(center.to_wkt())  # 'POINT(2 2)'
 # Convex Hull - smallest convex geometry enclosing all points
 from togo import MultiPoint
 points = MultiPoint([(0, 0), (1, 1), (0, 2), (2, 2), (3, 1), (1, 0)])
-hull = points.convex_hull()  # Direct method call
+hull = points.convex_hull  # Property access
 # Or: hull = convex_hull(points)  # Module-level function
 
 # Buffer - expand/shrink geometry

@@ -1229,7 +1229,7 @@ cdef class Geometry:
         ---------
         >>> from togo import Polygon
         >>> poly = Polygon([(0, 0), (2, 0), (2, 2), (1, 1), (0, 2), (0, 0)])
-        >>> hull = poly.convex_hull()
+        >>> hull = poly.convex_hull
         >>> print(hull.to_wkt())
         POLYGON((0 0,2 0,2 2,0 2,0 0))
         """
@@ -1631,6 +1631,7 @@ cdef class Point:
         """
         return self.as_geometry().centroid
 
+    @property
     def convex_hull(self) -> Geometry:
         """
         Return the convex hull of the point (which is the point itself).
@@ -1958,6 +1959,7 @@ cdef class Ring:
         """
         return self.as_geometry().centroid
 
+    @property
     def convex_hull(self) -> Geometry:
         """
         Return the convex hull of the ring.
@@ -2214,6 +2216,7 @@ cdef class Line:
         """
         return self.as_geometry().centroid
 
+    @property
     def convex_hull(self) -> Geometry:
         """
         Return the convex hull of the linestring.
@@ -2535,6 +2538,7 @@ cdef class Poly:
         """
         return self.as_geometry().centroid
 
+    @property
     def convex_hull(self) -> Geometry:
         """
         Return the convex hull of the polygon.
