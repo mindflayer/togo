@@ -280,6 +280,57 @@ The `simplify()` method:
 - `preserve_topology=False`: Uses standard Douglas-Peucker for faster simplification but may produce invalid geometries
 - `tolerance`: Maximum distance from original coordinates. Larger tolerance = more simplification
 
+### Intersection
+
+All geometry types support the `intersection()` method for computing the geometric intersection of two geometries:
+
+```python
+from togo import Point, LineString, Polygon, intersection
+
+# Intersection of overlapping polygons
+poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+result = poly1.intersection(poly2)
+print(result.geom_type)  # 'Polygon'
+print(result.area)       # 1.0 (1x1 square)
+
+# Module-level function (Shapely-compatible)
+result = intersection(poly1, poly2)
+
+# Line crossing polygon
+line = LineString([(0, 1), (3, 1)])
+poly = Polygon([(1, 0), (2, 0), (2, 2), (1, 2), (1, 0)])
+result = line.intersection(poly)
+print(result.geom_type)  # 'LineString'
+print(result.length)     # 1.0
+
+# Point in polygon
+point = Point(1.5, 1.5)
+poly = Polygon([(0, 0), (3, 0), (3, 3), (0, 3), (0, 0)])
+result = point.intersection(poly)
+print(result.geom_type)  # 'Point'
+
+# Non-intersecting geometries return empty
+poly1 = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+poly2 = Polygon([(5, 5), (6, 5), (6, 6), (5, 6), (5, 5)])
+result = intersection(poly1, poly2)
+print(result.is_empty)   # True
+
+# Via Geometry object
+geom1 = from_wkt("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))")
+geom2 = from_wkt("POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))")
+result = geom1.intersection(geom2)
+```
+
+The `intersection()` method:
+- Returns the set of points common to both geometries
+- Result type depends on input geometries and spatial relationship
+- Point-Point: Point (if overlapping) or empty
+- Line-Line: Point, LineString, or MultiLineString
+- Polygon-Polygon: Point, LineString, Polygon, or MultiPolygon
+- Returns empty geometry if inputs don't intersect
+- Compatible with Shapely's intersection API
+
 ### Convex Hull
 
 All geometry types support the `convex_hull()` method for computing the smallest convex geometry that encloses all points:
@@ -539,7 +590,7 @@ The `transform` function works with:
 | `nearest_points()` | `nearest_points()` | ✅ Supported (via GEOS) |
 | `shortest_line()` | `shortest_line()` | ✅ Supported (via GEOS, v2 API) |
 | `convex_hull()` | `convex_hull()` | ✅ Supported (via GEOS) |
-| `intersection()` | - | ❌ Not yet (use GEOS via tgx) |
+| `intersection()` | `intersection()` | ✅ Supported (via GEOS) |
 
 ## Conclusion
 

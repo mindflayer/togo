@@ -236,6 +236,9 @@ cdef extern from "geos_c.h":
     GEOSGeometry *GEOSConvexHull_r(
         GEOSContextHandle_t handle, const GEOSGeometry *g
     )
+    GEOSGeometry *GEOSIntersection_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g1, const GEOSGeometry *g2
+    )
 
 cdef extern from "tgx.h":
     GEOSGeometry *tg_geom_to_geos(GEOSContextHandle_t handle, const tg_geom *geom)
@@ -1262,6 +1265,86 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
+    def intersection(self, other: Geometry) -> Geometry:
+        """
+        Return the geometric intersection of this geometry with another.
+
+        The intersection is the set of points common to both geometries.
+        This method is compatible with Shapely's intersection.
+
+        Parameters:
+        -----------
+        other : Geometry
+            The other geometry to compute the intersection with
+
+        Returns:
+        --------
+        Geometry
+            A Geometry representing the intersection. The result type depends
+            on the input geometries and their spatial relationship:
+            - Point-Point: Point (if they overlap) or empty
+            - Line-Line: Point, LineString, or MultiLineString
+            - Polygon-Polygon: Point, LineString, Polygon, or MultiPolygon
+            - Empty if geometries do not intersect
+
+        Raises:
+        -------
+        TypeError
+            If other is None or not a Geometry
+        RuntimeError
+            If the intersection calculation fails
+
+        Examples:
+        ---------
+        >>> from togo import Geometry
+        >>> poly1 = Geometry("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))", fmt="wkt")
+        >>> poly2 = Geometry("POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))", fmt="wkt")
+        >>> result = poly1.intersection(poly2)
+        >>> print(result.geom_type)
+        Polygon
+        """
+        if other is None:
+            raise TypeError("other must be a Geometry object, not None")
+        if not isinstance(other, Geometry):
+            raise TypeError(f"other must be a Geometry, got {type(other)}")
+
+        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        cdef GEOSGeometry *g1_geos = tg_geom_to_geos(ctx, self.geom)
+        if g1_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert first geometry to GEOS")
+
+        cdef GEOSGeometry *g2_geos = tg_geom_to_geos(ctx, other.geom)
+        if g2_geos == NULL:
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert second geometry to GEOS")
+
+        cdef GEOSGeometry *g_intersection = GEOSIntersection_r(ctx, g1_geos, g2_geos)
+        if g_intersection == NULL:
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("GEOSIntersection failed")
+
+        cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_intersection)
+        if g_tg == NULL:
+            GEOSGeom_destroy_r(ctx, g_intersection)
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+
+        GEOSGeom_destroy_r(ctx, g_intersection)
+        GEOSGeom_destroy_r(ctx, g2_geos)
+        GEOSGeom_destroy_r(ctx, g1_geos)
+        GEOS_finish_r(ctx)
+
+        return _geometry_from_ptr(g_tg)
+
     cdef tuple _get_nearest_point_coords(self, Geometry other):
         """
         Private helper method to extract nearest point coordinates using GEOS.
@@ -1644,6 +1727,49 @@ cdef class Point:
         """
         return self.as_geometry().convex_hull
 
+    def intersection(self, other) -> Geometry:
+        """
+        Return the geometric intersection of this point with another geometry.
+
+        The intersection is the set of points common to both geometries.
+        This method is compatible with Shapely's intersection.
+
+        Parameters:
+        -----------
+        other : Geometry, Point, LineString, Polygon, or other geometry
+            The other geometry to compute the intersection with
+
+        Returns:
+        --------
+        Geometry
+            A Geometry representing the intersection. May be empty if geometries
+            do not intersect.
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        TypeError
+            If other is not a geometry object
+
+        Examples:
+        ---------
+        >>> from togo import Point, LineString
+        >>> p = Point(1, 1)
+        >>> line = LineString([(1, 1), (2, 2)])
+        >>> result = p.intersection(line)
+        >>> print(result.geom_type)
+        Point
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().intersection(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().intersection(other.as_geometry())
+        raise TypeError(f"other must be a geometry object, got {type(other)}")
+
 
 cdef class Rect:
     cdef tg_rect rect
@@ -1972,6 +2098,49 @@ cdef class Ring:
         """
         return self.as_geometry().convex_hull
 
+    def intersection(self, other) -> Geometry:
+        """
+        Return the geometric intersection of this ring with another geometry.
+
+        The intersection is the set of points common to both geometries.
+        This method is compatible with Shapely's intersection.
+
+        Parameters:
+        -----------
+        other : Geometry, Point, Line, Ring, Poly, or other geometry
+            The other geometry to compute the intersection with
+
+        Returns:
+        --------
+        Geometry
+            A Geometry representing the intersection. May be empty if geometries
+            do not intersect.
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        TypeError
+            If other is not a geometry object
+
+        Examples:
+        ---------
+        >>> from togo import Ring, Point
+        >>> ring = Ring([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
+        >>> point = Point(2, 2)
+        >>> result = ring.intersection(point.as_geometry())
+        >>> print(result.geom_type)
+        Point
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().intersection(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().intersection(other.as_geometry())
+        raise TypeError(f"other must be a geometry object, got {type(other)}")
+
 
 cdef class Line:
     cdef tg_line *line
@@ -2228,6 +2397,49 @@ cdef class Line:
             A Polygon (or LineString for collinear points) representing the convex hull
         """
         return self.as_geometry().convex_hull
+
+    def intersection(self, other) -> Geometry:
+        """
+        Return the geometric intersection of this linestring with another geometry.
+
+        The intersection is the set of points common to both geometries.
+        This method is compatible with Shapely's intersection.
+
+        Parameters:
+        -----------
+        other : Geometry, Point, Line, Ring, Poly, or other geometry
+            The other geometry to compute the intersection with
+
+        Returns:
+        --------
+        Geometry
+            A Geometry representing the intersection. May be empty if geometries
+            do not intersect.
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        TypeError
+            If other is not a geometry object
+
+        Examples:
+        ---------
+        >>> from togo import LineString, Polygon
+        >>> line = LineString([(0, 0), (2, 2)])
+        >>> poly = Polygon([(1, 0), (3, 0), (3, 2), (1, 2), (1, 0)])
+        >>> result = line.intersection(poly)
+        >>> print(result.geom_type)
+        LineString
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().intersection(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().intersection(other.as_geometry())
+        raise TypeError(f"other must be a geometry object, got {type(other)}")
 
 
 cdef class Poly:
@@ -2553,6 +2765,49 @@ cdef class Poly:
             A Polygon geometry representing the convex hull
         """
         return self.as_geometry().convex_hull
+
+    def intersection(self, other) -> Geometry:
+        """
+        Return the geometric intersection of this polygon with another geometry.
+
+        The intersection is the set of points common to both geometries.
+        This method is compatible with Shapely's intersection.
+
+        Parameters:
+        -----------
+        other : Geometry, Point, Line, Ring, Poly, or other geometry
+            The other geometry to compute the intersection with
+
+        Returns:
+        --------
+        Geometry
+            A Geometry representing the intersection. May be empty if geometries
+            do not intersect.
+
+        Raises:
+        -------
+        ValueError
+            If other is None or not a valid geometry
+        TypeError
+            If other is not a geometry object
+
+        Examples:
+        ---------
+        >>> from togo import Polygon
+        >>> poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+        >>> poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+        >>> result = poly1.intersection(poly2)
+        >>> print(result.geom_type)
+        Polygon
+        """
+        if other is None:
+            raise ValueError("other must be a Geometry object, not None")
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().intersection(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().intersection(other.as_geometry())
+        raise TypeError(f"other must be a geometry object, got {type(other)}")
 
 
 cdef class Segment:
@@ -3043,6 +3298,67 @@ def shortest_line(geom1, geom2):
 
     # Use the Geometry.shortest_line method
     return g1.shortest_line(g2)
+
+
+def intersection(geom1, geom2) -> Geometry:
+    """
+    Return the geometric intersection of two geometries.
+
+    This is a module-level function compatible with Shapely's intersection.
+    Returns the set of points common to both geometries.
+
+    Parameters:
+    -----------
+    geom1 : Geometry, Point, Line, Ring, Poly, or other geometry type
+        The first geometry
+    geom2 : Geometry, Point, Line, Ring, Poly, or other geometry type
+        The second geometry
+
+    Returns:
+    --------
+    Geometry
+        A Geometry representing the intersection. The result type depends
+        on the input geometries and their spatial relationship:
+        - Point-Point: Point (if they overlap) or empty
+        - Line-Line: Point, LineString, or MultiLineString
+        - Polygon-Polygon: Point, LineString, Polygon, or MultiPolygon
+        - Empty if geometries do not intersect
+
+    Raises:
+    -------
+    TypeError
+        If either geometry is None or not a valid geometry type
+    RuntimeError
+        If the intersection calculation fails
+
+    Examples:
+    ---------
+    >>> from togo import intersection, Polygon
+    >>> poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+    >>> poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+    >>> result = intersection(poly1, poly2)
+    >>> print(result.geom_type)
+    Polygon
+    >>> print(f"{result.area:.1f}")
+    1.0
+    """
+    # Convert to Geometry if needed
+    if hasattr(geom1, "as_geometry"):
+        g1 = geom1.as_geometry()
+    elif isinstance(geom1, Geometry):
+        g1 = geom1
+    else:
+        raise TypeError("geom1 must be a togo geometry type")
+
+    if hasattr(geom2, "as_geometry"):
+        g2 = geom2.as_geometry()
+    elif isinstance(geom2, Geometry):
+        g2 = geom2
+    else:
+        raise TypeError("geom2 must be a togo geometry type")
+
+    # Use the Geometry.intersection method
+    return g1.intersection(g2)
 
 
 def convex_hull(geom):
