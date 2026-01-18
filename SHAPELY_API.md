@@ -280,6 +280,47 @@ The `simplify()` method:
 - `preserve_topology=False`: Uses standard Douglas-Peucker for faster simplification but may produce invalid geometries
 - `tolerance`: Maximum distance from original coordinates. Larger tolerance = more simplification
 
+### Convex Hull
+
+All geometry types support the `convex_hull()` method for computing the smallest convex geometry that encloses all points:
+
+```python
+from togo import Point, LineString, Polygon, MultiPoint, convex_hull
+
+# Convex hull of a polygon - property access
+poly = Polygon([(0, 0), (2, 0), (2, 2), (1, 1), (0, 2), (0, 0)])
+hull = poly.convex_hull
+print(hull.geom_type)  # 'Polygon'
+
+# Convex hull of scattered points
+points = MultiPoint([(0, 0), (1, 1), (0, 2), (2, 2), (3, 1), (1, 0)])
+hull = points.convex_hull
+print(hull.geom_type)  # 'Polygon'
+
+# Module-level function (Shapely-compatible)
+line = LineString([(0, 0), (1, 2), (2, 0)])
+hull = convex_hull(line)
+print(hull.geom_type)  # 'Polygon'
+
+# Convex hull of a point returns a point
+point = Point(5, 5)
+hull = convex_hull(point)
+print(hull.geom_type)  # 'Point'
+
+# Via Geometry object
+geom = from_wkt("MULTIPOINT((0 0), (3 0), (3 3), (0 3))")
+hull = geom.convex_hull
+print(hull.area)  # 9.0
+```
+
+The `convex_hull` property:
+- Returns the smallest convex geometry containing all points
+- Equivalent to stretching a rubber band around the geometry
+- For points: returns a Point
+- For collinear points: returns a LineString
+- For 3+ non-collinear points: returns a Polygon
+- Useful for bounding analysis and spatial clustering
+
 ## Comparison with Shapely
 
 ### Similarities
@@ -478,6 +519,7 @@ The `transform` function works with:
 | `geom.area` | `geom.area` | ✅ Supported |
 | `geom.length` | `geom.length` | ✅ Supported |
 | `geom.centroid` | `geom.centroid` | ✅ Supported (via GEOS) |
+| `geom.convex_hull` | `geom.convex_hull()` | ✅ Supported (via GEOS) |
 | `geom.is_empty` | `geom.is_empty` | ✅ Supported |
 | `geom.coords` | `geom.coords` | ✅ Supported |
 | `geom.wkt` | `geom.wkt` | ✅ Supported |
@@ -496,6 +538,7 @@ The `transform` function works with:
 | `transform()` | `transform()` | ✅ Supported |
 | `nearest_points()` | `nearest_points()` | ✅ Supported (via GEOS) |
 | `shortest_line()` | `shortest_line()` | ✅ Supported (via GEOS, v2 API) |
+| `convex_hull()` | `convex_hull()` | ✅ Supported (via GEOS) |
 | `intersection()` | - | ❌ Not yet (use GEOS via tgx) |
 
 ## Conclusion
