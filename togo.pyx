@@ -1206,6 +1206,7 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
+    @property
     def convex_hull(self) -> Geometry:
         """
         Return the convex hull of the geometry.
@@ -1641,7 +1642,7 @@ cdef class Point:
         Geometry
             A Point geometry representing the convex hull
         """
-        return self.as_geometry().convex_hull()
+        return self.as_geometry().convex_hull
 
 
 cdef class Rect:
@@ -1969,7 +1970,7 @@ cdef class Ring:
         Geometry
             A Polygon geometry representing the convex hull
         """
-        return self.as_geometry().convex_hull()
+        return self.as_geometry().convex_hull
 
 
 cdef class Line:
@@ -2226,7 +2227,7 @@ cdef class Line:
         Geometry
             A Polygon (or LineString for collinear points) representing the convex hull
         """
-        return self.as_geometry().convex_hull()
+        return self.as_geometry().convex_hull
 
 
 cdef class Poly:
@@ -2551,7 +2552,7 @@ cdef class Poly:
         Geometry
             A Polygon geometry representing the convex hull
         """
-        return self.as_geometry().convex_hull()
+        return self.as_geometry().convex_hull
 
 
 cdef class Segment:
@@ -3084,8 +3085,8 @@ def convex_hull(geom):
     else:
         raise TypeError("geom must be a togo geometry type")
 
-    # Use the Geometry.convex_hull method
-    return g.convex_hull()
+    # Use the Geometry.convex_hull property
+    return g.convex_hull
 
 
 __all__ = [
