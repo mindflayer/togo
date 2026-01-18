@@ -862,3 +862,179 @@ class TestEdgeCases:
 
         with pytest.raises(ValueError):
             from_geojson('{"invalid": "geojson"}')
+
+
+class TestShapelyErrorHandling:
+    """Test that error handling matches Shapely behavior"""
+
+    def test_predicate_with_none_raises_typeerror(self):
+        """Spatial predicates should raise TypeError when given None"""
+        from togo import Point
+
+        p = Point(1, 2)
+        geom = p.as_geometry()
+
+        with pytest.raises(TypeError):
+            geom.contains(None)
+
+        with pytest.raises(TypeError):
+            geom.intersects(None)
+
+        with pytest.raises(TypeError):
+            geom.touches(None)
+
+        with pytest.raises(TypeError):
+            geom.within(None)
+
+        with pytest.raises(TypeError):
+            geom.disjoint(None)
+
+        with pytest.raises(TypeError):
+            geom.equals(None)
+
+        with pytest.raises(TypeError):
+            geom.covers(None)
+
+        with pytest.raises(TypeError):
+            geom.coveredby(None)
+
+    def test_predicate_with_invalid_type_raises_typeerror(self):
+        """Spatial predicates should raise TypeError when given invalid types"""
+        from togo import Point
+
+        p = Point(1, 2)
+        geom = p.as_geometry()
+
+        with pytest.raises(TypeError):
+            geom.contains("invalid")
+
+        with pytest.raises(TypeError):
+            geom.intersects(123)
+
+        with pytest.raises(TypeError):
+            geom.touches([1, 2, 3])
+
+        with pytest.raises(TypeError):
+            geom.within({"x": 1, "y": 2})
+
+    def test_x_property_only_on_point(self):
+        """Only Point should have .x property"""
+        from togo import Point, LineString, Polygon
+
+        # Point should have x
+        p = Point(1, 2)
+        assert p.x == 1
+
+        # LineString should not have x
+        line = LineString([(0, 0), (1, 1)])
+        with pytest.raises(AttributeError):
+            _ = line.x
+
+        # Polygon should not have x
+        poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+        with pytest.raises(AttributeError):
+            _ = poly.x
+
+    def test_y_property_only_on_point(self):
+        """Only Point should have .y property"""
+        from togo import Point, LineString, Polygon
+
+        # Point should have y
+        p = Point(1, 2)
+        assert p.y == 2
+
+        # LineString should not have y
+        line = LineString([(0, 0), (1, 1)])
+        with pytest.raises(AttributeError):
+            _ = line.y
+
+        # Polygon should not have y
+        poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+        with pytest.raises(AttributeError):
+            _ = poly.y
+
+    def test_coords_not_on_polygon(self):
+        """Polygon should not have .coords property (already tested but included here)"""
+        from togo import Polygon
+
+        poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+        with pytest.raises(AttributeError):
+            _ = poly.coords
+
+    def test_all_predicates_consistent(self):
+        """All predicates should behave consistently with None"""
+        from togo import Point
+
+        p = Point(1, 2)
+        geom = p.as_geometry()
+
+        predicates = [
+            "contains",
+            "intersects",
+            "touches",
+            "within",
+            "disjoint",
+            "equals",
+            "covers",
+            "coveredby",
+        ]
+
+        for pred_name in predicates:
+            pred = getattr(geom, pred_name)
+            with pytest.raises(TypeError):
+                pred(None)
+
+    def test_buffer_allows_negative_distance(self):
+        """Buffer should allow negative distances (creates empty or inset geometry)"""
+        from togo import Point, Polygon
+
+        # Negative buffer on a point should create an empty geometry
+        p = Point(1, 2)
+        result = p.buffer(-1)
+        # The result should be empty or a very small geometry
+        assert result is not None
+
+        # Negative buffer on a polygon should create an inset
+        poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+        result = poly.as_geometry().buffer(-1)
+        assert result is not None
+
+    def test_invalid_constructor_types(self):
+        """Constructors should raise appropriate errors for invalid inputs"""
+        from togo import Polygon
+
+        # Polygon with invalid exterior type should raise TypeError
+        with pytest.raises(TypeError):
+            Polygon("invalid")
+
+        # Polygon with None exterior should raise TypeError
+        with pytest.raises((TypeError, ValueError)):
+            Polygon(None)
+
+    def test_geometry_operations_with_none(self):
+        """Geometry operations should handle None appropriately"""
+        from togo import Point
+
+        p = Point(1, 2)
+
+        # intersection with None should return empty geometry (Shapely-compatible)
+        result = p.intersection(None)
+        assert result.is_empty
+
+    def test_nearest_points_with_none(self):
+        """nearest_points should raise ValueError with None"""
+        from togo import Point
+
+        p = Point(1, 2)
+
+        with pytest.raises(ValueError):
+            p.nearest_points(None)
+
+    def test_shortest_line_with_none(self):
+        """shortest_line should raise ValueError with None"""
+        from togo import Point
+
+        p = Point(1, 2)
+
+        with pytest.raises(ValueError):
+            p.shortest_line(None)

@@ -395,29 +395,45 @@ cdef class Geometry:
     def num_geometries(self) -> int:
         return tg_geom_num_geometries(self.geom)
 
-    def equals(self, other: Geometry) -> bool:
-        return tg_geom_equals(self.geom, other.geom) != 0
+    def equals(self, other) -> bool:
+        if other is None or not isinstance(other, Geometry):
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_equals(self.geom, (<Geometry>other).geom) != 0
 
-    def disjoint(self, other: Geometry) -> bool:
-        return tg_geom_disjoint(self.geom, other.geom) != 0
+    def disjoint(self, other) -> bool:
+        if other is None or not isinstance(other, Geometry):
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_disjoint(self.geom, (<Geometry>other).geom) != 0
 
-    def contains(self, other: Geometry) -> bool:
-        return tg_geom_contains(self.geom, other.geom) != 0
+    def contains(self, other) -> bool:
+        if other is None or not isinstance(other, Geometry):
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_contains(self.geom, (<Geometry>other).geom) != 0
 
-    def within(self, other: Geometry) -> bool:
-        return tg_geom_within(self.geom, other.geom) != 0
+    def within(self, other) -> bool:
+        if other is None or not isinstance(other, Geometry):
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_within(self.geom, (<Geometry>other).geom) != 0
 
-    def covers(self, other: Geometry) -> bool:
-        return tg_geom_covers(self.geom, other.geom) != 0
+    def covers(self, other) -> bool:
+        if other is None or not isinstance(other, Geometry):
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_covers(self.geom, (<Geometry>other).geom) != 0
 
-    def coveredby(self, other: Geometry) -> bool:
-        return tg_geom_coveredby(self.geom, other.geom) != 0
+    def coveredby(self, other) -> bool:
+        if other is None or not isinstance(other, Geometry):
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_coveredby(self.geom, (<Geometry>other).geom) != 0
 
-    def touches(self, other: Geometry) -> bool:
-        return tg_geom_touches(self.geom, other.geom) != 0
+    def touches(self, other) -> bool:
+        if other is None or not isinstance(other, Geometry):
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_touches(self.geom, (<Geometry>other).geom) != 0
 
-    def intersects(self, other: Geometry) -> bool:
-        return tg_geom_intersects(self.geom, other.geom) != 0
+    def intersects(self, other) -> bool:
+        if other is None or not isinstance(other, Geometry):
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_intersects(self.geom, (<Geometry>other).geom) != 0
 
     cdef str _to_string(
         self, size_t (*writer_func)(const tg_geom*, char*, size_t), str format_name
@@ -1430,7 +1446,7 @@ cdef class Geometry:
 
         return (x1, y1, x2, y2)
 
-    def nearest_points(self, other: Geometry) -> tuple:
+    def nearest_points(self, other) -> tuple:
         """
         Return a tuple of the nearest points between two geometries.
 
@@ -1460,7 +1476,7 @@ cdef class Geometry:
 
         # Use helper method to get coordinates
         cdef double x1, y1, x2, y2
-        x1, y1, x2, y2 = self._get_nearest_point_coords(other)
+        x1, y1, x2, y2 = self._get_nearest_point_coords(<Geometry>other)
 
         # Create Point objects efficiently using __new__ to avoid __init__ overhead
         cdef Point pt1 = Point.__new__(Point)
@@ -1473,7 +1489,7 @@ cdef class Geometry:
 
         return (pt1, pt2)
 
-    def shortest_line(self, other: Geometry):
+    def shortest_line(self, other):
         """
         Return the shortest LineString connecting two geometries.
 
@@ -1500,7 +1516,7 @@ cdef class Geometry:
 
         # Use helper method to get coordinates
         cdef double x1, y1, x2, y2
-        x1, y1, x2, y2 = self._get_nearest_point_coords(other)
+        x1, y1, x2, y2 = self._get_nearest_point_coords(<Geometry>other)
 
         # Create Line directly from coordinates using tg_line_new
         cdef tg_point *pts = <tg_point *>malloc(2 * sizeof(tg_point))
