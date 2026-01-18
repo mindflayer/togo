@@ -155,13 +155,13 @@ class TestPolygonConvexHull:
 
 
 class TestRingConvexHull:
-    """Test Ring.convex_hull() method"""
+    """Test Ring.convex_hull attribute"""
 
     def test_ring_convex_hull_square(self):
         """Test convex hull of a square ring (already convex)"""
         points = [(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]
         ring = Ring(points)
-        hull = ring.convex_hull()
+        hull = ring.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Square is already convex, so areas should match
@@ -172,7 +172,7 @@ class TestRingConvexHull:
         # L-shaped ring (concave)
         points = [(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2), (0, 0)]
         ring = Ring(points)
-        hull = ring.convex_hull()
+        hull = ring.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Convex hull should have greater or equal area
@@ -185,7 +185,7 @@ class TestRingConvexHull:
         """Test convex hull of a triangular ring"""
         points = [(0, 0), (3, 0), (1.5, 3), (0, 0)]
         ring = Ring(points)
-        hull = ring.convex_hull()
+        hull = ring.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Triangle is already convex, areas should match
@@ -208,7 +208,7 @@ class TestRingConvexHull:
             (0, 0),
         ]
         ring = Ring(points)
-        hull = ring.convex_hull()
+        hull = ring.convex_hull
         assert hull is not None
         assert hull.geom_type == "Polygon"
         # Hull should have greater area than the concave shape
