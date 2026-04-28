@@ -1,4 +1,5 @@
 import os
+import sys
 
 from setuptools import setup, Extension
 from Cython.Build import cythonize
@@ -38,6 +39,22 @@ plat_id = _platform_id()
 geos_include = os.path.join(repo_root, "vendor", "geos", plat_id, "include")
 geos_lib = os.path.join(repo_root, "vendor", "geos", plat_id, "lib")
 
+geos_c_a = os.path.join(geos_lib, "libgeos_c.a")
+geos_a = os.path.join(geos_lib, "libgeos.a")
+
+if sys.platform == "darwin":
+    whole_archive_flags = [
+        "-Wl,-force_load," + geos_c_a,
+        "-Wl,-force_load," + geos_a,
+    ]
+else:
+    whole_archive_flags = [
+        "-Wl,--whole-archive",
+        geos_c_a,
+        geos_a,
+        "-Wl,--no-whole-archive",
+    ]
+
 setup(
     ext_modules=cythonize(
         [
@@ -50,13 +67,7 @@ setup(
                 ],
                 # Link static archives as whole-archive to keep all needed RTTI/vtables
                 extra_compile_args=extra_compile_args,
-                extra_link_args=[
-                    "-Wl,--whole-archive",
-                    os.path.join(geos_lib, "libgeos_c.a"),
-                    os.path.join(geos_lib, "libgeos.a"),
-                    "-Wl,--no-whole-archive",
-                ]
-                + extra_link_args,
+                extra_link_args=whole_archive_flags + extra_link_args,
             )
         ]
     ),
