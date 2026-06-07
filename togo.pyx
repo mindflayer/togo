@@ -3378,9 +3378,22 @@ def from_geojson(geojson_string: str) -> Geometry:
 
 def from_wkb(wkb_bytes: bytes) -> Geometry:
     """Create a Geometry from WKB bytes (Shapely-compatible)"""
-    import binascii
-    hex_string = binascii.hexlify(wkb_bytes).decode("ascii")
-    return Geometry(hex_string, fmt="hex")
+    cdef tg_geom *g
+    cdef size_t wkb_len = len(wkb_bytes)
+    cdef const unsigned char *wkb_ptr
+
+    wkb_ptr = <const unsigned char *>wkb_bytes
+    g = tg_parse_wkb(wkb_ptr, <size_t>wkb_len)
+
+    if g == NULL:
+        raise ValueError("ParseError: invalid binary")
+
+    err = tg_geom_error(g)
+    if err != NULL:
+        tg_geom_free(g)
+        raise ValueError(err.decode("utf-8"))
+
+    return _geometry_from_ptr(g)
 
 
 def to_wkt(geom) -> str:
