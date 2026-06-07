@@ -831,6 +831,9 @@ class TestEdgeCases:
 
         multi = MultiLineString([])
         assert multi.geom_type == "MultiLineString"
+        multi_default = MultiLineString()
+        assert multi_default.geom_type == "MultiLineString"
+        assert "EMPTY" in repr(multi_default)
 
     def test_empty_multilinestring_no_args(self):
         from togo import MultiLineString
@@ -843,6 +846,9 @@ class TestEdgeCases:
 
         multi = MultiPolygon([])
         assert multi.geom_type == "MultiPolygon"
+        multi_default = MultiPolygon()
+        assert multi_default.geom_type == "MultiPolygon"
+        assert "EMPTY" in repr(multi_default)
 
     def test_empty_multipolygon_no_args(self):
         from togo import MultiPolygon
