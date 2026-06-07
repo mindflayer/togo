@@ -776,9 +776,10 @@ cdef class Geometry:
     @property
     def boundary(self):
         cdef int t = tg_geom_typeof(self.geom)
-        cdef int n, i
+        cdef int n, i, n_pts, k
         cdef const tg_poly *poly
         cdef const tg_ring *ext
+        cdef const tg_point *pts_ptr
         cdef list lines
         if t == 3:
             return Line(self.exterior.points(as_tuples=True))
@@ -788,7 +789,9 @@ cdef class Geometry:
             for i in range(n):
                 poly = tg_geom_poly_at(self.geom, i)
                 ext = tg_poly_exterior(poly)
-                lines.append(Ring.from_ptr(<tg_ring *>ext).points(as_tuples=True))
+                n_pts = tg_ring_num_points(ext)
+                pts_ptr = tg_ring_points(ext)
+                lines.append([(pts_ptr[k].x, pts_ptr[k].y) for k in range(n_pts)])
             return MultiLineString(lines)
         raise AttributeError(f"boundary not available for {self.type_string()}")
 
