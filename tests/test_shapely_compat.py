@@ -116,7 +116,7 @@ class TestLineStringProject:
         """project() accepts a Point wrapper object directly."""
         line = LineString([(0, 0), (10, 0)])
         pt = Point(4, 0)
-        dist = line.project(pt.as_geometry())
+        dist = line.project(pt)
         assert dist == pytest.approx(4.0, abs=1e-9)
 
     def test_project_returns_float(self):
