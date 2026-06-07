@@ -3381,9 +3381,14 @@ def from_wkb(wkb_bytes: bytes) -> Geometry:
     cdef tg_geom *g
     cdef size_t wkb_len = len(wkb_bytes)
     cdef const unsigned char *wkb_ptr
+    cdef const unsigned char[::1] wkb_view = wkb_bytes
+    cdef const char *err
 
-    wkb_ptr = <const unsigned char *>wkb_bytes
-    g = tg_parse_wkb(wkb_ptr, <size_t>wkb_len)
+    if wkb_len == 0:
+        raise ValueError("ParseError: empty WKB")
+
+    wkb_ptr = &wkb_view[0]
+    g = tg_parse_wkb(wkb_ptr, wkb_len)
 
     if g == NULL:
         raise ValueError("ParseError: invalid binary")
