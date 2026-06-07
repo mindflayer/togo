@@ -239,6 +239,9 @@ cdef extern from "geos_c.h":
     GEOSGeometry *GEOSIntersection_r(
         GEOSContextHandle_t handle, const GEOSGeometry *g1, const GEOSGeometry *g2
     )
+    double GEOSProject_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *line, const GEOSGeometry *point
+    )
 
 cdef extern from "tgx.h":
     GEOSGeometry *tg_geom_to_geos(GEOSContextHandle_t handle, const tg_geom *geom)
@@ -266,8 +269,13 @@ cdef Line _line_from_ptr(tg_line *ptr):
 cdef class Geometry:
     cdef tg_geom *geom
 
-    def __cinit__(self, data: str = None, fmt: str = "geojson"):
+    def __cinit__(self, data=None, fmt: str = "geojson"):
         if self.geom is not NULL:
+            return
+        if data is not None and not isinstance(data, str):
+            # Non-string data is handled by subclass __init__
+            if type(self) is Geometry:
+                raise TypeError("data must be a str for Geometry()")
             return
         if data is not None:
             if fmt == "geojson":
@@ -396,44 +404,100 @@ cdef class Geometry:
         return tg_geom_num_geometries(self.geom)
 
     def equals(self, other) -> bool:
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_g
+        if other is None:
             raise TypeError("other must be a Geometry instance")
-        return tg_geom_equals(self.geom, (<Geometry>other).geom) != 0
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_equals(self.geom, other_g.geom) != 0
 
     def disjoint(self, other) -> bool:
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_g
+        if other is None:
             raise TypeError("other must be a Geometry instance")
-        return tg_geom_disjoint(self.geom, (<Geometry>other).geom) != 0
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_disjoint(self.geom, other_g.geom) != 0
 
     def contains(self, other) -> bool:
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_g
+        if other is None:
             raise TypeError("other must be a Geometry instance")
-        return tg_geom_contains(self.geom, (<Geometry>other).geom) != 0
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_contains(self.geom, other_g.geom) != 0
 
     def within(self, other) -> bool:
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_g
+        if other is None:
             raise TypeError("other must be a Geometry instance")
-        return tg_geom_within(self.geom, (<Geometry>other).geom) != 0
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_within(self.geom, other_g.geom) != 0
 
     def covers(self, other) -> bool:
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_g
+        if other is None:
             raise TypeError("other must be a Geometry instance")
-        return tg_geom_covers(self.geom, (<Geometry>other).geom) != 0
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_covers(self.geom, other_g.geom) != 0
 
     def coveredby(self, other) -> bool:
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_g
+        if other is None:
             raise TypeError("other must be a Geometry instance")
-        return tg_geom_coveredby(self.geom, (<Geometry>other).geom) != 0
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_coveredby(self.geom, other_g.geom) != 0
 
     def touches(self, other) -> bool:
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_g
+        if other is None:
             raise TypeError("other must be a Geometry instance")
-        return tg_geom_touches(self.geom, (<Geometry>other).geom) != 0
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_touches(self.geom, other_g.geom) != 0
 
     def intersects(self, other) -> bool:
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_g
+        if other is None:
             raise TypeError("other must be a Geometry instance")
-        return tg_geom_intersects(self.geom, (<Geometry>other).geom) != 0
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            raise TypeError("other must be a Geometry instance")
+        return tg_geom_intersects(self.geom, other_g.geom) != 0
 
     cdef str _to_string(
         self, size_t (*writer_func)(const tg_geom*, char*, size_t), str format_name
@@ -567,6 +631,34 @@ cdef class Geometry:
     # internal accessor for C pointer
     cdef tg_geom *_get_c_geom(self) noexcept:
         return self.geom
+
+    def _init_from_geometry(self, Geometry other):
+        """Copy geom pointer from another Geometry (used by Python subclasses)."""
+        if self.geom is not NULL:
+            tg_geom_free(self.geom)
+            self.geom = NULL
+        if other.geom is not NULL:
+            self.geom = tg_geom_clone(other.geom)
+        else:
+            self.geom = NULL
+    def __eq__(self, other):
+        if other is None:
+            return False
+        cdef Geometry other_g
+        if isinstance(other, Geometry):
+            other_g = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_g = other.as_geometry()
+        else:
+            return NotImplemented
+        if self.geom is NULL or other_g.geom is NULL:
+            return self.geom is NULL and other_g.geom is NULL
+        return tg_geom_equals(self.geom, other_g.geom) != 0
+
+    def __hash__(self):
+        if self.geom is NULL:
+            return hash(None)
+        return hash(self.to_wkb())
 
     # Shapely-compatible properties
     @property
@@ -1325,14 +1417,19 @@ cdef class Geometry:
         cdef tg_geom *empty
         cdef Geometry other_geom
 
-        # Return empty geometry for None or non-Geometry objects (Shapely-compatible behavior)
-        if other is None or not isinstance(other, Geometry):
-            # Return empty geometry collection
+        # Coerce wrapper geometry objects
+        if other is None:
             empty = tg_geom_new_geometrycollection_empty()
             return _geometry_from_ptr(empty)
 
-        # Cast to Geometry for safe access to .geom attribute
-        other_geom = <Geometry>other
+        if isinstance(other, Geometry):
+            other_geom = <Geometry>other
+        elif hasattr(other, "as_geometry"):
+            other_geom = other.as_geometry()
+        else:
+            # Return empty geometry collection
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
 
         ctx = GEOS_init_r()
         if ctx == NULL:
@@ -1555,6 +1652,24 @@ cdef class Point:
 
     def __repr__(self):
         return self.__str__()
+
+    def __eq__(self, other):
+        if isinstance(other, Point):
+            return self.pt.x == (<Point>other).pt.x and self.pt.y == (<Point>other).pt.y
+        if isinstance(other, Geometry):
+            try:
+                return self.as_geometry().equals(other)
+            except Exception:
+                return False
+        if hasattr(other, "as_geometry"):
+            try:
+                return self.as_geometry().equals(other.as_geometry())
+            except Exception:
+                return False
+        return NotImplemented
+
+    def __hash__(self):
+        return hash((self.pt.x, self.pt.y))
 
     @property
     def x(self) -> float:
@@ -2467,6 +2582,58 @@ cdef class Line:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
+    def project(self, point) -> float:
+        """Return the distance along the line to the nearest point on the line
+        to the given point (Shapely-compatible).
+
+        Parameters:
+        -----------
+        point : Point, Geometry, or any geometry with as_geometry()
+            The point to project onto the line
+
+        Returns:
+        --------
+        float
+            The distance along the line from its start to the projected point
+        """
+        cdef GEOSContextHandle_t ctx
+        cdef GEOSGeometry *g_line
+        cdef GEOSGeometry *g_point
+        cdef double result
+        cdef Geometry line_geom
+        cdef Geometry point_geom
+
+        line_geom = self.as_geometry()
+        if isinstance(point, Geometry):
+            point_geom = <Geometry>point
+        elif hasattr(point, "as_geometry"):
+            point_geom = point.as_geometry()
+        else:
+            raise TypeError("point must be a Point or Geometry")
+
+        ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        g_line = tg_geom_to_geos(ctx, line_geom._get_c_geom())
+        if g_line == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert line to GEOS")
+
+        g_point = tg_geom_to_geos(ctx, point_geom._get_c_geom())
+        if g_point == NULL:
+            GEOSGeom_destroy_r(ctx, g_line)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert point to GEOS")
+
+        result = GEOSProject_r(ctx, g_line, g_point)
+        GEOSGeom_destroy_r(ctx, g_point)
+        GEOSGeom_destroy_r(ctx, g_line)
+        GEOS_finish_r(ctx)
+        if result < 0:
+            raise RuntimeError("GEOSProject failed")
+        return result
+
 
 cdef class Poly:
     cdef tg_poly *poly
@@ -2835,6 +3002,40 @@ cdef class Poly:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
+    def intersects(self, other) -> bool:
+        """Check if this polygon intersects another geometry (Shapely-compatible).
+
+        Parameters:
+        -----------
+        other : Geometry, Point, Line, Ring, Poly, or other geometry type
+            The other geometry to check intersection with
+
+        Returns:
+        --------
+        bool
+            True if the geometries intersect, False otherwise
+        """
+        if other is None:
+            raise TypeError("other must be a geometry")
+        if isinstance(other, Geometry):
+            return self.as_geometry().intersects(other)
+        if hasattr(other, "as_geometry"):
+            return self.as_geometry().intersects(other.as_geometry())
+        raise TypeError(f"other must be a geometry, got {type(other)}")
+
+    @property
+    def boundary(self) -> Line:
+        """Return the exterior boundary of the polygon as a LineString (Shapely-compatible).
+
+        Returns:
+        --------
+        Line
+            The exterior ring as a LineString
+        """
+        ext = self.exterior
+        pts = ext.points(as_tuples=True)
+        return Line(pts)
+
 
 cdef class Segment:
     cdef public tg_segment seg
@@ -2947,25 +3148,116 @@ class Polygon(Poly):
         # Call parent Poly.__init__
         super().__init__(exterior, holes)
 
+    @classmethod
+    def from_bounds(cls, minx, miny, maxx, maxy):
+        """Create a Polygon from bounding box coordinates (Shapely-compatible).
+
+        Parameters:
+        -----------
+        minx, miny, maxx, maxy : float
+            The bounding box coordinates
+
+        Returns:
+        --------
+        Polygon
+            A rectangular Polygon
+        """
+        coords = [
+            (minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy), (minx, miny)
+        ]
+        return cls(coords)
+
+
+class MultiPolygon(Geometry):
+    """Shapely-compatible MultiPolygon class (supports isinstance checks).
+
+    Create a MultiPolygon from a list of Poly/Polygon objects or coordinate sequences.
+    """
+
+    def __new__(cls, polys=None):
+        return Geometry.__new__(cls)
+
+    def __init__(self, polys=None):
+        if polys is None:
+            tmp = Geometry.from_multipolygon([])
+        else:
+            # Convert Polygon objects / coordinate sequences to Poly for from_multipolygon
+            converted = []
+            for p in polys:
+                if isinstance(p, Poly):
+                    converted.append(p)
+                else:
+                    # Accept either (shell, holes) or a shell coordinate sequence
+                    if len(p) > 0 and isinstance(p[0], (tuple, list)) and len(p[0]) == 2:
+                        converted.append(Polygon(p))
+                    else:
+                        converted.append(Polygon(p[0], p[1] if len(p) > 1 else None))
+            tmp = Geometry.from_multipolygon(converted)
+        self._init_from_geometry(tmp)
+
+    def __repr__(self):
+        return f"MultiPolygon({self.to_wkt()})"
+
+
+class MultiLineString(Geometry):
+    """Shapely-compatible MultiLineString class (supports isinstance checks).
+
+    Create a MultiLineString from a list of Line/LineString objects or coordinate sequences.
+    """
+
+    def __new__(cls, lines=None):
+        return Geometry.__new__(cls)
+
+    def __init__(self, lines=None):
+        if lines is None:
+            tmp = Geometry.from_multilinestring([])
+        else:
+            tmp = Geometry.from_multilinestring(lines)
+        self._init_from_geometry(tmp)
+
+    def __repr__(self):
+        return f"MultiLineString({self.to_wkt()})"
+
 
 def MultiPoint(points) -> Geometry:
     """Create a MultiPoint geometry from a list of points"""
     return Geometry.from_multipoint(points)
 
 
-def MultiLineString(lines) -> Geometry:
-    """Create a MultiLineString geometry from a list of lines"""
-    return Geometry.from_multilinestring(lines)
-
-
-def MultiPolygon(polys) -> Geometry:
-    """Create a MultiPolygon geometry from a list of polygons"""
-    return Geometry.from_multipolygon(polys)
-
-
 def GeometryCollection(geoms) -> Geometry:
     """Create a GeometryCollection from a list of geometries"""
     return Geometry.from_geometrycollection(geoms)
+
+
+def unary_union(geoms) -> Geometry:
+    """Return the unary union of a sequence of geometries using GEOS (Shapely-compatible).
+
+    Parameters:
+    -----------
+    geoms : sequence of Geometry, Point, Line, Ring, Poly, Polygon, or other geometry types
+        The geometries to union together
+
+    Returns:
+    --------
+    Geometry
+        The union of all input geometries
+
+    Raises:
+    -------
+    ValueError
+        If geoms is empty
+    RuntimeError
+        If the union operation fails
+    """
+    converted = []
+    for g in geoms:
+        if isinstance(g, Geometry):
+            converted.append(g)
+        elif hasattr(g, "as_geometry"):
+            converted.append(g.as_geometry())
+        else:
+            raise TypeError(f"unary_union expects geometry objects, got {type(g)}")
+    return Geometry.unary_union(converted)
 
 
 # Shapely-compatible module-level functions
@@ -3098,6 +3390,7 @@ cdef Geometry _transform_recursive(object func, Geometry geom):
     cdef tg_point pt
     cdef const tg_point *pts
     cdef const tg_point *line_pts
+    cdef Poly transformed_poly
 
     # Point (type 1)
     if geom_type == 1:
@@ -3139,7 +3432,7 @@ cdef Geometry _transform_recursive(object func, Geometry geom):
             transformed_holes.append(Ring(transformed_hole_coords))
 
         transformed_poly = Poly(transformed_ext, transformed_holes if transformed_holes else None)
-        return _geometry_from_ptr(tg_geom_new_polygon(transformed_poly._get_c_poly()))
+        return _geometry_from_ptr(tg_geom_new_polygon((<Poly>transformed_poly)._get_c_poly()))
 
     # MultiPoint (type 4)
     elif geom_type == 4:
@@ -3449,6 +3742,7 @@ __all__ = [
     "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection",
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
-    "nearest_points", "shortest_line", "convex_hull", "transform",
+    "unary_union", "nearest_points", "shortest_line", "convex_hull",
+    "intersection", "transform",
     "set_polygon_indexing_mode", "TGIndex"
 ]

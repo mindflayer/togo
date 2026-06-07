@@ -22,12 +22,14 @@ pip install togo
 - Fast and efficient geometric operations
 - Support for standard geometry types: Point, Line, Ring, Polygon, and their multi-variants
 - Flexible API supporting both TG and Shapely conventions
-- Geometric predicates: contains, intersects, covers, touches, etc.
+- Geometric predicates: contains, intersects, covers, touches, etc. — accept any wrapper type directly (no manual `.as_geometry()` conversion needed)
 - Format conversion between WKT, GeoJSON, WKB, and HEX
 - Spatial indexing for accelerated queries
 - Memory-efficient C implementation with Python-friendly interface
 - Advanced operations via libgeos integration (buffer, unary union, simplify, centroid, convex_hull, etc.)
-- Distance and proximity operations (nearest_points, shortest_line)
+- Distance and proximity operations (nearest_points, shortest_line, project)
+- `MultiPolygon` and `MultiLineString` are real Python classes — `isinstance()` checks work correctly
+- Geometry equality via `==` operator consistent with Shapely semantics
 
 ## Basic Usage
 
@@ -61,6 +63,7 @@ from togo import Point, Polygon
 point = Point(1.0, 2.0)
 print(point.geom_type)     # 'Point'
 print(point.bounds)        # (1.0, 2.0, 1.0, 2.0)
+print(point.coords[0])     # (1.0, 2.0)  — indexable coordinate sequence
 
 poly = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
 print(poly.area)           # 16.0
@@ -70,9 +73,20 @@ print(poly.length)         # 16.0
 print(point.to_wkt())      # 'POINT (1 2)'
 print(point.to_geojson())  # '{"type":"Point","coordinates":[1.0,2.0]}'
 
-# Spatial predicates
+# Spatial predicates — wrapper objects are accepted directly, no .as_geometry() needed
 if poly.contains(point):
     print("Polygon contains point!")
+
+if poly.intersects(Polygon([(3, 3), (5, 3), (5, 5), (3, 5), (3, 3)])):
+    print("Polygons intersect!")
+
+# Polygon.boundary — exterior ring as a LineString
+boundary = poly.boundary
+print(boundary.length)     # perimeter of polygon
+
+# Polygon.from_bounds — create a rectangle from a bounding box
+bbox = Polygon.from_bounds(0, 0, 10, 5)
+print(bbox.area)           # 50.0
 
 # Centroid (Shapely-compatible)
 centroid = poly.centroid  # Returns a Point geometry
@@ -230,24 +244,46 @@ print(f"Contains point (1.5,1.5): {geom.contains(Point(1.5,1.5).as_geometry())}"
 
 ### MultiGeometries
 
-Creating collections of geometries:
+`MultiPolygon` and `MultiLineString` are real Python classes, so `isinstance()` checks work correctly:
 
 ```python
-from togo import Geometry, Point, Line, Poly, Ring
+from togo import MultiPoint, MultiLineString, MultiPolygon, Poly, Ring, Geometry
 
-# Create a MultiPoint
-multi_point = Geometry.from_multipoint([(0,0), (1,1), Point(2,2)])
-
-# Create a MultiLineString
-multi_line = Geometry.from_multilinestring([
-    [(0,0), (1,1)],
-    Line([(2,2), (3,3)])
-])
-
-# Create a MultiPolygon
+# MultiPolygon — real class, supports isinstance
 poly1 = Poly(Ring([(0,0), (1,0), (1,1), (0,1), (0,0)]))
 poly2 = Poly(Ring([(2,2), (3,2), (3,3), (2,3), (2,2)]))
-multi_poly = Geometry.from_multipolygon([poly1, poly2])
+multi_poly = MultiPolygon([poly1, poly2])
+print(isinstance(multi_poly, MultiPolygon))  # True
+print(isinstance(multi_poly, Geometry))      # True
+
+# MultiLineString — real class, supports isinstance
+multi_line = MultiLineString([[(0,0), (1,1)], [(2,2), (3,3)]])
+print(isinstance(multi_line, MultiLineString))  # True
+
+# MultiPoint — factory (returns Geometry)
+multi_point = MultiPoint([(0,0), (1,1), (2,2)])
+
+# Low-level factory methods still available on Geometry
+multi_poly2 = Geometry.from_multipolygon([poly1, poly2])
+```
+
+### LineString.project()
+
+`project()` returns the distance along a line to the nearest projected point — equivalent to Shapely's `project()`:
+
+```python
+from togo import LineString, Point
+
+line = LineString([(0, 0), (10, 0)])
+
+# Distance to the start: 0.0
+print(line.project(Point(0, 0).as_geometry()))   # 0.0
+
+# Distance to the midpoint: 5.0
+print(line.project(Point(5, 0).as_geometry()))   # 5.0
+
+# Point above the midpoint still projects to 5.0
+print(line.project(Point(5, 3).as_geometry()))   # 5.0
 ```
 
 ## Polygon Indexing
@@ -267,20 +303,27 @@ Togo integrates with the [tgx](https://github.com/tidwall/tgx) extension and [li
 
 ### Example: Unary Union (GEOS integration)
 
-The `unary_union` method demonstrates this integration. It combines multiple geometries into a single geometry using GEOS's topological union, with all conversions handled automatically:
+`unary_union` is a module-level function (Shapely-compatible) that merges multiple geometries into one using GEOS topological union. It accepts any wrapper type directly — no `.as_geometry()` conversion required:
 
 ```python
-from togo import Geometry, Point, Poly, Ring
+from togo import Polygon, unary_union
 
-# Create several polygons
-poly1 = Poly(Ring([(0,0), (2,0), (2,2), (0,2), (0,0)]))
-poly2 = Poly(Ring([(1,1), (3,1), (3,3), (1,3), (1,1)]))
+# Create several polygons using the Shapely-compatible constructor
+poly1 = Polygon([(0,0), (2,0), (2,2), (0,2), (0,0)])
+poly2 = Polygon([(1,1), (3,1), (3,3), (1,3), (1,1)])
 
-# Perform unary union (requires tgx and libgeos)
-union = Geometry.unary_union([poly1, poly2])
+# Module-level unary_union — accepts Polygon wrapper objects directly
+union = unary_union([poly1, poly2])
 
-# The result is a single geometry representing the union of the input polygons
+# The result is a single geometry representing the union
+print(union.geom_type)   # 'Polygon'
 print(union.to_wkt())
+
+# Works with mixed types (Poly, Polygon, Geometry, etc.)
+from togo import Poly, Ring, Geometry
+poly3 = Poly(Ring([(5,0), (7,0), (7,2), (5,2), (5,0)]))
+union2 = unary_union([poly1, poly3])
+print(union2.geom_type)  # 'MultiPolygon' (non-overlapping)
 ```
 
 This operation uses `tgx` to convert `TG` geometries to `GEOS`, applies the union in `libgeos`, and converts the result back to `TG` format for further use in `ToGo`.
