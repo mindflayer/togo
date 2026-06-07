@@ -3181,13 +3181,17 @@ class MultiPolygon(Geometry):
         if polys is None:
             tmp = Geometry.from_multipolygon([])
         else:
-            # Convert Polygon objects to Poly for from_multipolygon
+            # Convert Polygon objects / coordinate sequences to Poly for from_multipolygon
             converted = []
             for p in polys:
                 if isinstance(p, Poly):
                     converted.append(p)
                 else:
-                    converted.append(Polygon(p[0], p[1] if len(p) > 1 else None))
+                    # Accept either (shell, holes) or a shell coordinate sequence
+                    if len(p) > 0 and isinstance(p[0], (tuple, list)) and len(p[0]) == 2:
+                        converted.append(Polygon(p))
+                    else:
+                        converted.append(Polygon(p[0], p[1] if len(p) > 1 else None))
             tmp = Geometry.from_multipolygon(converted)
         self._init_from_geometry(tmp)
 
