@@ -3013,10 +3013,10 @@ cdef class Poly:
             True if the geometries intersect, False otherwise
         """
         if other is None:
-            raise ValueError("other must not be None")
+            raise TypeError("other must be a geometry")
         if isinstance(other, Geometry):
             return self.as_geometry().intersects(other)
-        elif hasattr(other, "as_geometry"):
+        if hasattr(other, "as_geometry"):
             return self.as_geometry().intersects(other.as_geometry())
         raise TypeError(f"other must be a geometry, got {type(other)}")
 
