@@ -126,6 +126,34 @@ class TestLineStringProject:
         dist = line.project(pt.as_geometry())
         assert isinstance(dist, float)
 
+    def test_project_normalized_midpoint(self):
+        """project(normalized=True) returns ~0.5 for the midpoint."""
+        line = LineString([(0, 0), (10, 0)])
+        pt = Point(5, 0)
+        dist = line.project(pt.as_geometry(), normalized=True)
+        assert dist == pytest.approx(0.5, abs=1e-9)
+
+    def test_project_normalized_end_point(self):
+        """project(normalized=True) returns ~1.0 for the end point."""
+        line = LineString([(0, 0), (10, 0)])
+        pt = Point(10, 0)
+        dist = line.project(pt.as_geometry(), normalized=True)
+        assert dist == pytest.approx(1.0, abs=1e-9)
+
+    def test_project_normalized_start_point(self):
+        """project(normalized=True) returns ~0.0 for the start point."""
+        line = LineString([(0, 0), (10, 0)])
+        pt = Point(0, 0)
+        dist = line.project(pt.as_geometry(), normalized=True)
+        assert dist == pytest.approx(0.0, abs=1e-9)
+
+    def test_project_normalized_zero_length_line(self):
+        """project(normalized=True) returns 0.0 for a zero-length line."""
+        line = LineString([(5, 5), (5, 5)])
+        pt = Point(5, 5)
+        dist = line.project(pt.as_geometry(), normalized=True)
+        assert dist == pytest.approx(0.0, abs=1e-9)
+
 
 # ---------------------------------------------------------------------------
 # 3. Polygon.intersects(other)
