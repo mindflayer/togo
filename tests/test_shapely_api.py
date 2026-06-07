@@ -832,10 +832,22 @@ class TestEdgeCases:
         multi = MultiLineString([])
         assert multi.geom_type == "MultiLineString"
 
+    def test_empty_multilinestring_no_args(self):
+        from togo import MultiLineString
+
+        multi = MultiLineString()
+        assert multi.geom_type == "MultiLineString"
+
     def test_empty_multipolygon(self):
         from togo import MultiPolygon
 
         multi = MultiPolygon([])
+        assert multi.geom_type == "MultiPolygon"
+
+    def test_empty_multipolygon_no_args(self):
+        from togo import MultiPolygon
+
+        multi = MultiPolygon()
         assert multi.geom_type == "MultiPolygon"
 
     def test_empty_geometrycollection(self):

@@ -3175,7 +3175,9 @@ class MultiPolygon(Geometry):
         return Geometry.__new__(cls)
 
     def __init__(self, polys=None):
-        if polys is not None:
+        if polys is None:
+            tmp = Geometry.from_multipolygon([])
+        else:
             # Convert Polygon objects to Poly for from_multipolygon
             converted = []
             for p in polys:
@@ -3184,7 +3186,7 @@ class MultiPolygon(Geometry):
                 else:
                     converted.append(Polygon(p[0], p[1] if len(p) > 1 else None))
             tmp = Geometry.from_multipolygon(converted)
-            self._init_from_geometry(tmp)
+        self._init_from_geometry(tmp)
 
     def __repr__(self):
         return f"MultiPolygon({self.to_wkt()})"
@@ -3200,9 +3202,11 @@ class MultiLineString(Geometry):
         return Geometry.__new__(cls)
 
     def __init__(self, lines=None):
-        if lines is not None:
+        if lines is None:
+            tmp = Geometry.from_multilinestring([])
+        else:
             tmp = Geometry.from_multilinestring(lines)
-            self._init_from_geometry(tmp)
+        self._init_from_geometry(tmp)
 
     def __repr__(self):
         return f"MultiLineString({self.to_wkt()})"
