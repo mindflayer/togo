@@ -278,7 +278,6 @@ cdef class Geometry:
                 raise TypeError("data must be a str for Geometry()")
             return
         if data is not None:
-        if data is not None:
             if fmt == "geojson":
                 self.geom = tg_parse_geojson(data.encode("utf-8"))
             elif fmt == "wkt":
@@ -655,6 +654,8 @@ cdef class Geometry:
         return tg_geom_equals(self.geom, other_g.geom) != 0
 
     def __hash__(self):
+        if self.geom is NULL:
+            return hash(None)
         return hash(self.to_wkb())
 
     # Shapely-compatible properties

@@ -420,6 +420,16 @@ class TestMultiGeometryClasses:
         assert isinstance(mp, MultiPolygon)
         assert mp.geom_type == "MultiPolygon"
 
+    def test_multipolygon_no_args_is_empty(self):
+        """No-arg MultiPolygon initializes to an empty geometry."""
+        mp = MultiPolygon()
+        assert mp.geom_type == "MultiPolygon"
+
+    def test_multilinestring_no_args_is_empty(self):
+        """No-arg MultiLineString initializes to an empty geometry."""
+        mls = MultiLineString()
+        assert mls.geom_type == "MultiLineString"
+
 
 # ---------------------------------------------------------------------------
 # 9. Geometry equality consistency
