@@ -16,6 +16,8 @@ import os
 import sys
 import json
 import time
+import argparse
+import statistics
 
 # Ensure repo root and tests are importable
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -126,23 +128,110 @@ def time_op(fn, iters=1000, warmup=200):
     return t1 - t0
 
 
-def bench_case(name, togo_fn, shapely_fn, iters=1000):
-    # Run both and compute ops/sec
-    t_togo = time_op(togo_fn, iters=iters)
-    t_shp = time_op(shapely_fn, iters=iters)
-    ops_togo = iters / t_togo if t_togo > 0 else float("inf")
-    ops_shp = iters / t_shp if t_shp > 0 else float("inf")
+DEFAULT_REPEATS = 5
+DEFAULT_WARMUP = 200
+BENCH_RESULTS = []
+
+
+def _calc_stats(times, iters):
+    ops = [iters / t if t > 0 else float("inf") for t in times]
+    med_time = statistics.median(times)
+    med_ops = iters / med_time if med_time > 0 else float("inf")
+    min_time = min(times)
+    max_time = max(times)
+    mean_time = statistics.mean(times)
+    stdev_time = statistics.stdev(times) if len(times) > 1 else 0.0
+    cv = (stdev_time / mean_time * 100.0) if mean_time > 0 else 0.0
+    return {
+        "ops": ops,
+        "med_time": med_time,
+        "med_ops": med_ops,
+        "min_time": min_time,
+        "max_time": max_time,
+        "mean_time": mean_time,
+        "stdev_time": stdev_time,
+        "cv": cv,
+    }
+
+
+def bench_case(name, togo_fn, shapely_fn, iters=1000, repeats=None, warmup=None):
+    if repeats is None:
+        repeats = DEFAULT_REPEATS
+    if warmup is None:
+        warmup = DEFAULT_WARMUP
+
+    togo_times = [time_op(togo_fn, iters=iters, warmup=warmup) for _ in range(repeats)]
+    shp_times = [
+        time_op(shapely_fn, iters=iters, warmup=warmup) for _ in range(repeats)
+    ]
+    togo_stats = _calc_stats(togo_times, iters)
+    shp_stats = _calc_stats(shp_times, iters)
+
+    ops_togo = togo_stats["med_ops"]
+    ops_shp = shp_stats["med_ops"]
+    if ops_togo > ops_shp:
+        winner = "togo"
+        speedup = ops_togo / ops_shp if ops_shp > 0 else float("inf")
+    elif ops_shp > ops_togo:
+        winner = "shapely"
+        speedup = ops_shp / ops_togo if ops_togo > 0 else float("inf")
+    else:
+        winner = "tie"
+        speedup = 1.0
+
+    BENCH_RESULTS.append(
+        {
+            "name": name,
+            "winner": winner,
+            "speedup": speedup,
+            "togo_ops": ops_togo,
+            "shapely_ops": ops_shp,
+        }
+    )
+
     print(f"- {name}:")
-    print(f"  togo:    {ops_togo:12.1f} ops/s   ({t_togo * 1000:.2f} ms for {iters})")
-    print(f"  shapely: {ops_shp:12.1f} ops/s   ({t_shp * 1000:.2f} ms for {iters})")
+    print(
+        f"  togo:    {ops_togo:12.1f} ops/s   "
+        f"(median {togo_stats['med_time'] * 1000:.2f} ms, "
+        f"range {togo_stats['min_time'] * 1000:.2f}-{togo_stats['max_time'] * 1000:.2f} ms, "
+        f"cv {togo_stats['cv']:.2f}%, n={repeats}, iters={iters})"
+    )
+    print(
+        f"  shapely: {ops_shp:12.1f} ops/s   "
+        f"(median {shp_stats['med_time'] * 1000:.2f} ms, "
+        f"range {shp_stats['min_time'] * 1000:.2f}-{shp_stats['max_time'] * 1000:.2f} ms, "
+        f"cv {shp_stats['cv']:.2f}%, n={repeats}, iters={iters})"
+    )
+    print(f"  winner:  {winner} ({speedup:.2f}x)")
 
 
 def main():
+    global DEFAULT_REPEATS, DEFAULT_WARMUP
+
+    parser = argparse.ArgumentParser(description="Benchmark togo vs shapely")
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=DEFAULT_REPEATS,
+        help="Number of repeated timed runs per benchmark case",
+    )
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=DEFAULT_WARMUP,
+        help="Warmup iterations before each timed run",
+    )
+    args = parser.parse_args()
+
+    DEFAULT_REPEATS = max(1, args.repeats)
+    DEFAULT_WARMUP = max(0, args.warmup)
+
     print("Benchmark: togo vs Shapely")
     print(f"Python: {sys.version.split()[0]}")
     print(
         f"Shapely: {getattr(shapely, '__version__', 'unknown')} (2.x={HAVE_SHAPELY2})"
     )
+    print(f"Runs per case: {DEFAULT_REPEATS}, warmup iters per run: {DEFAULT_WARMUP}")
 
     # Pre-parse big polygons for predicate tests
     g_togo_a = from_geojson(TOGO_JSON)
@@ -673,6 +762,13 @@ def main():
         iters=200,
     )
 
+    togo_wins = sum(1 for r in BENCH_RESULTS if r["winner"] == "togo")
+    shp_wins = sum(1 for r in BENCH_RESULTS if r["winner"] == "shapely")
+    ties = sum(1 for r in BENCH_RESULTS if r["winner"] == "tie")
+    print("\nSummary:")
+    print(f"  togo wins: {togo_wins}")
+    print(f"  shapely wins: {shp_wins}")
+    print(f"  ties: {ties}")
     print("\nNote: Results are rough microbenchmarks. Real-world performance can vary.")
 
 

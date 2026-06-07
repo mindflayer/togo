@@ -266,6 +266,61 @@ cdef Line _line_from_ptr(tg_line *ptr):
     return line_obj
 
 
+cdef tuple _coerce_xy(object value, str arg_name):
+    cdef double x
+    cdef double y
+    if isinstance(value, Point):
+        return ((<Point>value).pt.x, (<Point>value).pt.y)
+    if hasattr(value, "x") and hasattr(value, "y"):
+        try:
+            x = float(value.x)
+            y = float(value.y)
+            return (x, y)
+        except Exception:
+            pass
+    try:
+        x = float(value[0])
+        y = float(value[1])
+        return (x, y)
+    except Exception:
+        raise TypeError(f"{arg_name} must contain point-like entries")
+
+
+cdef Geometry _coerce_geometry_or_raise(object obj, str arg_name, bint allow_point_tuple=False):
+    cdef Geometry g
+    cdef object maybe_geom
+    cdef object wkb_obj
+    cdef bytes wkb_bytes
+    cdef double x
+    cdef double y
+    if obj is None:
+        raise TypeError(f"{arg_name} must be a Geometry instance")
+    if isinstance(obj, Geometry):
+        return <Geometry>obj
+    if hasattr(obj, "as_geometry"):
+        maybe_geom = obj.as_geometry()
+        if isinstance(maybe_geom, Geometry):
+            return <Geometry>maybe_geom
+    # Tolerate mixed stacks with Shapely-like objects via WKB round-trip.
+    if hasattr(obj, "wkb"):
+        try:
+            wkb_obj = obj.wkb
+            wkb_bytes = bytes(wkb_obj)
+            if len(wkb_bytes) > 0:
+                g = from_wkb(wkb_bytes)
+                return g
+        except Exception:
+            pass
+    if allow_point_tuple:
+        try:
+            x = float(obj[0])
+            y = float(obj[1])
+            return Point(x, y).as_geometry()
+        except Exception:
+            pass
+    raise TypeError(f"{arg_name} must be a Geometry instance")
+
+
 cdef class Geometry:
     cdef tg_geom *geom
 
@@ -404,99 +459,35 @@ cdef class Geometry:
         return tg_geom_num_geometries(self.geom)
 
     def equals(self, other) -> bool:
-        cdef Geometry other_g
-        if other is None:
-            raise TypeError("other must be a Geometry instance")
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
-            raise TypeError("other must be a Geometry instance")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
         return tg_geom_equals(self.geom, other_g.geom) != 0
 
     def disjoint(self, other) -> bool:
-        cdef Geometry other_g
-        if other is None:
-            raise TypeError("other must be a Geometry instance")
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
-            raise TypeError("other must be a Geometry instance")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
         return tg_geom_disjoint(self.geom, other_g.geom) != 0
 
     def contains(self, other) -> bool:
-        cdef Geometry other_g
-        if other is None:
-            raise TypeError("other must be a Geometry instance")
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
-            raise TypeError("other must be a Geometry instance")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
         return tg_geom_contains(self.geom, other_g.geom) != 0
 
     def within(self, other) -> bool:
-        cdef Geometry other_g
-        if other is None:
-            raise TypeError("other must be a Geometry instance")
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
-            raise TypeError("other must be a Geometry instance")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
         return tg_geom_within(self.geom, other_g.geom) != 0
 
     def covers(self, other) -> bool:
-        cdef Geometry other_g
-        if other is None:
-            raise TypeError("other must be a Geometry instance")
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
-            raise TypeError("other must be a Geometry instance")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
         return tg_geom_covers(self.geom, other_g.geom) != 0
 
     def coveredby(self, other) -> bool:
-        cdef Geometry other_g
-        if other is None:
-            raise TypeError("other must be a Geometry instance")
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
-            raise TypeError("other must be a Geometry instance")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
         return tg_geom_coveredby(self.geom, other_g.geom) != 0
 
     def touches(self, other) -> bool:
-        cdef Geometry other_g
-        if other is None:
-            raise TypeError("other must be a Geometry instance")
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
-            raise TypeError("other must be a Geometry instance")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
         return tg_geom_touches(self.geom, other_g.geom) != 0
 
     def intersects(self, other) -> bool:
-        cdef Geometry other_g
-        if other is None:
-            raise TypeError("other must be a Geometry instance")
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
-            raise TypeError("other must be a Geometry instance")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
         return tg_geom_intersects(self.geom, other_g.geom) != 0
 
     cdef str _to_string(
@@ -641,15 +632,14 @@ cdef class Geometry:
             self.geom = tg_geom_clone(other.geom)
         else:
             self.geom = NULL
+
     def __eq__(self, other):
         if other is None:
             return False
         cdef Geometry other_g
-        if isinstance(other, Geometry):
-            other_g = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_g = other.as_geometry()
-        else:
+        try:
+            other_g = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
             return NotImplemented
         if self.geom is NULL or other_g.geom is NULL:
             return self.geom is NULL and other_g.geom is NULL
@@ -744,6 +734,45 @@ cdef class Geometry:
             raise AttributeError(f"coords not available for {self.type_string()}")
 
     @property
+    def exterior(self) -> Ring:
+        cdef const tg_poly *poly
+        cdef const tg_ring *ext
+        if tg_geom_typeof(self.geom) != 3:
+            raise AttributeError(f"{self.type_string()} has no exterior")
+        poly = tg_geom_poly(self.geom)
+        ext = tg_poly_exterior(poly)
+        return Ring.from_ptr(<tg_ring *>ext)
+
+    @property
+    def interiors(self) -> list:
+        cdef const tg_poly *poly
+        cdef int n, i
+        if tg_geom_typeof(self.geom) != 3:
+            raise AttributeError(f"{self.type_string()} has no interiors")
+        poly = tg_geom_poly(self.geom)
+        n = tg_poly_num_holes(poly)
+        return [Ring.from_ptr(<tg_ring *>tg_poly_hole_at(poly, i)) for i in range(n)]
+
+    @property
+    def boundary(self):
+        cdef int t = tg_geom_typeof(self.geom)
+        cdef int n, i
+        cdef const tg_poly *poly
+        cdef const tg_ring *ext
+        cdef list lines
+        if t == 3:
+            return Line(self.exterior.points(as_tuples=True))
+        if t == 6:
+            n = tg_geom_num_polys(self.geom)
+            lines = []
+            for i in range(n):
+                poly = tg_geom_poly_at(self.geom, i)
+                ext = tg_poly_exterior(poly)
+                lines.append(Ring.from_ptr(<tg_ring *>ext).points(as_tuples=True))
+            return MultiLineString(lines)
+        raise AttributeError(f"boundary not available for {self.type_string()}")
+
+    @property
     def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
         import json
@@ -756,6 +785,7 @@ cdef class Geometry:
         """
         Create a MultiPoint geometry from an iterable of Point or (x, y) tuples.
         """
+        points = list(points)
         cdef int n = len(points)
         cdef tg_geom *gptr
         if n == 0:
@@ -786,6 +816,7 @@ cdef class Geometry:
         """
         Create a MultiLineString from an iterable of Line or sequences of (x,y).
         """
+        lines = list(lines)
         cdef int n = len(lines)
         cdef tg_geom *gptr
         if n == 0:
@@ -816,6 +847,7 @@ cdef class Geometry:
     @staticmethod
     def from_multipolygon(polys) -> Geometry:
         """Create a MultiPolygon from an iterable of Poly objects."""
+        polys = list(polys)
         cdef int n = len(polys)
         cdef tg_geom *gptr
         if n == 0:
@@ -846,6 +878,7 @@ cdef class Geometry:
         Ring, or Poly. For Point or (x,y) input, temporary tg_geom objects are
         created and freed after cloning.
         """
+        geoms = list(geoms)
         cdef int n = len(geoms)
         cdef tg_geom *gptr
         if n == 0:
@@ -997,6 +1030,7 @@ cdef class Geometry:
     @staticmethod
     def unary_union(geoms) -> Geometry:
         """Return the unary union of a sequence of geometries using GEOS."""
+        geoms = list(geoms)
         cdef int n = len(geoms)
         if n == 0:
             raise ValueError("unary_union requires at least one geometry")
@@ -1015,6 +1049,8 @@ cdef class Geometry:
             if isinstance(obj, Geometry):
                 continue
             elif isinstance(obj, (Point, Line, Ring, Poly)):
+                temp_count += 1
+            elif hasattr(obj, "as_geometry") or hasattr(obj, "wkb"):
                 temp_count += 1
             else:
                 try:
@@ -1037,6 +1073,9 @@ cdef class Geometry:
             obj = geoms[i]
             if isinstance(obj, Geometry):
                 arr[i] = (<Geometry>obj)._get_c_geom()
+            elif hasattr(obj, "as_geometry") or hasattr(obj, "wkb"):
+                tmp_gobj = _coerce_geometry_or_raise(obj, "geoms", allow_point_tuple=False)
+                arr[i] = tmp_gobj._get_c_geom()
             elif isinstance(obj, Point):
                 tmpg = tg_geom_new_point((<Point>obj)._get_c_point())
                 if not tmpg:
@@ -1422,11 +1461,9 @@ cdef class Geometry:
             empty = tg_geom_new_geometrycollection_empty()
             return _geometry_from_ptr(empty)
 
-        if isinstance(other, Geometry):
-            other_geom = <Geometry>other
-        elif hasattr(other, "as_geometry"):
-            other_geom = other.as_geometry()
-        else:
+        try:
+            other_geom = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
             # Return empty geometry collection
             empty = tg_geom_new_geometrycollection_empty()
             return _geometry_from_ptr(empty)
@@ -1568,12 +1605,15 @@ cdef class Geometry:
         ValueError
             If the operation fails
         """
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_geom
+        try:
+            other_geom = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
             raise ValueError("other must be a Geometry object")
 
         # Use helper method to get coordinates
         cdef double x1, y1, x2, y2
-        x1, y1, x2, y2 = self._get_nearest_point_coords(<Geometry>other)
+        x1, y1, x2, y2 = self._get_nearest_point_coords(other_geom)
 
         # Create Point objects efficiently using __new__ to avoid __init__ overhead
         cdef Point pt1 = Point.__new__(Point)
@@ -1608,12 +1648,15 @@ cdef class Geometry:
         ValueError
             If the operation fails
         """
-        if other is None or not isinstance(other, Geometry):
+        cdef Geometry other_geom
+        try:
+            other_geom = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
             raise ValueError("other must be a Geometry object")
 
         # Use helper method to get coordinates
         cdef double x1, y1, x2, y2
-        x1, y1, x2, y2 = self._get_nearest_point_coords(<Geometry>other)
+        x1, y1, x2, y2 = self._get_nearest_point_coords(other_geom)
 
         # Create Line directly from coordinates using tg_line_new
         cdef tg_point *pts = <tg_point *>malloc(2 * sizeof(tg_point))
@@ -1995,14 +2038,18 @@ cdef class Ring:
     cdef object _cached_geometry
 
     def __init__(self, points):
+        points = list(points)
         cdef int n = len(points)
         cdef int i
+        cdef double x
+        cdef double y
         cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for Ring")
         for i in range(n):
-            pts[i].x = points[i][0]
-            pts[i].y = points[i][1]
+            x, y = _coerce_xy(points[i], "points")
+            pts[i].x = x
+            pts[i].y = y
         self.ring = tg_ring_new(pts, n)
         free(pts)
         if not self.ring:
@@ -2021,6 +2068,19 @@ cdef class Ring:
 
     def __repr__(self):
         return self.__str__()
+
+    def __eq__(self, other):
+        cdef Geometry other_g
+        if other is None:
+            return False
+        try:
+            other_g = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
+            return NotImplemented
+        return self.as_geometry().equals(other_g)
+
+    def __hash__(self):
+        return hash(self.as_geometry().to_wkb())
 
     @staticmethod
     cdef Ring from_ptr(tg_ring *ptr):
@@ -2289,14 +2349,18 @@ cdef class Line:
     cdef object _cached_geometry
 
     def __init__(self, points):
+        points = list(points)
         cdef int n = len(points)
         cdef int i
+        cdef double x
+        cdef double y
         cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for Line")
         for i in range(n):
-            pts[i].x = points[i][0]
-            pts[i].y = points[i][1]
+            x, y = _coerce_xy(points[i], "points")
+            pts[i].x = x
+            pts[i].y = y
         self.line = tg_line_new(pts, n)
         free(pts)
         if not self.line:
@@ -2319,6 +2383,19 @@ cdef class Line:
 
     def __repr__(self):
         return self.__str__()
+
+    def __eq__(self, other):
+        cdef Geometry other_g
+        if other is None:
+            return False
+        try:
+            other_g = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
+            return NotImplemented
+        return self.as_geometry().equals(other_g)
+
+    def __hash__(self):
+        return hash(self.as_geometry().to_wkb())
 
     @property
     def num_points(self) -> int:
@@ -2582,7 +2659,7 @@ cdef class Line:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
-    def project(self, point) -> float:
+    def project(self, point, normalized: bool = False) -> float:
         """Return the distance along the line to the nearest point on the line
         to the given point (Shapely-compatible).
 
@@ -2602,14 +2679,10 @@ cdef class Line:
         cdef double result
         cdef Geometry line_geom
         cdef Geometry point_geom
+        cdef double total_len
 
         line_geom = self.as_geometry()
-        if isinstance(point, Geometry):
-            point_geom = <Geometry>point
-        elif hasattr(point, "as_geometry"):
-            point_geom = point.as_geometry()
-        else:
-            raise TypeError("point must be a Point or Geometry")
+        point_geom = _coerce_geometry_or_raise(point, "point")
 
         ctx = GEOS_init_r()
         if ctx == NULL:
@@ -2632,6 +2705,11 @@ cdef class Line:
         GEOS_finish_r(ctx)
         if result < 0:
             raise RuntimeError("GEOSProject failed")
+        if normalized:
+            total_len = tg_line_length(self.line)
+            if total_len <= 0.0:
+                return 0.0
+            return max(0.0, min(1.0, result / total_len))
         return result
 
 
@@ -2696,6 +2774,19 @@ cdef class Poly:
 
     def __repr__(self):
         return self.__str__()
+
+    def __eq__(self, other):
+        cdef Geometry other_g
+        if other is None:
+            return False
+        try:
+            other_g = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
+            return NotImplemented
+        return self.as_geometry().equals(other_g)
+
+    def __hash__(self):
+        return hash(self.as_geometry().to_wkb())
 
     @property
     def exterior(self) -> Ring:
@@ -3015,13 +3106,8 @@ cdef class Poly:
         bool
             True if the geometries intersect, False otherwise
         """
-        if other is None:
-            raise TypeError("other must be a geometry")
-        if isinstance(other, Geometry):
-            return self.as_geometry().intersects(other)
-        if hasattr(other, "as_geometry"):
-            return self.as_geometry().intersects(other.as_geometry())
-        raise TypeError(f"other must be a geometry, got {type(other)}")
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        return self.as_geometry().intersects(other_g)
 
     @property
     def boundary(self) -> Line:
@@ -3249,15 +3335,7 @@ def unary_union(geoms) -> Geometry:
     RuntimeError
         If the union operation fails
     """
-    converted = []
-    for g in geoms:
-        if isinstance(g, Geometry):
-            converted.append(g)
-        elif hasattr(g, "as_geometry"):
-            converted.append(g.as_geometry())
-        else:
-            raise TypeError(f"unary_union expects geometry objects, got {type(g)}")
-    return Geometry.unary_union(converted)
+    return Geometry.unary_union(list(geoms))
 
 
 # Shapely-compatible module-level functions
@@ -3548,20 +3626,8 @@ def nearest_points(geom1, geom2) -> tuple:
     >>> print(f"Distance: {((pt2.x - pt1.x)**2 + (pt2.y - pt1.y)**2)**0.5:.1f}")
     10.0
     """
-    # Convert to Geometry if needed
-    if hasattr(geom1, "as_geometry"):
-        g1 = geom1.as_geometry()
-    elif isinstance(geom1, Geometry):
-        g1 = geom1
-    else:
-        raise TypeError("geom1 must be a togo geometry type")
-
-    if hasattr(geom2, "as_geometry"):
-        g2 = geom2.as_geometry()
-    elif isinstance(geom2, Geometry):
-        g2 = geom2
-    else:
-        raise TypeError("geom2 must be a togo geometry type")
+    g1 = _coerce_geometry_or_raise(geom1, "geom1")
+    g2 = _coerce_geometry_or_raise(geom2, "geom2")
 
     # Use the Geometry.nearest_points method
     return g1.nearest_points(g2)
@@ -3600,20 +3666,8 @@ def shortest_line(geom1, geom2):
     >>> print(connecting.length)
     10.0
     """
-    # Convert to Geometry if needed
-    if hasattr(geom1, "as_geometry"):
-        g1 = geom1.as_geometry()
-    elif isinstance(geom1, Geometry):
-        g1 = geom1
-    else:
-        raise TypeError("geom1 must be a togo geometry type")
-
-    if hasattr(geom2, "as_geometry"):
-        g2 = geom2.as_geometry()
-    elif isinstance(geom2, Geometry):
-        g2 = geom2
-    else:
-        raise TypeError("geom2 must be a togo geometry type")
+    g1 = _coerce_geometry_or_raise(geom1, "geom1")
+    g2 = _coerce_geometry_or_raise(geom2, "geom2")
 
     # Use the Geometry.shortest_line method
     return g1.shortest_line(g2)
@@ -3662,28 +3716,15 @@ def intersection(geom1, geom2) -> Geometry:
     cdef tg_geom *empty
 
     # Convert to Geometry if needed, return empty for None/invalid (Shapely-compatible)
-    if geom1 is None:
-        empty = tg_geom_new_geometrycollection_empty()
-        return _geometry_from_ptr(empty)
-
-    if hasattr(geom1, "as_geometry"):
-        g1 = geom1.as_geometry()
-    elif isinstance(geom1, Geometry):
-        g1 = geom1
-    else:
+    try:
+        g1 = _coerce_geometry_or_raise(geom1, "geom1")
+    except TypeError:
         # Return empty for invalid type (Shapely-compatible)
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
-
-    if geom2 is None:
-        empty = tg_geom_new_geometrycollection_empty()
-        return _geometry_from_ptr(empty)
-
-    if hasattr(geom2, "as_geometry"):
-        g2 = geom2.as_geometry()
-    elif isinstance(geom2, Geometry):
-        g2 = geom2
-    else:
+    try:
+        g2 = _coerce_geometry_or_raise(geom2, "geom2")
+    except TypeError:
         # Return empty for invalid type (Shapely-compatible)
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
@@ -3724,13 +3765,7 @@ def convex_hull(geom):
     >>> print(hull.geom_type)
     Polygon
     """
-    # Convert to Geometry if needed
-    if hasattr(geom, "as_geometry"):
-        g = geom.as_geometry()
-    elif isinstance(geom, Geometry):
-        g = geom
-    else:
-        raise TypeError("geom must be a togo geometry type")
+    g = _coerce_geometry_or_raise(geom, "geom")
 
     # Use the Geometry.convex_hull property
     return g.convex_hull
