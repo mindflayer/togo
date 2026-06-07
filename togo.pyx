@@ -274,7 +274,10 @@ cdef class Geometry:
             return
         if data is not None and not isinstance(data, str):
             # Non-string data is handled by subclass __init__
+            if type(self) is Geometry:
+                raise TypeError("data must be a str for Geometry()")
             return
+        if data is not None:
         if data is not None:
             if fmt == "geojson":
                 self.geom = tg_parse_geojson(data.encode("utf-8"))
