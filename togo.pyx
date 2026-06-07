@@ -655,7 +655,7 @@ cdef class Geometry:
         return tg_geom_equals(self.geom, other_g.geom) != 0
 
     def __hash__(self):
-        return hash(self.to_wkt())
+        return hash(self.to_wkb())
 
     # Shapely-compatible properties
     @property
