@@ -736,22 +736,42 @@ cdef class Geometry:
     @property
     def exterior(self) -> Ring:
         cdef const tg_poly *poly
-        cdef const tg_ring *ext
+        cdef tg_ring *cloned
+        cdef Ring r
         if tg_geom_typeof(self.geom) != 3:
             raise AttributeError(f"{self.type_string()} has no exterior")
         poly = tg_geom_poly(self.geom)
-        ext = tg_poly_exterior(poly)
-        return Ring.from_ptr(<tg_ring *>ext)
+        cloned = tg_ring_clone(tg_poly_exterior(poly))
+        if not cloned:
+            raise MemoryError("Failed to clone exterior ring")
+        r = Ring.__new__(Ring)
+        r.ring = cloned
+        r.owns_pointer = True
+        r._cached_geometry = None
+        return r
 
     @property
     def interiors(self) -> list:
         cdef const tg_poly *poly
         cdef int n, i
+        cdef tg_ring *cloned
+        cdef Ring r
+        cdef list result
         if tg_geom_typeof(self.geom) != 3:
             raise AttributeError(f"{self.type_string()} has no interiors")
         poly = tg_geom_poly(self.geom)
         n = tg_poly_num_holes(poly)
-        return [Ring.from_ptr(<tg_ring *>tg_poly_hole_at(poly, i)) for i in range(n)]
+        result = []
+        for i in range(n):
+            cloned = tg_ring_clone(tg_poly_hole_at(poly, i))
+            if not cloned:
+                raise MemoryError("Failed to clone interior ring")
+            r = Ring.__new__(Ring)
+            r.ring = cloned
+            r.owns_pointer = True
+            r._cached_geometry = None
+            result.append(r)
+        return result
 
     @property
     def boundary(self):
@@ -1069,13 +1089,15 @@ cdef class Geometry:
                     "Failed to allocate temporary geoms for unary_union"
                 )
         temp_count = 0
+        coerced_geoms = []
         for i in range(n):
             obj = geoms[i]
             if isinstance(obj, Geometry):
                 arr[i] = (<Geometry>obj)._get_c_geom()
             elif hasattr(obj, "as_geometry") or hasattr(obj, "wkb"):
                 tmp_gobj = _coerce_geometry_or_raise(obj, "geoms", allow_point_tuple=False)
-                arr[i] = tmp_gobj._get_c_geom()
+                coerced_geoms.append(tmp_gobj)
+                arr[i] = (<Geometry>tmp_gobj)._get_c_geom()
             elif isinstance(obj, Point):
                 tmpg = tg_geom_new_point((<Point>obj)._get_c_point())
                 if not tmpg:
