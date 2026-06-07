@@ -33,11 +33,23 @@ ToGo provides the following Shapely-compatible class names:
 
 - `Point` - Create points
 - `LineString` - Create linestrings (alias for `Line`)
-- `Polygon` - Create polygons (alias for `Poly`)
-- `MultiPoint()` - Create multi-point geometries
-- `MultiLineString()` - Create multi-linestring geometries
-- `MultiPolygon()` - Create multi-polygon geometries
-- `GeometryCollection()` - Create geometry collections
+- `Polygon` - Create polygons (subclass of `Poly`)
+- `MultiPoint()` - Create multi-point geometries (returns `Geometry`)
+- `MultiLineString` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
+- `MultiPolygon` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
+- `GeometryCollection()` - Create geometry collections (returns `Geometry`)
+
+```python
+from togo import MultiPolygon, MultiLineString, Geometry, Poly, Ring
+
+poly1 = Poly(Ring([(0,0), (1,0), (1,1), (0,1), (0,0)]))
+mp = MultiPolygon([poly1])
+print(isinstance(mp, MultiPolygon))  # True
+print(isinstance(mp, Geometry))      # True
+
+mls = MultiLineString([[(0,0), (1,1)]])
+print(isinstance(mls, MultiLineString))  # True
+```
 
 ### Point
 
@@ -51,13 +63,19 @@ p = Point(1.5, 2.5)
 p.geom_type      # 'Point'
 p.x              # 1.5
 p.y              # 2.5
-p.coords         # [(1.5, 2.5)]
+p.coords         # [(1.5, 2.5)]  — indexable sequence
+p.coords[0]      # (1.5, 2.5)
+len(p.coords)    # 1
 p.bounds         # (1.5, 2.5, 1.5, 2.5)
 p.is_empty       # False
 p.is_valid       # True
 p.wkt            # 'POINT(1.5 2.5)'
 p.wkb            # bytes object
 p.__geo_interface__  # {'type': 'Point', 'coordinates': [1.5, 2.5]}
+
+# Equality
+Point(1.5, 2.5) == Point(1.5, 2.5)   # True
+Point(1.5, 2.5) == Point(0.0, 0.0)   # False
 ```
 
 ### LineString
@@ -70,7 +88,10 @@ line = LineString([(0, 0), (1, 1), (2, 2), (3, 3)])
 
 # Shapely-compatible properties
 line.geom_type   # 'LineString'
-line.coords      # [(0, 0), (1, 1), (2, 2), (3, 3)]
+line.coords      # [(0, 0), (1, 1), (2, 2), (3, 3)]  — indexable sequence
+line.coords[0]   # (0, 0)
+line.coords[-1]  # (3, 3)
+len(line.coords) # 4
 line.bounds      # (0, 0, 3, 3)
 line.is_empty    # False
 line.is_valid    # True
@@ -78,6 +99,13 @@ line.length      # 4.242... (property)
 line.wkt         # 'LINESTRING(0 0,1 1,2 2,3 3)'
 line.wkb         # bytes object
 line.__geo_interface__  # GeoJSON-like dict
+
+# project(point) — distance along line to nearest projected point (Shapely-compatible)
+from togo import Point
+line = LineString([(0, 0), (10, 0)])
+line.project(Point(5, 3).as_geometry())   # 5.0 — projects perpendicularly
+line.project(Point(0, 0).as_geometry())   # 0.0 — start of line
+line.project(Point(10, 0).as_geometry())  # 10.0 — end of line
 ```
 
 ### Polygon
@@ -100,11 +128,21 @@ poly.area        # 16.0
 poly.centroid    # Point geometry (center of mass)
 poly.is_empty    # False
 poly.is_valid    # True
-poly.exterior  # Ring object
+poly.exterior    # Ring object (exterior ring)
 poly.interiors   # List of Ring objects (holes)
+poly.boundary    # LineString — the exterior ring as a line
 poly.wkt         # 'POLYGON((0 0,4 0,4 4,0 4,0 0))'
 poly.wkb         # bytes object
 poly.__geo_interface__  # GeoJSON-like dict
+
+# intersects() — accepts wrapper objects directly (Shapely-compatible)
+other = Polygon([(3, 3), (5, 3), (5, 5), (3, 5), (3, 3)])
+poly.intersects(other)   # True (touching at corner)
+
+# from_bounds() — create a rectangle from a bounding box (Shapely-compatible)
+bbox = Polygon.from_bounds(0, 0, 10, 5)
+print(bbox.area)    # 50.0
+print(bbox.bounds)  # (0.0, 0.0, 10.0, 5.0)
 ```
 
 ## Module-Level Functions
@@ -143,6 +181,26 @@ geojson_str = to_geojson(poly)
 wkb_bytes = to_wkb(geom)
 ```
 
+### unary_union()
+
+`unary_union(geoms)` merges a sequence of geometries into a single geometry using GEOS (Shapely-compatible). Accepts any wrapper type directly — no `.as_geometry()` needed:
+
+```python
+from togo import Polygon, unary_union
+
+# Merge overlapping polygons
+poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+union = unary_union([poly1, poly2])
+print(union.geom_type)  # 'Polygon'
+print(union.area)       # 7.0 (merged area)
+
+# Non-overlapping → MultiPolygon
+poly3 = Polygon([(10, 10), (11, 10), (11, 11), (10, 11), (10, 10)])
+union2 = unary_union([poly1, poly3])
+print(union2.geom_type)  # 'MultiPolygon'
+```
+
 ## Geometry Properties
 
 All geometry types support these Shapely-compatible properties:
@@ -166,45 +224,50 @@ geom.__geo_interface__  # Dict: GeoJSON-like interface
 # Point
 point.x           # x coordinate
 point.y           # y coordinate
-point.coords      # [(x, y)]
+point.coords      # [(x, y)] — indexable, len() works
+point.coords[0]   # (x, y)
 
 # LineString
-line.coords       # List of (x, y) tuples
+line.coords       # List of (x, y) tuples — indexable, len() works
+line.coords[0]    # first coordinate
+line.coords[-1]   # last coordinate
 line.length       # Float: length of line (property)
+line.project(pt)  # Float: distance along line to projected point
 
 # Polygon
 poly.area         # Float: area of polygon
-poly.exterior   # Ring: exterior ring
+poly.exterior     # Ring: exterior ring
 poly.interiors    # List[Ring]: list of holes
 poly.centroid     # Point: center of mass
+poly.boundary     # LineString: exterior ring as a line
 ```
 
 ## Spatial Predicates
 
-All predicates work with Shapely-compatible API:
+All predicates accept wrapper objects (`Point`, `LineString`, `Polygon`, etc.) **directly** — no manual `.as_geometry()` conversion is needed:
 
 ```python
-from togo import Point, Polygon, Ring, from_wkt
+from togo import Point, Polygon, from_wkt
 
 # Create geometries
 poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
 poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
 point = Point(0.5, 0.5)
 
-# Convert to Geometry for predicates
-geom1 = poly1.as_geometry()
-geom2 = poly2.as_geometry()
-pt_geom = point.as_geometry()
+# Predicates work directly on wrapper objects
+poly1.intersects(poly2)  # True  — Polygon.intersects() available
+poly1.intersects(point)  # True
 
-# Test predicates
-geom1.intersects(geom2)  # True
-geom1.contains(pt_geom)  # True
-geom1.equals(geom2)      # False
-geom1.disjoint(geom2)    # False
-geom1.touches(geom2)     # False
-geom1.within(geom2)      # False
-geom1.covers(pt_geom)    # True
-geom1.coveredby(geom2)   # False
+# Geometry-level predicates also accept wrappers directly
+geom1 = from_wkt("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))")
+geom1.intersects(poly2)  # True  — no .as_geometry() needed
+geom1.contains(point)    # True
+geom1.equals(poly1)      # True
+geom1.disjoint(poly2)    # False
+geom1.touches(poly2)     # False
+geom1.within(poly2)      # False
+geom1.covers(point)      # True
+geom1.coveredby(poly2)   # False
 ```
 
 ## Geometric Operations
@@ -379,17 +442,20 @@ The `convex_hull` property:
 1. **Class names**: `Point`, `LineString`, `Polygon`
 2. **Properties**: `geom_type`, `bounds`, `area`, `coords`, `is_empty`, `is_valid`
 3. **Serialization**: `wkt`, `wkb`, `__geo_interface__`
-4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`
+4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`, `unary_union()`
+5. **Predicates**: `contains()`, `intersects()`, `touches()`, `within()`, `equals()`
+6. **Operations**: `intersection()`, `buffer()`, `simplify()`, `project()`
+7. **Multi-geometry classes**: `MultiPolygon`, `MultiLineString` are real Python classes, `isinstance()` works
+8. **Equality**: `geom1 == geom2` works consistently, geometries are hashable
 
-5. **Predicates**: `contains()`, `intersects()`, `touches()`, `crosses()`, `within()`, `equals()`
-6. **Operations**: `union()`, `intersection()`, `difference()`, `buffer()`, `simplify()`
 ### Differences
 
-1. **Geometry conversion**: ToGo uses `.as_geometry()` for predicates:
-   ```python
-   # ToGo
-   poly_geom = poly.as_geometry()
-   poly_geom.contains(point.as_geometry())
+1. **Low-level access**: ToGo exposes the TG object model (`Ring`, `Poly`, `Line`) which
+   Shapely does not have. Use `.as_geometry()` when you need to pass a wrapper object to
+   a function that specifically requires a `Geometry` instance.
+
+2. **GEOS dependency**: Buffer, simplify, centroid, convex_hull, intersection, unary_union,
+   nearest_points, shortest_line, and project all require the bundled `libgeos`.
 
 ## Performance
 
@@ -419,7 +485,7 @@ from togo import from_wkt, to_wkt
 ## Complete Example
 
 ```python
-from togo import Point, LineString, Polygon
+from togo import Point, LineString, Polygon, MultiPolygon, unary_union
 from togo import from_wkt, to_wkt
 
 # Create various geometries
@@ -428,25 +494,40 @@ line = LineString([(0, 0), (1, 1), (2, 2)])
 poly = Polygon([(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)])
 
 # Check properties
-print(f"Point: {point.geom_type}, coords: {point.coords}")
+print(f"Point: {point.geom_type}, coords[0]: {point.coords[0]}")
 print(f"Line: length = {line.length:.2f}, bounds = {line.bounds}")
 print(f"Polygon: area = {poly.area}, bounds = {poly.bounds}")
 
-# Parse from WKT
-wkt = "POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0), (2 2, 8 2, 8 8, 2 8, 2 2))"
-parsed = from_wkt(wkt)
-print(f"Parsed: {parsed.geom_type}")
+# project() — distance along line to projected point
+road = LineString([(0, 0), (100, 0)])
+stop = Point(40, 10)
+print(f"Stop is at {road.project(stop.as_geometry()):.1f}m along the road")  # 40.0m
 
-# Test spatial relationships
-pt_geom = point.as_geometry()
-poly_geom = poly.as_geometry()
+# Polygon.from_bounds() — create a bounding box rectangle
+bbox = Polygon.from_bounds(0, 0, 10, 5)
+print(f"BBox area: {bbox.area}")   # 50.0
 
-if poly_geom.contains(pt_geom):
-    print("Polygon contains the point!")
+# Polygon.boundary — exterior ring as a LineString
+print(f"Perimeter via boundary: {poly.boundary.length:.2f}")  # same as poly.length
 
-# Export to different formats
-print(f"WKT: {point.wkt}")
-print(f"GeoJSON: {point.__geo_interface__}")
+# Spatial predicates — no .as_geometry() needed
+other_poly = Polygon([(3, 3), (7, 3), (7, 7), (3, 7), (3, 3)])
+print(f"Intersects: {poly.intersects(other_poly)}")  # True
+print(f"Contains point: {from_wkt('POLYGON((0 0,5 0,5 5,0 5,0 0))').contains(point)}")  # True
+
+# unary_union — module-level Shapely-compatible function
+poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+union = unary_union([poly1, poly2])
+print(f"Union type: {union.geom_type}, area: {union.area:.1f}")  # Polygon, 7.0
+
+# MultiPolygon — real class, isinstance works
+mp = MultiPolygon([poly1, Polygon([(10, 10), (11, 10), (11, 11), (10, 11), (10, 10)])])
+print(f"isinstance check: {isinstance(mp, MultiPolygon)}")  # True
+
+# Equality
+p1, p2 = Point(1, 2), Point(1, 2)
+print(f"p1 == p2: {p1 == p2}")  # True
 ```
 
 ## Nearest Points and Shortest Line (Shapely v2 API)
@@ -560,38 +641,59 @@ The `transform` function works with:
 
 ## API Reference Summary
 
-| Shapely API | ToGo API | Status |
-|-------------|----------|--------|
-| `Point(x, y)` | `Point(x, y)` | ✅ Supported |
-| `LineString(coords)` | `LineString(coords)` | ✅ Supported |
-| `Polygon(shell, holes)` | `Polygon(shell, holes=[...])` | ✅ Supported |
-| `geom.geom_type` | `geom.geom_type` | ✅ Supported |
-| `geom.bounds` | `geom.bounds` | ✅ Supported |
-| `geom.area` | `geom.area` | ✅ Supported |
-| `geom.length` | `geom.length` | ✅ Supported |
-| `geom.centroid` | `geom.centroid` | ✅ Supported (via GEOS) |
-| `geom.convex_hull` | `geom.convex_hull()` | ✅ Supported (via GEOS) |
-| `geom.is_empty` | `geom.is_empty` | ✅ Supported |
-| `geom.coords` | `geom.coords` | ✅ Supported |
-| `geom.wkt` | `geom.wkt` | ✅ Supported |
-| `geom.wkb` | `geom.wkb` | ✅ Supported |
-| `geom.__geo_interface__` | `geom.__geo_interface__` | ✅ Supported |
-| `from_wkt()` | `from_wkt()` | ✅ Supported |
-| `from_geojson()` | `from_geojson()` | ✅ Supported |
-| `to_wkt()` | `to_wkt()` | ✅ Supported |
-| `contains()` | `contains()` | ✅ Supported |
-| `intersects()` | `intersects()` | ✅ Supported |
-| `touches()` | `touches()` | ✅ Supported |
-| `within()` | `within()` | ✅ Supported |
-| `geom.buffer()` | `geom.buffer()` | ✅ Supported (via GEOS) |
-| `geom.simplify()` | `geom.simplify()` | ✅ Supported (via GEOS) |
-| `unary_union()` | `unary_union()` | ✅ Supported (via GEOS) |
-| `transform()` | `transform()` | ✅ Supported |
-| `nearest_points()` | `nearest_points()` | ✅ Supported (via GEOS) |
-| `shortest_line()` | `shortest_line()` | ✅ Supported (via GEOS, v2 API) |
-| `convex_hull()` | `convex_hull()` | ✅ Supported (via GEOS) |
-| `intersection()` | `intersection()` | ✅ Supported (via GEOS) |
+| Shapely API | ToGo API | Notes |
+|-------------|----------|-------|
+| `Point(x, y)` | `Point(x, y)` | ✅ |
+| `LineString(coords)` | `LineString(coords)` | ✅ |
+| `Polygon(shell, holes)` | `Polygon(shell, holes=[...])` | ✅ |
+| `Polygon.from_bounds(x1,y1,x2,y2)` | `Polygon.from_bounds(x1,y1,x2,y2)` | ✅ |
+| `MultiPolygon(polys)` | `MultiPolygon(polys)` | ✅ Real class; `isinstance` works |
+| `MultiLineString(lines)` | `MultiLineString(lines)` | ✅ Real class; `isinstance` works |
+| `geom.geom_type` | `geom.geom_type` | ✅ |
+| `geom.bounds` | `geom.bounds` | ✅ |
+| `geom.area` | `geom.area` | ✅ |
+| `geom.length` | `geom.length` | ✅ |
+| `geom.centroid` | `geom.centroid` | ✅ via GEOS |
+| `geom.convex_hull` | `geom.convex_hull` | ✅ via GEOS |
+| `geom.boundary` | `poly.boundary` | ✅ on Polygon/Poly |
+| `geom.is_empty` | `geom.is_empty` | ✅ |
+| `geom.is_valid` | `geom.is_valid` | ✅ via GEOS |
+| `geom.coords` | `geom.coords` | ✅ Indexable; `coords[i]` and `len()` work |
+| `geom.exterior` | `poly.exterior` | ✅ on Polygon/Poly |
+| `geom.interiors` | `poly.interiors` | ✅ on Polygon/Poly |
+| `geom.wkt` | `geom.wkt` | ✅ |
+| `geom.wkb` | `geom.wkb` | ✅ |
+| `geom.__geo_interface__` | `geom.__geo_interface__` | ✅ |
+| `geom1 == geom2` | `geom1 == geom2` | ✅ |
+| `from_wkt()` | `from_wkt()` | ✅ |
+| `from_geojson()` | `from_geojson()` | ✅ |
+| `to_wkt()` | `to_wkt()` | ✅ |
+| `geom.contains(other)` | `geom.contains(other)` | ✅ Accepts wrapper objects directly |
+| `geom.intersects(other)` | `geom.intersects(other)` | ✅ Accepts wrapper objects directly |
+| `poly.intersects(other)` | `poly.intersects(other)` | ✅ on Polygon/Poly |
+| `geom.touches(other)` | `geom.touches(other)` | ✅ Accepts wrapper objects directly |
+| `geom.within(other)` | `geom.within(other)` | ✅ Accepts wrapper objects directly |
+| `geom.equals(other)` | `geom.equals(other)` | ✅ Accepts wrapper objects directly |
+| `geom.buffer()` | `geom.buffer()` | ✅ via GEOS |
+| `geom.simplify()` | `geom.simplify()` | ✅ via GEOS |
+| `geom.intersection(other)` | `geom.intersection(other)` | ✅ via GEOS; accepts wrappers |
+| `line.project(point)` | `line.project(point)` | ✅ via GEOS |
+| `unary_union(geoms)` | `unary_union(geoms)` | ✅ Module-level; via GEOS |
+| `transform(fn, geom)` | `transform(fn, geom)` | ✅ |
+| `nearest_points(g1, g2)` | `nearest_points(g1, g2)` | ✅ via GEOS |
+| `shortest_line(g1, g2)` | `shortest_line(g1, g2)` | ✅ via GEOS |
+| `convex_hull(geom)` | `convex_hull(geom)` | ✅ via GEOS |
+| `intersection(g1, g2)` | `intersection(g1, g2)` | ✅ via GEOS |
 
 ## Conclusion
 
-ToGo now provides a Shapely-compatible API that makes it easy to use for developers familiar with Shapely, while leveraging the high performance of the underlying TG C library. The API is designed to be intuitive and follows Shapely conventions wherever possible.
+ToGo provides a comprehensive Shapely-compatible API that makes it easy to migrate from Shapely or use it as a drop-in replacement for common geometric operations. Key highlights:
+
+- **Wrapper objects are first-class citizens** — all spatial predicates and operations accept `Point`, `LineString`, `Polygon`, etc. directly without calling `.as_geometry()`.
+- **`MultiPolygon` and `MultiLineString` are real Python classes** — `isinstance()` checks work as expected.
+- **`unary_union(geoms)`** is a proper module-level function aligned with Shapely's API.
+- **New Polygon conveniences**: `from_bounds()`, `boundary`, `intersects()`.
+- **`LineString.project()`** for measuring distance-along-line projections.
+- **Geometry equality** via `==` and hashability are supported on all geometry types.
+
+All of this sits on top of the ultra-fast TG C library, with advanced operations powered by the bundled `libgeos`.
