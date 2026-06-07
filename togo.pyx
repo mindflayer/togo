@@ -2627,6 +2627,8 @@ cdef class Line:
         GEOSGeom_destroy_r(ctx, g_point)
         GEOSGeom_destroy_r(ctx, g_line)
         GEOS_finish_r(ctx)
+        if result < 0:
+            raise RuntimeError("GEOSProject failed")
         return result
 
 
