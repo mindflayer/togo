@@ -781,8 +781,10 @@ cdef class Geometry:
         cdef const tg_ring *ext
         cdef const tg_point *pts_ptr
         cdef list lines
+        cdef Ring ext_ring
         if t == 3:
-            return Line(self.exterior.points(as_tuples=True))
+            ext_ring = self.exterior
+            return Line(ext_ring.points(as_tuples=True))
         if t == 6:
             n = tg_geom_num_polys(self.geom)
             lines = []
