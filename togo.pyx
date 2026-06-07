@@ -636,9 +636,11 @@ cdef class Geometry:
         """Copy geom pointer from another Geometry (used by Python subclasses)."""
         if self.geom is not NULL:
             tg_geom_free(self.geom)
+            self.geom = NULL
         if other.geom is not NULL:
             self.geom = tg_geom_clone(other.geom)
-
+        else:
+            self.geom = NULL
     def __eq__(self, other):
         if other is None:
             return False
