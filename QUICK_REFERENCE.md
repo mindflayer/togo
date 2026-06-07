@@ -1,5 +1,11 @@
 # Quick Reference: ToGo Shapely-Compatible API
 
+## v0.4.1 Notes (vs v0.4.0)
+
+- `LineString.project(..., normalized=True)` is supported.
+- `Geometry.exterior`, `Geometry.interiors`, and `Geometry.boundary` have safer lifetime handling.
+- Mixed-input `unary_union()` coercion is safer (coerced objects are kept alive during union).
+
 ## Installation
 
 ```bash
@@ -96,19 +102,29 @@ geo_dict = point.__geo_interface__
 poly = Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
 point = Point(5, 5)
 
-# Convert to Geometry for predicates
-poly_geom = poly.as_geometry()
-pt_geom = point.as_geometry()
+# Predicates (wrapper objects accepted directly)
+poly.contains(point)                 # Point in polygon?
+poly.intersects(poly)                # Overlap?
+poly.equals(poly)                    # Same geometry?
+poly.disjoint(poly)                  # No overlap?
+point.within(poly)                   # Inside?
+poly.covers(point)                   # Covers?
+point.coveredby(poly)                # Covered by?
+poly.touches(poly)                   # Touch?
 
-# Predicates
-poly_geom.contains(pt_geom)          # Point in polygon?
-poly_geom.intersects(poly_geom)      # Overlap?
-poly_geom.equals(poly_geom)          # Same geometry?
-poly_geom.disjoint(poly_geom)        # No overlap?
-pt_geom.within(poly_geom)            # Inside?
-poly_geom.covers(pt_geom)            # Covers?
-pt_geom.coveredby(poly_geom)         # Covered by?
-poly_geom.touches(poly_geom)         # Touch?
+# Geometry-level predicates also accept wrappers directly
+poly_geom = poly.as_geometry()
+poly_geom.contains(point)
+```
+
+## LineString Projection
+
+```python
+line = LineString([(0, 0), (10, 0)])
+p = Point(5, 3)
+
+line.project(p)                       # 5.0 (distance along line)
+line.project(p, normalized=True)      # 0.5 (fraction of line length)
 ```
 
 ## Multi-Geometries
@@ -249,7 +265,7 @@ poly = Poly(Ring([...]))
 
 | Feature | Shapely | ToGo |
 |---------|---------|------|
-| Predicates | Work on shapes directly | Need `.as_geometry()` |
+| Predicates | Work on shapes directly | Work on wrapper objects directly |
 | Multi-geometries | Auto-created | Explicit constructors |
 
 ---

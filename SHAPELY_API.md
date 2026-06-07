@@ -2,6 +2,15 @@
 
 ToGo now provides a Shapely-compatible API, making it easy to migrate from Shapely or use ToGo as a drop-in replacement for many common geometric operations.
 
+## v0.4.1 Update (vs v0.4.0)
+
+v0.4.1 includes targeted compatibility and safety improvements:
+
+- Added support for `LineString.project(other, normalized=True)`.
+- Hardened `Geometry.exterior` and `Geometry.interiors` lifetime behavior.
+- Hardened `Geometry.boundary` extraction paths for polygon and multipolygon outputs.
+- Fixed mixed-input `unary_union()` lifetime handling for coerced geometry objects.
+
 ## Quick Start
 
 ```python
@@ -106,6 +115,10 @@ line = LineString([(0, 0), (10, 0)])
 line.project(Point(5, 3).as_geometry())   # 5.0 — projects perpendicularly
 line.project(Point(0, 0).as_geometry())   # 0.0 — start of line
 line.project(Point(10, 0).as_geometry())  # 10.0 — end of line
+
+# project(..., normalized=True) — fraction in [0.0, 1.0]
+line.project(Point(5, 0).as_geometry(), normalized=True)   # 0.5
+line.project(Point(10, 0).as_geometry(), normalized=True)  # 1.0
 ```
 
 ### Polygon
@@ -677,7 +690,7 @@ The `transform` function works with:
 | `geom.buffer()` | `geom.buffer()` | ✅ via GEOS |
 | `geom.simplify()` | `geom.simplify()` | ✅ via GEOS |
 | `geom.intersection(other)` | `geom.intersection(other)` | ✅ via GEOS; accepts wrappers |
-| `line.project(point)` | `line.project(point)` | ✅ via GEOS |
+| `line.project(point, normalized=False)` | `line.project(point, normalized=False)` | ✅ via GEOS |
 | `unary_union(geoms)` | `unary_union(geoms)` | ✅ Module-level; via GEOS |
 | `transform(fn, geom)` | `transform(fn, geom)` | ✅ |
 | `nearest_points(g1, g2)` | `nearest_points(g1, g2)` | ✅ via GEOS |

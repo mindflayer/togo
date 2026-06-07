@@ -10,6 +10,17 @@ Note on pronunciation: "ToGo" is pronounced like the country Togo ("TOH-go"), no
 The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient library for geometric operations, including spatial predicates, format conversions, and spatial indexing. ToGo's API is flexible and allows you to reason in either TG concepts (if you're familiar with the TG library) or Shapely conventions (the de facto standard for geospatial work in Python)—whichever fits your workflow best.
 
 See [SHAPELY_API.md](SHAPELY_API.md) for more details on Shapely compatibility.
+See [CHANGELOG.md](CHANGELOG.md) for version-by-version release notes.
+
+## What's New in v0.4.1
+
+Compared to v0.4.0, v0.4.1 focuses on Shapely-compatibility hardening and memory-safety fixes:
+
+- `LineString.project(other, normalized=False)` now supports `normalized=True` (returns 0.0..1.0).
+- `Geometry.exterior` and `Geometry.interiors` now return safely owned ring objects.
+- `Geometry.boundary` ring extraction is safer for polygon and multipolygon results.
+- `unary_union()` keeps coerced mixed-input geometries alive for the full operation.
+- Added regression tests for normalized `project()` edge cases.
 
 ## Installation
 
@@ -269,7 +280,7 @@ multi_poly2 = Geometry.from_multipolygon([poly1, poly2])
 
 ### LineString.project()
 
-`project()` returns the distance along a line to the nearest projected point — equivalent to Shapely's `project()`:
+`project()` returns the distance along a line to the nearest projected point — equivalent to Shapely's `project()`. Use `normalized=True` to get a fraction of total line length:
 
 ```python
 from togo import LineString, Point
@@ -284,6 +295,10 @@ print(line.project(Point(5, 0).as_geometry()))   # 5.0
 
 # Point above the midpoint still projects to 5.0
 print(line.project(Point(5, 3).as_geometry()))   # 5.0
+
+# Normalized distance in [0.0, 1.0]
+print(line.project(Point(5, 0).as_geometry(), normalized=True))   # 0.5
+print(line.project(Point(10, 0).as_geometry(), normalized=True))  # 1.0
 ```
 
 ## Polygon Indexing
