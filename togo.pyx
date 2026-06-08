@@ -1011,6 +1011,9 @@ cdef class Geometry:
                         "Line, Ring, or Poly"
                     )
         if temp_count > 0:
+            if (<size_t>(<unsigned int>temp_count)) > ((<size_t>-1) // sizeof(tg_geom *)):
+                free(arr)
+                raise OverflowError("temp_count is too large")
             temp_to_free = <tg_geom **>malloc(
                 (<size_t>(<unsigned int>temp_count)) * sizeof(tg_geom *)
             )
