@@ -3806,7 +3806,12 @@ def force_2d(geometry) -> Geometry:
     """
     cdef Geometry geom = _coerce_geometry_or_raise(geometry, "geometry")
     geom._ensure_initialized("this")
+
     cdef int geom_type = tg_geom_typeof(geom.geom)
+
+    # If already 2D, return a clone directly for simple geometries
+    if geom_type <= 3 and tg_geom_has_z(geom.geom) == 0 and tg_geom_has_m(geom.geom) == 0:
+        return _geometry_from_ptr(tg_geom_clone(geom.geom))
 
     # Fast path for Point - avoid Python callback entirely
     if geom_type == 1:
