@@ -1139,6 +1139,8 @@ cdef class Geometry:
         cdef int n = _checked_c_count(geoms, "geoms")
         if n == 0:
             raise ValueError("unary_union requires at least one geometry")
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_geom *)):
+            raise OverflowError("geoms is too large")
         cdef const tg_geom **arr = <const tg_geom **>malloc(
             (<size_t>(<unsigned int>n)) * sizeof(tg_geom *)
         )
