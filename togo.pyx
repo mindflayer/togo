@@ -1699,7 +1699,7 @@ cdef class Geometry:
 
         return _geometry_from_ptr(g_tg)
 
-    def union(self, other):
+    def union(self, other) -> Geometry:
         """Return the geometric union of this geometry with another."""
         cdef GEOSContextHandle_t ctx
         cdef GEOSGeometry *g1_geos
@@ -2219,7 +2219,7 @@ cdef class Point:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
-    def union(self, other):
+    def union(self, other) -> Geometry:
         cdef tg_geom *empty
 
         if other is None:
@@ -2632,7 +2632,7 @@ cdef class Ring:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
-    def union(self, other):
+    def union(self, other) -> Geometry:
         cdef tg_geom *empty
 
         if other is None:
@@ -2968,7 +2968,7 @@ cdef class Line:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
-    def union(self, other):
+    def union(self, other) -> Geometry:
         cdef tg_geom *empty
 
         if other is None:
@@ -3429,7 +3429,7 @@ cdef class Poly:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
-    def union(self, other):
+    def union(self, other) -> Geometry:
         cdef tg_geom *empty
 
         if other is None:
@@ -3804,29 +3804,31 @@ def force_2d(geometry) -> Geometry:
 
     Optimized implementation that avoids Python callbacks entirely.
     """
-    cdef int geom_type = tg_geom_typeof((<Geometry>geometry).geom)
+    cdef Geometry geom = _coerce_geometry_or_raise(geometry, "geometry")
+    geom._ensure_initialized("this")
+    cdef int geom_type = tg_geom_typeof(geom.geom)
 
     # Fast path for Point - avoid Python callback entirely
     if geom_type == 1:
-        return _force_2d_point(<Geometry>geometry)
+        return _force_2d_point(geom)
     # Fast path for LineString - avoid Python callback entirely
     elif geom_type == 2:
-        return _force_2d_linestring(<Geometry>geometry)
+        return _force_2d_linestring(geom)
     # Fast path for Polygon - avoid Python callback entirely
     elif geom_type == 3:
-        return _force_2d_polygon(<Geometry>geometry)
+        return _force_2d_polygon(geom)
     # Fast path for MultiPoint
     elif geom_type == 4:
-        return _force_2d_multipoint(<Geometry>geometry)
+        return _force_2d_multipoint(geom)
     # Fast path for MultiLineString
     elif geom_type == 5:
-        return _force_2d_multilinestring(<Geometry>geometry)
+        return _force_2d_multilinestring(geom)
     # Fast path for MultiPolygon
     elif geom_type == 6:
-        return _force_2d_multipolygon(<Geometry>geometry)
+        return _force_2d_multipolygon(geom)
     # GeometryCollection - recurse
     elif geom_type == 7:
-        return _force_2d_collection(<Geometry>geometry)
+        return _force_2d_collection(geom)
     else:
         raise ValueError(f"Unknown geometry type: {geom_type}")
 
@@ -3965,12 +3967,16 @@ cdef Geometry _force_2d_collection(Geometry geom):
     cdef int n = tg_geom_num_geometries(geom.geom)
     cdef list children = []
     cdef const tg_geom *child_geom
+    cdef tg_geom *child_clone
     cdef Geometry child_geom_obj
     cdef int i
 
     for i in range(n):
         child_geom = tg_geom_geometry_at(geom.geom, i)
-        child_geom_obj = _geometry_from_ptr(tg_geom_clone(child_geom))
+        child_clone = tg_geom_clone(child_geom)
+        if child_clone == NULL:
+            raise MemoryError("Failed to clone geometry in force_2d")
+        child_geom_obj = _geometry_from_ptr(child_clone)
         children.append(force_2d(child_geom_obj))
 
     return Geometry.from_geometrycollection(children)

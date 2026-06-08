@@ -264,3 +264,18 @@ def test_force_2d_polygon_and_collection_preserves_2d_shape():
     assert forced_gc[0].has_z is False
     assert forced_gc[1].type_string() == "LineString"
     assert forced_gc[1].has_z is False
+
+
+def test_force_2d_accepts_wrapper_types():
+    force_2d = getattr(tg, "force_2d")
+    forced = force_2d(tg.Point(1, 2))
+
+    assert forced.type_string() == "Point"
+    assert forced.coords == [(1.0, 2.0)]
+
+
+def test_force_2d_uninitialized_geometry_raises_managed_exception():
+    force_2d = getattr(tg, "force_2d")
+
+    with pytest.raises(ValueError, match="not initialized"):
+        force_2d(tg.Geometry())

@@ -30,7 +30,7 @@ pip install togo
 - Format conversion between WKT, GeoJSON, WKB, and HEX
 - Spatial indexing for accelerated queries
 - Memory-efficient C implementation with Python-friendly interface
-- Advanced operations via libgeos integration (buffer, unary union, simplify, centroid, convex_hull, force_2d, etc.)
+- Advanced operations via libgeos integration (buffer, unary union, simplify, centroid, convex_hull, etc.)
 - Distance and proximity operations (nearest_points, shortest_line, project)
 - `MultiPolygon` and `MultiLineString` are real Python classes — `isinstance()` checks work correctly
 - Geometry equality via `==` operator consistent with Shapely semantics
