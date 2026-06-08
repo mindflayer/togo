@@ -11,7 +11,7 @@ P0 – Accept / normalise ``LinearRing`` in the ``shape()`` parsing API.
 P1 – Export/contract consistency: anything produced by ``__geo_interface__``
      must be re-parseable by ``shape()``.
 
-The loky/joblib cross-process transfer tests use the same reproduce snippets
+The loky/joblib cross-process transfer tests use the same reproduction snippets
 supplied by MBP so that passing these tests is a direct proxy for the MBP
 pipeline being unblocked.
 """
@@ -69,8 +69,10 @@ class TestLinearRingParsing:
         coords = [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0), (0.0, 0.0)]
         payload = {"type": "LinearRing", "coordinates": coords}
         result = shape(payload)
+        expected = Polygon(coords).as_geometry()
+
         assert result is not None
-        assert not result.is_empty
+        assert result.equals(expected)
 
     def test_shape_ring_object_via_geo_interface(self):
         """shape() called with a Ring object must not raise (uses __geo_interface__)."""
@@ -96,18 +98,20 @@ class TestLinearRingParsing:
         assert result is not None
 
     def test_shape_linear_ring_empty_coords(self):
-        """Empty coordinates list should not raise; result may be empty geometry."""
+        """Empty coordinates list should produce an empty polygon geometry."""
         payload = {"type": "LinearRing", "coordinates": []}
-        # Should not raise a ParseError – may return an empty geometry
-        try:
-            result = shape(payload)
-            # If it returns, verify it is a Geometry
-            from togo import Geometry
+        result = shape(payload)
 
-            assert isinstance(result, Geometry) or hasattr(result, "as_geometry")
-        except (ValueError, RuntimeError):
-            # Acceptable – empty ring may not be constructable
-            pass
+        assert result.geom_type == "Polygon"
+        assert result.is_empty
+
+    def test_shape_linear_ring_none_coords(self):
+        """None coordinates should produce an empty polygon geometry."""
+        payload = {"type": "LinearRing", "coordinates": None}
+        result = shape(payload)
+
+        assert result.geom_type == "Polygon"
+        assert result.is_empty
 
     def test_geo_interface_contract_all_types(self):
         """Every type exported via __geo_interface__ must be parseable by shape()."""

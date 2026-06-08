@@ -3873,7 +3873,9 @@ def shape(obj) -> Geometry:
         # when polygon boundary/exterior objects cross process boundaries.
         geom_type = obj.get("type", "")
         if geom_type == "LinearRing":
-            coords = obj.get("coordinates", [])
+            coords = obj.get("coordinates")
+            if not coords:
+                coords = []
             return Ring(coords).as_geometry()
         return from_geojson(json.dumps(obj))
 
