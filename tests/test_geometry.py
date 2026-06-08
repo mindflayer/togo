@@ -1,3 +1,5 @@
+import gc
+
 import pytest
 from togo import Geometry, Point, Ring, Poly
 
@@ -184,6 +186,27 @@ def test_geometry_poly_accessor():
     assert ext.num_points == 5
 
 
+def test_geometry_line_accessor_survives_parent_gc():
+    points = [(0, 0), (1, 1), (2, 2)]
+    geom = Geometry.from_linestring(points)
+    line = geom.line()
+    del geom
+    gc.collect()
+
+    assert line.points(as_tuples=True) == points
+
+
+def test_geometry_poly_accessor_survives_parent_gc():
+    geom = Geometry("POLYGON((0 0,1 0,1 1,0 1,0 0))", fmt="wkt")
+    poly = geom.poly()
+    exterior = poly.exterior
+    del geom
+    gc.collect()
+
+    assert poly.exterior.num_points == 5
+    assert exterior.num_points == 5
+
+
 def test_geometry_geom_at():
     # GeometryCollection with two points
     g = Geometry("GEOMETRYCOLLECTION(POINT(1 2),POINT(3 4))", fmt="wkt")
@@ -204,6 +227,24 @@ def test_tgx_meters_grid():
     # Should round-trip back to original coordinates
     assert g3.point().x == pytest.approx(1.0, abs=1e-6)
     assert g3.point().y == pytest.approx(2.0, abs=1e-6)
+
+
+def test_tgx_meters_grid_empty_geometries():
+    origin = Point(0.0, 0.0)
+    geoms = [
+        Geometry.from_multipoint([]),
+        Geometry.from_multilinestring([]),
+        Geometry.from_multipolygon([]),
+        Geometry.from_geometrycollection([]),
+    ]
+
+    for geom in geoms:
+        converted = geom.to_meters_grid(origin)
+        round_tripped = converted.from_meters_grid(origin)
+        assert converted.type_string() == geom.type_string()
+        assert converted.is_empty
+        assert round_tripped.type_string() == geom.type_string()
+        assert round_tripped.is_empty
 
 
 def test_unary_union_geos_lines():
