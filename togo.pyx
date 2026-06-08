@@ -3587,17 +3587,23 @@ cdef class Poly:
         return self.as_geometry().intersects(other_g)
 
     @property
-    def boundary(self) -> Line:
-        """Return the exterior boundary of the polygon as a LineString (Shapely-compatible).
+    def boundary(self):
+        """Return the polygon boundary as LineString or MultiLineString (Shapely-compatible).
 
         Returns:
         --------
-        Line
-            The exterior ring as a LineString
+        Line or MultiLineString
+            Exterior ring as LineString, or exterior + holes as MultiLineString
         """
         ext = self.exterior
+        holes = self.interiors
         pts = ext.points(as_tuples=True)
-        return Line(pts)
+        if len(holes) == 0:
+            return Line(pts)
+        lines = [pts]
+        for hole in holes:
+            lines.append(hole.points(as_tuples=True))
+        return MultiLineString(lines)
 
 
 cdef class Segment:
