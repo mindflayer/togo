@@ -362,7 +362,10 @@ cdef class Geometry:
                 raise ValueError("Failed to parse geometry")
             err = tg_geom_error(self.geom)
             if err != NULL:
-                raise ValueError(err.decode("utf-8"))
+                msg = err.decode("utf-8")
+                tg_geom_free(self.geom)
+                self.geom = NULL
+                raise ValueError(msg)
             return
         # If data is None, this might be an object created from a C pointer
         # The pointer will be set after __cinit__ in _geometry_from_ptr
@@ -862,6 +865,8 @@ cdef class Geometry:
             if not gptr:
                 raise ValueError("Failed to create empty MultiPoint")
             return _geometry_from_ptr(gptr)
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_point)):
+            raise OverflowError("points is too large")
         cdef tg_point *pts = <tg_point *>malloc((<size_t>(<unsigned int>n)) * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for MultiPoint")
@@ -2162,6 +2167,8 @@ cdef class Ring:
         cdef int i
         cdef double x
         cdef double y
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_point)):
+            raise OverflowError("points is too large")
         cdef tg_point *pts = <tg_point *>malloc((<size_t>(<unsigned int>n)) * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for Ring")
@@ -2481,6 +2488,8 @@ cdef class Line:
         cdef int i
         cdef double x
         cdef double y
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_point)):
+            raise OverflowError("points is too large")
         cdef tg_point *pts = <tg_point *>malloc((<size_t>(<unsigned int>n)) * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for Line")
@@ -2865,6 +2874,8 @@ cdef class Poly:
             holes_arr = NULL
         else:
             nholes = _checked_c_count(holes, "holes")
+            if (<size_t>(<unsigned int>nholes)) > ((<size_t>-1) // sizeof(tg_ring *)):
+                raise OverflowError("holes is too large")
             hole_ptrs = <tg_ring **>malloc(
                 (<size_t>(<unsigned int>nholes)) * sizeof(tg_ring *)
             )
