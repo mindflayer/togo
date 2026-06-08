@@ -342,6 +342,24 @@ cdef Geometry _coerce_geometry_or_raise(object obj, str arg_name, bint allow_poi
     raise TypeError(f"{arg_name} must be a Geometry instance")
 
 
+def _restore_geometry_as(cls, bytes wkb_bytes):
+    """Rebuild Geometry (or Geometry subclass) from WKB for pickling."""
+    cdef Geometry geom = from_wkb(wkb_bytes)
+    if cls is Geometry:
+        return geom
+    obj = cls.__new__(cls)
+    (<Geometry>obj).geom = geom.geom
+    geom.geom = NULL
+    return obj
+
+
+def _restore_poly_as(cls, exterior_coords, hole_coords):
+    """Rebuild Poly/Polygon preserving the original class when pickling."""
+    if cls is Poly:
+        return Poly(Ring(exterior_coords), [Ring(hole) for hole in hole_coords])
+    return cls(exterior_coords, hole_coords)
+
+
 cdef class Geometry:
     cdef tg_geom *geom
 
@@ -394,6 +412,9 @@ cdef class Geometry:
 
     def __repr__(self):
         return self.__str__()
+
+    def __reduce__(self):
+        return (_restore_geometry_as, (type(self), self.to_wkb()))
 
     cdef void _ensure_initialized(self, str label) except *:
         if self.geom == NULL:
@@ -1979,6 +2000,9 @@ cdef class Point:
     def __hash__(self):
         return hash((self.pt.x, self.pt.y))
 
+    def __reduce__(self):
+        return (Point, (self.pt.x, self.pt.y))
+
     @property
     def x(self) -> float:
         return self.pt.x
@@ -2366,6 +2390,9 @@ cdef class Ring:
     def __hash__(self):
         return hash(self.as_geometry().to_wkb())
 
+    def __reduce__(self):
+        return (Ring, (self.points(as_tuples=True),))
+
     @staticmethod
     cdef Ring from_ptr(tg_ring *ptr):
         if ptr == NULL:
@@ -2453,6 +2480,11 @@ cdef class Ring:
     def is_valid(self):
         """A Ring is always valid."""
         return True
+
+    @property
+    def __geo_interface__(self) -> dict:
+        """Returns GeoJSON-like dict for Shapely compatibility."""
+        return {"type": "LinearRing", "coordinates": self.points(as_tuples=True)}
 
     def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
@@ -2706,6 +2738,9 @@ cdef class Line:
     def __hash__(self):
         return hash(self.as_geometry().to_wkb())
 
+    def __reduce__(self):
+        return (Line, (self.points(as_tuples=True),))
+
     @property
     def num_points(self) -> int:
         return tg_line_num_points(self.line)
@@ -2777,6 +2812,20 @@ cdef class Line:
     def is_valid(self) -> bool:
         """A LineString is always valid."""
         return True
+
+    @property
+    def boundary(self) -> Geometry:
+        """Return line endpoints as MultiPoint; closed lines have empty boundary."""
+        cdef int n = tg_line_num_points(self.line)
+        cdef const tg_point *pts
+        if n < 2:
+            return Geometry.from_multipoint([])
+        pts = tg_line_points(self.line)
+        if pts[0].x == pts[n - 1].x and pts[0].y == pts[n - 1].y:
+            return Geometry.from_multipoint([])
+        return Geometry.from_multipoint(
+            [(pts[0].x, pts[0].y), (pts[n - 1].x, pts[n - 1].y)]
+        )
 
     @property
     def wkt(self) -> str:
@@ -3117,6 +3166,16 @@ cdef class Poly:
 
     def __hash__(self):
         return hash(self.as_geometry().to_wkb())
+
+    def __reduce__(self):
+        return (
+            _restore_poly_as,
+            (
+                type(self),
+                self.exterior.points(as_tuples=True),
+                [self.hole(i).points(as_tuples=True) for i in range(self.num_holes())],
+            ),
+        )
 
     @property
     def exterior(self) -> Ring:
