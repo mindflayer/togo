@@ -540,6 +540,27 @@ class TestModuleLevelFunctions:
         # Bounds should be approximately equal
         assert geom2.bounds == pytest.approx(geom1.bounds)
 
+    def test_shape_from_geojson_mapping(self):
+        from togo import shape
+
+        geom = shape({"type": "Point", "coordinates": [2, 3]})
+        assert geom.geom_type == "Point"
+        assert geom.coords == [(2.0, 3.0)]
+
+    def test_shape_from_geo_interface_object(self):
+        from togo import shape, Point
+
+        geom = shape(Point(4, 5))
+        assert geom.geom_type == "Point"
+        assert geom.coords == [(4.0, 5.0)]
+
+    def test_box_creates_polygon_from_bounds(self):
+        from togo import box
+
+        geom = box(0, 1, 3, 4)
+        assert geom.geom_type == "Polygon"
+        assert geom.bounds == (0.0, 1.0, 3.0, 4.0)
+
     def test_to_wkt_from_point(self):
         from togo import Point, to_wkt
 
@@ -621,6 +642,14 @@ class TestMultiGeometries:
         points = [(0, 0), (1, 1), (2, 2)]
         multi = MultiPoint(points)
         assert multi.geom_type == "MultiPoint"
+    
+    def test_multipoint_getitem_returns_point(self):
+        from togo import MultiPoint
+
+        mp = MultiPoint([(0, 0), (1, 1), (2, 2)])
+        p = mp[1]
+        assert p.geom_type == "Point"
+        assert p.coords == [(1.0, 1.0)]
 
     def test_multilinestring_creation(self):
         from togo import MultiLineString, LineString
@@ -652,6 +681,53 @@ class TestMultiGeometries:
         geoms = [Point(0, 0), LineString([(1, 1), (2, 2)])]
         collection = GeometryCollection(geoms)
         assert collection.geom_type == "GeometryCollection"
+
+    def test_multi_geoms_property(self):
+        from togo import MultiPoint
+
+        multi = MultiPoint([(0, 0), (1, 1), (2, 2)])
+        children = multi.geoms
+        assert isinstance(children, tuple)
+        assert len(children) == 3
+        assert [g.geom_type for g in children] == ["Point", "Point", "Point"]
+
+    def test_geometry_collection_geoms_property(self):
+        from togo import GeometryCollection, Point, LineString
+
+        collection = GeometryCollection([Point(0, 0), LineString([(1, 1), (2, 2)])])
+        children = collection.geoms
+        assert isinstance(children, tuple)
+        assert [g.geom_type for g in children] == ["Point", "LineString"]
+
+    def test_multilinestring_geoms_property(self):
+        from togo import MultiLineString
+
+        multi = MultiLineString([[(0, 0), (1, 1)], [(2, 2), (3, 3)]])
+        children = multi.geoms
+        assert isinstance(children, tuple)
+        assert [g.geom_type for g in children] == ["LineString", "LineString"]
+
+    def test_multipolygon_geoms_property(self):
+        from togo import MultiPolygon, Polygon
+
+        multi = MultiPolygon([
+            Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)]),
+            Polygon([(3, 3), (4, 3), (4, 4), (3, 4), (3, 3)]),
+        ])
+        children = multi.geoms
+        assert isinstance(children, tuple)
+        assert [g.geom_type for g in children] == ["Polygon", "Polygon"]
+
+    def test_polygon_boundary_with_holes_returns_multilinestring(self):
+        from togo import Polygon
+
+        poly = Polygon(
+            [(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)],
+            holes=[[(1, 1), (1, 2), (2, 2), (2, 1), (1, 1)]],
+        )
+        b = poly.boundary
+        assert b.geom_type == "MultiLineString"
+        assert len(b.geoms) == 2
 
 
 class TestSpatialPredicates:

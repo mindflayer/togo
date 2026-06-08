@@ -693,11 +693,18 @@ cdef class Geometry:
         cdef const tg_geom *g
         cdef int t = tg_geom_typeof(self.geom)
         cdef int n
+        cdef tg_point pt
         cdef const tg_line *ln
         cdef const tg_poly *poly
         # 1: Point, 2: LineString, 3: Polygon, 4: MultiPoint,
         # 5: MultiLineString, 6: MultiPolygon, 7: GeometryCollection
-        if t == 5:  # MultiLineString
+        if t == 4:  # MultiPoint
+            n = tg_geom_num_points(self.geom)
+            if not (0 <= idx < n):
+                raise IndexError("MultiPoint index out of range")
+            pt = tg_geom_point_at(self.geom, idx)
+            return _geometry_from_ptr(tg_geom_new_point(pt))
+        elif t == 5:  # MultiLineString
             n = tg_geom_num_lines(self.geom)
             if not (0 <= idx < n):
                 raise IndexError("MultiLineString index out of range")
@@ -890,15 +897,30 @@ cdef class Geometry:
     @property
     def boundary(self):
         cdef int t = tg_geom_typeof(self.geom)
-        cdef int n, i, n_pts, k
+        cdef int n, i, j, n_pts, k, n_holes
         cdef const tg_poly *poly
         cdef const tg_ring *ext
+        cdef const tg_ring *hole
         cdef const tg_point *pts_ptr
         cdef list lines
         cdef Ring ext_ring
         if t == 3:
-            ext_ring = self.exterior
-            return Line(ext_ring.points(as_tuples=True))
+            poly = tg_geom_poly(self.geom)
+            n_holes = tg_poly_num_holes(poly)
+            if n_holes == 0:
+                ext_ring = self.exterior
+                return Line(ext_ring.points(as_tuples=True))
+            lines = []
+            ext = tg_poly_exterior(poly)
+            n_pts = tg_ring_num_points(ext)
+            pts_ptr = tg_ring_points(ext)
+            lines.append([(pts_ptr[k].x, pts_ptr[k].y) for k in range(n_pts)])
+            for i in range(n_holes):
+                hole = tg_poly_hole_at(poly, i)
+                n_pts = tg_ring_num_points(hole)
+                pts_ptr = tg_ring_points(hole)
+                lines.append([(pts_ptr[k].x, pts_ptr[k].y) for k in range(n_pts)])
+            return MultiLineString(lines)
         if t == 6:
             n = tg_geom_num_polys(self.geom)
             lines = []
@@ -908,8 +930,53 @@ cdef class Geometry:
                 n_pts = tg_ring_num_points(ext)
                 pts_ptr = tg_ring_points(ext)
                 lines.append([(pts_ptr[k].x, pts_ptr[k].y) for k in range(n_pts)])
+                n_holes = tg_poly_num_holes(poly)
+                for j in range(n_holes):
+                    hole = tg_poly_hole_at(poly, j)
+                    n_pts = tg_ring_num_points(hole)
+                    pts_ptr = tg_ring_points(hole)
+                    lines.append([(pts_ptr[k].x, pts_ptr[k].y) for k in range(n_pts)])
             return MultiLineString(lines)
         raise AttributeError(f"boundary not available for {self.type_string()}")
+
+    @property
+    def geoms(self):
+        """Return child geometries for multi and collection geometries."""
+        cdef int t = tg_geom_typeof(self.geom)
+        cdef int n, i
+        cdef tg_point pt
+        cdef const tg_line *ln
+        cdef const tg_poly *poly
+        cdef const tg_geom *g
+        cdef list result
+
+        result = []
+        if t == 4:
+            n = tg_geom_num_points(self.geom)
+            for i in range(n):
+                pt = tg_geom_point_at(self.geom, i)
+                result.append(_geometry_from_ptr(tg_geom_new_point(pt)))
+            return tuple(result)
+        if t == 5:
+            n = tg_geom_num_lines(self.geom)
+            for i in range(n):
+                ln = tg_geom_line_at(self.geom, i)
+                result.append(_geometry_from_ptr(tg_geom_new_linestring(<tg_line *>ln)))
+            return tuple(result)
+        if t == 6:
+            n = tg_geom_num_polys(self.geom)
+            for i in range(n):
+                poly = tg_geom_poly_at(self.geom, i)
+                result.append(_geometry_from_ptr(tg_geom_new_polygon(<tg_poly *>poly)))
+            return tuple(result)
+        if t == 7:
+            n = tg_geom_num_geometries(self.geom)
+            for i in range(n):
+                g = tg_geom_geometry_at(self.geom, i)
+                if g != NULL:
+                    result.append(_geometry_from_ptr(tg_geom_clone(g)))
+            return tuple(result)
+        raise AttributeError(f"geoms not available for {self.type_string()}")
 
     @property
     def __geo_interface__(self) -> dict:
@@ -3520,17 +3587,23 @@ cdef class Poly:
         return self.as_geometry().intersects(other_g)
 
     @property
-    def boundary(self) -> Line:
-        """Return the exterior boundary of the polygon as a LineString (Shapely-compatible).
+    def boundary(self):
+        """Return the polygon boundary as LineString or MultiLineString (Shapely-compatible).
 
         Returns:
         --------
-        Line
-            The exterior ring as a LineString
+        Line or MultiLineString
+            Exterior ring as LineString, or exterior + holes as MultiLineString
         """
         ext = self.exterior
+        holes = self.interiors
         pts = ext.points(as_tuples=True)
-        return Line(pts)
+        if len(holes) == 0:
+            return Line(pts)
+        lines = [pts]
+        for hole in holes:
+            lines.append(hole.points(as_tuples=True))
+        return MultiLineString(lines)
 
 
 cdef class Segment:
@@ -3715,14 +3788,36 @@ class MultiLineString(Geometry):
         return f"MultiLineString({self.to_wkt()})"
 
 
-def MultiPoint(points) -> Geometry:
-    """Create a MultiPoint geometry from a list of points"""
-    return Geometry.from_multipoint(points)
+class MultiPoint(Geometry):
+    """Shapely-compatible MultiPoint class (supports isinstance checks)."""
+
+    def __new__(cls, points=None):
+        return Geometry.__new__(cls)
+
+    def __init__(self, points=None):
+        if points is None:
+            points = []
+        tmp = Geometry.from_multipoint(points)
+        self._init_from_geometry(tmp)
+
+    def __repr__(self):
+        return f"MultiPoint({self.to_wkt()})"
 
 
-def GeometryCollection(geoms) -> Geometry:
-    """Create a GeometryCollection from a list of geometries"""
-    return Geometry.from_geometrycollection(geoms)
+class GeometryCollection(Geometry):
+    """Shapely-compatible GeometryCollection class (supports isinstance checks)."""
+
+    def __new__(cls, geoms=None):
+        return Geometry.__new__(cls)
+
+    def __init__(self, geoms=None):
+        if geoms is None:
+            geoms = []
+        tmp = Geometry.from_geometrycollection(geoms)
+        self._init_from_geometry(tmp)
+
+    def __repr__(self):
+        return f"GeometryCollection({self.to_wkt()})"
 
 
 def unary_union(geoms) -> Geometry:
@@ -3746,6 +3841,41 @@ def unary_union(geoms) -> Geometry:
         If the union operation fails
     """
     return Geometry.unary_union(list(geoms))
+
+
+def shape(obj) -> Geometry:
+    """Create a Geometry from a GeoJSON-like mapping or JSON text."""
+    import json
+
+    if obj is None:
+        raise TypeError("shape() argument cannot be None")
+
+    if hasattr(obj, "__geo_interface__"):
+        obj = obj.__geo_interface__
+
+    if isinstance(obj, (bytes, bytearray)):
+        obj = obj.decode("utf-8")
+
+    if isinstance(obj, str):
+        return from_geojson(obj)
+
+    if isinstance(obj, dict):
+        return from_geojson(json.dumps(obj))
+
+    raise TypeError("shape() requires a GeoJSON mapping/string or __geo_interface__ object")
+
+
+def box(minx, miny, maxx, maxy, ccw=True) -> Polygon:
+    """Create a rectangular polygon from bounds (Shapely-compatible)."""
+    if ccw:
+        coords = [
+            (minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy), (minx, miny)
+        ]
+    else:
+        coords = [
+            (minx, miny), (minx, maxy), (maxx, maxy), (maxx, miny), (minx, miny)
+        ]
+    return Polygon(coords)
 
 
 # Shapely-compatible module-level functions
@@ -4411,7 +4541,7 @@ __all__ = [
     "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection",
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
-    "unary_union", "nearest_points", "shortest_line", "convex_hull",
+    "unary_union", "shape", "box", "nearest_points", "shortest_line", "convex_hull",
     "intersection", "union", "transform", "force_2d",
     "set_polygon_indexing_mode", "TGIndex"
 ]
