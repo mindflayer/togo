@@ -496,11 +496,17 @@ cdef class Geometry:
         return tg_geom_num_geometries(self.geom)
 
     def equals(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_equals(self.geom, other_g.geom) != 0
 
     def disjoint(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_disjoint(self.geom, other_g.geom) != 0
 
     def contains(self, other) -> bool:
@@ -770,6 +776,7 @@ cdef class Geometry:
     @property
     def length(self) -> float:
         """Returns length for LineString geometries"""
+        self._ensure_initialized("this")
         cdef int t = tg_geom_typeof(self.geom)
         cdef const tg_line *line
         cdef const tg_poly *poly
@@ -4095,7 +4102,7 @@ def intersection(geom1, geom2) -> Geometry:
     return g1.intersection(g2)
 
 
-def union(geom1, geom2):
+def union(geom1, geom2) -> Geometry:
     """Return the geometric union of two geometries."""
     cdef tg_geom *empty
 
