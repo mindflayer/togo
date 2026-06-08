@@ -6,7 +6,7 @@ P0 – Native pickling for runtime geometry and sub-geometry objects
     (Point, LineString, Polygon, Multi*, GeometryCollection,
      polygon exterior/boundary, line boundary).
 
-P0 – Accept / normalise ``LinearRing`` in the ``shape()`` parsing API.
+P0 – Accept / normalize ``LinearRing`` in the ``shape()`` parsing API.
 
 P1 – Export/contract consistency: anything produced by ``__geo_interface__``
      must be re-parseable by ``shape()``.

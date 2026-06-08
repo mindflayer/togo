@@ -3847,7 +3847,7 @@ def shape(obj) -> Geometry:
     """Create a Geometry from a GeoJSON-like mapping or JSON text.
 
     Accepts all standard GeoJSON types plus ``LinearRing``, which is
-    normalised to a Ring-based Polygon geometry so that round-trips
+    normalized to a Ring-based Polygon geometry so that round-trips
     through ``__geo_interface__`` (e.g. from ``Ring`` or ``Polygon.exterior``)
     never raise a parse error.
     """
