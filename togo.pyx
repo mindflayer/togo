@@ -3844,7 +3844,13 @@ def unary_union(geoms) -> Geometry:
 
 
 def shape(obj) -> Geometry:
-    """Create a Geometry from a GeoJSON-like mapping or JSON text."""
+    """Create a Geometry from a GeoJSON-like mapping or JSON text.
+
+    Accepts all standard GeoJSON types plus ``LinearRing``, which is
+    normalised to a Ring-based Polygon geometry so that round-trips
+    through ``__geo_interface__`` (e.g. from ``Ring`` or ``Polygon.exterior``)
+    never raise a parse error.
+    """
     import json
 
     if obj is None:
@@ -3860,6 +3866,15 @@ def shape(obj) -> Geometry:
         return from_geojson(obj)
 
     if isinstance(obj, dict):
+        # TG's GeoJSON parser does not recognise "LinearRing".  Normalise it
+        # to a Ring so that payloads produced by Ring.__geo_interface__ (or
+        # Shapely LinearRing objects) can be round-tripped through shape()
+        # without error.  This is the direct cause of loky worker failures
+        # when polygon boundary/exterior objects cross process boundaries.
+        geom_type = obj.get("type", "")
+        if geom_type == "LinearRing":
+            coords = obj.get("coordinates", [])
+            return Ring(coords).as_geometry()
         return from_geojson(json.dumps(obj))
 
     raise TypeError("shape() requires a GeoJSON mapping/string or __geo_interface__ object")
