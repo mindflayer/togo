@@ -3799,6 +3799,183 @@ def transform(func, geometry) -> Geometry:
     return _transform_recursive(func, geom)
 
 
+def force_2d(geometry) -> Geometry:
+    """Return a 2D copy of a geometry, dropping any Z/M coordinates.
+
+    Optimized implementation that avoids Python callbacks entirely.
+    """
+    cdef int geom_type = tg_geom_typeof((<Geometry>geometry).geom)
+
+    # Fast path for Point - avoid Python callback entirely
+    if geom_type == 1:
+        return _force_2d_point(<Geometry>geometry)
+    # Fast path for LineString - avoid Python callback entirely
+    elif geom_type == 2:
+        return _force_2d_linestring(<Geometry>geometry)
+    # Fast path for Polygon - avoid Python callback entirely
+    elif geom_type == 3:
+        return _force_2d_polygon(<Geometry>geometry)
+    # Fast path for MultiPoint
+    elif geom_type == 4:
+        return _force_2d_multipoint(<Geometry>geometry)
+    # Fast path for MultiLineString
+    elif geom_type == 5:
+        return _force_2d_multilinestring(<Geometry>geometry)
+    # Fast path for MultiPolygon
+    elif geom_type == 6:
+        return _force_2d_multipolygon(<Geometry>geometry)
+    # GeometryCollection - recurse
+    elif geom_type == 7:
+        return _force_2d_collection(<Geometry>geometry)
+    else:
+        raise ValueError(f"Unknown geometry type: {geom_type}")
+
+
+cdef Geometry _force_2d_point(Geometry geom):
+    """Fast point force_2d - no Python callbacks"""
+    cdef tg_point pt = tg_geom_point(geom.geom)
+    return _geometry_from_ptr(tg_geom_new_point(pt))
+
+
+cdef Geometry _force_2d_linestring(Geometry geom):
+    """Fast linestring force_2d - no Python callbacks"""
+    cdef const tg_line *line = tg_geom_line(geom.geom)
+    cdef int n = tg_line_num_points(line)
+    cdef const tg_point *pts = tg_line_points(line)
+    cdef list coords = []
+    cdef int i
+
+    for i in range(n):
+        coords.append((pts[i].x, pts[i].y))
+
+    cdef Line tmp_line = Line(coords)
+    return _geometry_from_ptr(tg_geom_new_linestring(tmp_line._get_c_line()))
+
+
+cdef Geometry _force_2d_polygon(Geometry geom):
+    """Fast polygon force_2d - no Python callbacks"""
+    cdef const tg_poly *poly = tg_geom_poly(geom.geom)
+    cdef const tg_ring *ext_ring = tg_poly_exterior(poly)
+    cdef int n = tg_ring_num_points(ext_ring)
+    cdef const tg_point *pts = tg_ring_points(ext_ring)
+    cdef list ext_coords = []
+    cdef int i, j, nholes, hole_npts
+    cdef const tg_ring *hole
+    cdef const tg_point *hole_pts
+    cdef list holes = []
+
+    # Extract exterior ring coordinates
+    for i in range(n):
+        ext_coords.append((pts[i].x, pts[i].y))
+
+    # Extract holes
+    nholes = tg_poly_num_holes(poly)
+    for j in range(nholes):
+        hole = tg_poly_hole_at(poly, j)
+        hole_npts = tg_ring_num_points(hole)
+        hole_pts = tg_ring_points(hole)
+        hole_coords = []
+        for i in range(hole_npts):
+            hole_coords.append((hole_pts[i].x, hole_pts[i].y))
+        holes.append(Ring(hole_coords))
+
+    cdef Ring ext = Ring(ext_coords)
+    cdef Poly tmp_poly = Poly(ext, holes if holes else None)
+    return _geometry_from_ptr(tg_geom_new_polygon(tmp_poly._get_c_poly()))
+
+
+cdef Geometry _force_2d_multipoint(Geometry geom):
+    """Fast multipoint force_2d - no Python callbacks"""
+    cdef int n = tg_geom_num_points(geom.geom)
+    cdef list coords = []
+    cdef int i
+    cdef tg_point pt
+
+    for i in range(n):
+        pt = tg_geom_point_at(geom.geom, i)
+        coords.append((pt.x, pt.y))
+
+    return Geometry.from_multipoint(coords)
+
+
+cdef Geometry _force_2d_multilinestring(Geometry geom):
+    """Fast multilinestring force_2d - no Python callbacks"""
+    cdef int n = tg_geom_num_lines(geom.geom)
+    cdef list lines = []
+    cdef const tg_line *line
+    cdef int line_npts, i, j
+    cdef const tg_point *pts
+    cdef list coords
+
+    for i in range(n):
+        line = tg_geom_line_at(geom.geom, i)
+        line_npts = tg_line_num_points(line)
+        pts = tg_line_points(line)
+        coords = []
+        for j in range(line_npts):
+            coords.append((pts[j].x, pts[j].y))
+        lines.append(coords)
+
+    return Geometry.from_multilinestring(lines)
+
+
+cdef Geometry _force_2d_multipolygon(Geometry geom):
+    """Fast multipolygon force_2d - no Python callbacks"""
+    cdef int n = tg_geom_num_polys(geom.geom)
+    cdef list polys = []
+    cdef const tg_poly *poly
+    cdef const tg_ring *ext_ring
+    cdef const tg_ring *hole
+    cdef int i, j, k, nholes, npts, hole_npts
+    cdef const tg_point *pts
+    cdef const tg_point *hole_pts
+    cdef list ext_coords, hole_coords, holes
+    cdef Ring ext
+    cdef Poly tmp_poly
+
+    for i in range(n):
+        poly = tg_geom_poly_at(geom.geom, i)
+        ext_ring = tg_poly_exterior(poly)
+        npts = tg_ring_num_points(ext_ring)
+        pts = tg_ring_points(ext_ring)
+        ext_coords = []
+        for j in range(npts):
+            ext_coords.append((pts[j].x, pts[j].y))
+
+        nholes = tg_poly_num_holes(poly)
+        holes = []
+        for j in range(nholes):
+            hole = tg_poly_hole_at(poly, j)
+            hole_npts = tg_ring_num_points(hole)
+            hole_pts = tg_ring_points(hole)
+            hole_coords = []
+            for k in range(hole_npts):
+                hole_coords.append((hole_pts[k].x, hole_pts[k].y))
+            holes.append(Ring(hole_coords))
+
+        ext = Ring(ext_coords)
+        tmp_poly = Poly(ext, holes if holes else None)
+        polys.append(tmp_poly)
+
+    return Geometry.from_multipolygon(polys)
+
+
+cdef Geometry _force_2d_collection(Geometry geom):
+    """Fast geometry collection force_2d - recurse with optimized path"""
+    cdef int n = tg_geom_num_geometries(geom.geom)
+    cdef list children = []
+    cdef const tg_geom *child_geom
+    cdef Geometry child_geom_obj
+    cdef int i
+
+    for i in range(n):
+        child_geom = tg_geom_geometry_at(geom.geom, i)
+        child_geom_obj = _geometry_from_ptr(tg_geom_clone(child_geom))
+        children.append(force_2d(child_geom_obj))
+
+    return Geometry.from_geometrycollection(children)
+
+
 cdef tuple _validate_transform_result(object result):
     """
     Validate and convert the result from a transform function.
@@ -4165,6 +4342,6 @@ __all__ = [
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
     "unary_union", "nearest_points", "shortest_line", "convex_hull",
-    "intersection", "union", "transform",
+    "intersection", "union", "transform", "force_2d",
     "set_polygon_indexing_mode", "TGIndex"
 ]

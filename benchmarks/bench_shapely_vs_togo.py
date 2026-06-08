@@ -41,6 +41,7 @@ try:
         nearest_points,
         shortest_line,
         intersection,
+        force_2d,
     )
 except Exception as e:
     print("ERROR: Failed to import togo:", e)
@@ -615,9 +616,11 @@ def main():
     bench_case(
         "nearest_points (point to point)",
         lambda: nearest_points(np_point1, np_point2),
-        lambda: shp_nearest_points(shp_np_point1, shp_np_point2)
-        if shp_nearest_points
-        else None,
+        lambda: (
+            shp_nearest_points(shp_np_point1, shp_np_point2)
+            if shp_nearest_points
+            else None
+        ),
         iters=1000,
     )
 
@@ -630,9 +633,11 @@ def main():
     bench_case(
         "nearest_points (point to linestring)",
         lambda: nearest_points(np_point, np_line),
-        lambda: shp_nearest_points(shp_np_point, shp_np_line)
-        if shp_nearest_points
-        else None,
+        lambda: (
+            shp_nearest_points(shp_np_point, shp_np_line)
+            if shp_nearest_points
+            else None
+        ),
         iters=500,
     )
 
@@ -645,9 +650,11 @@ def main():
     bench_case(
         "nearest_points (point to polygon)",
         lambda: nearest_points(np_point_poly, np_poly),
-        lambda: shp_nearest_points(shp_np_point_poly, shp_np_poly)
-        if shp_nearest_points
-        else None,
+        lambda: (
+            shp_nearest_points(shp_np_point_poly, shp_np_poly)
+            if shp_nearest_points
+            else None
+        ),
         iters=500,
     )
 
@@ -660,9 +667,11 @@ def main():
     bench_case(
         "nearest_points (polygon to polygon)",
         lambda: nearest_points(np_poly1, np_poly2),
-        lambda: shp_nearest_points(shp_np_poly1, shp_np_poly2)
-        if shp_nearest_points
-        else None,
+        lambda: (
+            shp_nearest_points(shp_np_poly1, shp_np_poly2)
+            if shp_nearest_points
+            else None
+        ),
         iters=500,
     )
 
@@ -675,9 +684,9 @@ def main():
     bench_case(
         "shortest_line (point to linestring)",
         lambda: shortest_line(sl_point, sl_line),
-        lambda: shp_shortest_line(shp_sl_point, shp_sl_line)
-        if shp_shortest_line
-        else None,
+        lambda: (
+            shp_shortest_line(shp_sl_point, shp_sl_line) if shp_shortest_line else None
+        ),
         iters=500,
     )
 
@@ -690,9 +699,11 @@ def main():
     bench_case(
         "shortest_line (point to polygon)",
         lambda: shortest_line(sl_point_poly, sl_poly),
-        lambda: shp_shortest_line(shp_sl_point_poly, shp_sl_poly)
-        if shp_shortest_line
-        else None,
+        lambda: (
+            shp_shortest_line(shp_sl_point_poly, shp_sl_poly)
+            if shp_shortest_line
+            else None
+        ),
         iters=500,
     )
 
@@ -705,9 +716,9 @@ def main():
     bench_case(
         "shortest_line (polygon to polygon)",
         lambda: shortest_line(sl_poly1, sl_poly2),
-        lambda: shp_shortest_line(shp_sl_poly1, shp_sl_poly2)
-        if shp_shortest_line
-        else None,
+        lambda: (
+            shp_shortest_line(shp_sl_poly1, shp_sl_poly2) if shp_shortest_line else None
+        ),
         iters=500,
     )
 
@@ -760,6 +771,69 @@ def main():
         lambda: transform(rotate_45, transform_poly),
         lambda: shp_transform(rotate_45, shp_transform_poly),
         iters=200,
+    )
+
+    # Force 2D operations
+    # Point with Z
+    force_2d_point = from_wkt("POINT (1 2 3)")
+    shp_force_2d_point = (
+        shp_from_wkt("POINT Z (1 2 3)")
+        if HAVE_SHAPELY2
+        else shp_from_wkt("POINT (1 2)")
+    )
+
+    def drop_z_point():
+        return (
+            ShpPoint([(x, y) for x, y, *_ in [shp_force_2d_point.coords[0]]][0])
+            if hasattr(shp_force_2d_point, "has_z")
+            else shp_force_2d_point
+        )
+
+    bench_case(
+        "force_2d (point with Z)",
+        lambda: force_2d(force_2d_point),
+        drop_z_point,
+        iters=2000,
+    )
+
+    # LineString with Z
+    force_2d_line = from_wkt("LINESTRING (0 0 0, 1 1 1, 2 2 2, 3 3 3, 4 4 4)")
+    shp_force_2d_line = (
+        shp_from_wkt("LINESTRING Z (0 0 0, 1 1 1, 2 2 2, 3 3 3, 4 4 4)")
+        if HAVE_SHAPELY2
+        else shp_from_wkt("LINESTRING (0 0, 1 1, 2 2, 3 3, 4 4)")
+    )
+
+    def drop_z_line():
+        if hasattr(shp_force_2d_line, "has_z") and shp_force_2d_line.has_z:
+            return ShpLineString([(x, y) for x, y, *_ in shp_force_2d_line.coords])
+        return shp_force_2d_line
+
+    bench_case(
+        "force_2d (linestring with Z)",
+        lambda: force_2d(force_2d_line),
+        drop_z_line,
+        iters=1000,
+    )
+
+    # Polygon with Z
+    force_2d_poly = from_geojson(TOGO_JSON)
+    shp_force_2d_poly = shp_from_geojson(TOGO_JSON)
+
+    def drop_z_poly():
+        if hasattr(shp_force_2d_poly, "has_z") and shp_force_2d_poly.has_z:
+            exterior = [(x, y) for x, y, *_ in shp_force_2d_poly.exterior.coords]
+            interiors = [
+                [(x, y) for x, y, *_ in r.coords] for r in shp_force_2d_poly.interiors
+            ]
+            return ShpPolygon(exterior, interiors)
+        return shp_force_2d_poly
+
+    bench_case(
+        "force_2d (polygon with Z)",
+        lambda: force_2d(force_2d_poly),
+        drop_z_poly,
+        iters=500,
     )
 
     togo_wins = sum(1 for r in BENCH_RESULTS if r["winner"] == "togo")

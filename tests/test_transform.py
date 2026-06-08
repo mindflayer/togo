@@ -229,3 +229,38 @@ def test_transform_non_numeric_values():
 
     with pytest.raises(TypeError, match="must return a tuple of two numbers"):
         tg.transform(returns_mixed, tg.Point(1, 2))
+
+
+def test_force_2d_point_drops_z():
+    g = tg.Geometry("POINT ZM (1 2 3 4)", fmt="wkt")
+
+    force_2d = getattr(tg, "force_2d")
+    forced = force_2d(g)
+
+    assert forced.type_string() == "Point"
+    assert forced.has_z is False
+    assert forced.has_m is False
+    assert forced.coords == [(1.0, 2.0)]
+
+
+def test_force_2d_polygon_and_collection_preserves_2d_shape():
+    poly = tg.Geometry("POLYGON Z ((0 0 5, 2 0 5, 2 2 5, 0 2 5, 0 0 5))", fmt="wkt")
+    gc = tg.GeometryCollection(
+        [
+            tg.Geometry("POINT Z (1 2 3)", fmt="wkt"),
+            tg.Geometry("LINESTRING Z (0 0 7, 1 1 7)", fmt="wkt"),
+        ]
+    )
+
+    force_2d = getattr(tg, "force_2d")
+    forced_poly = force_2d(poly)
+    forced_gc = force_2d(gc)
+
+    assert forced_poly.type_string() == "Polygon"
+    assert forced_poly.has_z is False
+    assert forced_gc.type_string() == "GeometryCollection"
+    assert forced_gc.has_z is False
+    assert forced_gc[0].type_string() == "Point"
+    assert forced_gc[0].has_z is False
+    assert forced_gc[1].type_string() == "LineString"
+    assert forced_gc[1].has_z is False

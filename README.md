@@ -10,7 +10,9 @@ Note on pronunciation: "ToGo" is pronounced like the country Togo ("TOH-go"), no
 The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient library for geometric operations, including spatial predicates, format conversions, and spatial indexing. ToGo's API is flexible and allows you to reason in either TG concepts (if you're familiar with the TG library) or Shapely conventions (the de facto standard for geospatial work in Python)—whichever fits your workflow best.
 
 See [SHAPELY_API.md](SHAPELY_API.md) for more details on Shapely compatibility.
-See [CHANGELOG.md](CHANGELOG.md) for version-by-version release notes.
+See the "Error Behavior vs Shapely" section in `SHAPELY_API.md` for overlay and predicate
+compatibility notes.
+See [CHANGELOG.md](./CHANGELOG.md) for version-by-version release notes.
 
 
 ## Installation
@@ -28,7 +30,7 @@ pip install togo
 - Format conversion between WKT, GeoJSON, WKB, and HEX
 - Spatial indexing for accelerated queries
 - Memory-efficient C implementation with Python-friendly interface
-- Advanced operations via libgeos integration (buffer, unary union, simplify, centroid, convex_hull, etc.)
+- Advanced operations via libgeos integration (buffer, unary union, simplify, centroid, convex_hull, force_2d, etc.)
 - Distance and proximity operations (nearest_points, shortest_line, project)
 - `MultiPolygon` and `MultiLineString` are real Python classes — `isinstance()` checks work correctly
 - Geometry equality via `==` operator consistent with Shapely semantics
