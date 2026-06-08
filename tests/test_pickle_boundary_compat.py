@@ -2,7 +2,7 @@ import pickle
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
 
-from togo import Geometry, LineString, Point, Polygon
+from togo import Geometry, GeometryCollection, LineString, MultiPoint, Point, Polygon
 
 
 def _wkb_of(obj):
@@ -54,6 +54,8 @@ def test_pickle_roundtrip_core_geometry_types():
         Point(0.1, 0.2),
         LineString([(0, 0), (1, 1)]),
         poly,
+        MultiPoint([(0, 0), (1, 1)]),
+        GeometryCollection([Point(0, 0), LineString([(0, 0), (1, 0)])]),
         poly.exterior,
         poly.boundary,
         poly.as_geometry(),
