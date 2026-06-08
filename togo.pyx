@@ -250,20 +250,38 @@ cdef extern from "tgx.h":
     tg_geom *tg_geom_from_meters_grid(const tg_geom *geom, tg_point origin)
 
 
+from libc.limits cimport INT_MAX
 from libc.stdlib cimport malloc, free
 
 
 cdef Geometry _geometry_from_ptr(tg_geom *ptr):
+    if ptr == NULL:
+        raise ValueError("Received NULL geometry pointer")
     cdef Geometry g = Geometry.__new__(Geometry)
     g.geom = ptr
     return g
 
 
 cdef Line _line_from_ptr(tg_line *ptr):
+    if ptr == NULL:
+        raise ValueError("Received NULL LineString pointer")
+    cdef tg_line *cloned = tg_line_clone(ptr)
+    if cloned == NULL:
+        raise MemoryError("Failed to clone LineString pointer")
     cdef Line line_obj = Line.__new__(Line)
-    line_obj.line = ptr
-    line_obj.owns_pointer = False
+    line_obj.line = cloned
+    line_obj.owns_pointer = True
+    line_obj._cached_geometry = None
     return line_obj
+
+
+cdef int _checked_c_count(object values, str arg_name):
+    cdef Py_ssize_t n = len(values)
+    if n < 0:
+        raise ValueError(f"{arg_name} length must be non-negative")
+    if n > INT_MAX:
+        raise OverflowError(f"{arg_name} contains too many entries")
+    return <int>n
 
 
 cdef tuple _coerce_xy(object value, str arg_name):
@@ -325,8 +343,7 @@ cdef class Geometry:
     cdef tg_geom *geom
 
     def __cinit__(self, data=None, fmt: str = "geojson"):
-        if self.geom is not NULL:
-            return
+        self.geom = NULL
         if data is not None and not isinstance(data, str):
             # Non-string data is handled by subclass __init__
             if type(self) is Geometry:
@@ -341,9 +358,14 @@ cdef class Geometry:
                 self.geom = tg_parse_hex(data.encode("utf-8"))
             else:
                 raise ValueError("Unknown format")
+            if self.geom == NULL:
+                raise ValueError("Failed to parse geometry")
             err = tg_geom_error(self.geom)
             if err != NULL:
-                raise ValueError(err.decode("utf-8"))
+                msg = err.decode("utf-8")
+                tg_geom_free(self.geom)
+                self.geom = NULL
+                raise ValueError(msg)
             return
         # If data is None, this might be an object created from a C pointer
         # The pointer will be set after __cinit__ in _geometry_from_ptr
@@ -493,11 +515,13 @@ cdef class Geometry:
     cdef str _to_string(
         self, size_t (*writer_func)(const tg_geom*, char*, size_t), str format_name
     ):
+        if self.geom == NULL:
+            raise ValueError("Geometry is not initialized")
         # First call to get the required buffer size
         cdef size_t required_size = writer_func(self.geom, NULL, 0)
+        cdef size_t n
         if required_size == 0:
             return ""
-
         # Allocate buffer with an extra byte for the null terminator
         cdef char *buf = <char *>malloc(required_size + 1)
         if not buf:
@@ -505,12 +529,14 @@ cdef class Geometry:
                 f"Failed to allocate memory for {format_name} buffer"
             )
 
-        # Second call to actually write the data
-        cdef size_t n = writer_func(self.geom, buf, required_size + 1)
-        # Convert to bytes and remove any trailing null terminators
-        result = (<bytes>buf[:n]).rstrip(b"\x00").decode("utf-8")
-        free(buf)
-        return result
+        try:
+            # Second call to actually write the data
+            n = writer_func(self.geom, buf, required_size + 1)
+            # Convert to bytes and remove any trailing null terminators
+            result = (<bytes>buf[:n]).rstrip(b"\x00").decode("utf-8")
+            return result
+        finally:
+            free(buf)
 
     def to_wkt(self) -> str:
         return self._to_string(tg_geom_wkt, "WKT")
@@ -523,8 +549,12 @@ cdef class Geometry:
         size_t (*writer_func)(const tg_geom*, unsigned char*, size_t),
         str format_name
     ):
+        if self.geom == NULL:
+            raise ValueError("Geometry is not initialized")
         # First call to get the required buffer size
         cdef size_t required_size = writer_func(self.geom, NULL, 0)
+        cdef size_t n
+        cdef size_t actual_len
         if required_size == 0:
             return b""
 
@@ -535,13 +565,15 @@ cdef class Geometry:
                 f"Failed to allocate memory for {format_name} buffer"
             )
 
-        # Second call to actually write the data
-        cdef size_t n = writer_func(self.geom, buf, required_size)
-        # Ensure we don't read beyond the allocated buffer
-        cdef size_t actual_len = min(n, required_size)
-        result = bytes(buf[:actual_len])
-        free(buf)
-        return result
+        try:
+            # Second call to actually write the data
+            n = writer_func(self.geom, buf, required_size)
+            # Ensure we don't read beyond the allocated buffer
+            actual_len = min(n, required_size)
+            result = bytes(buf[:actual_len])
+            return result
+        finally:
+            free(buf)
 
     def to_wkb(self) -> bytes:
         return self._to_binary(tg_geom_wkb, "WKB")
@@ -554,14 +586,30 @@ cdef class Geometry:
 
     def to_meters_grid(self, origin: Point) -> Geometry:
         """Convert geometry to meters grid using tgx."""
-        cdef tg_geom *g2 = tg_geom_to_meters_grid(self.geom, origin._get_c_point())
+        cdef tg_geom *g2
+        if self.geom == NULL:
+            raise ValueError("Geometry is not initialized")
+        if tg_geom_is_empty(self.geom) != 0:
+            g2 = tg_geom_clone(self.geom)
+            if not g2:
+                raise MemoryError("Failed to clone empty geometry")
+            return _geometry_from_ptr(g2)
+        g2 = tg_geom_to_meters_grid(self.geom, origin._get_c_point())
         if not g2:
             raise ValueError("tgx meters grid conversion failed")
         return _geometry_from_ptr(g2)
 
     def from_meters_grid(self, origin: Point) -> Geometry:
         """Convert geometry from meters grid using tgx."""
-        cdef tg_geom *g2 = tg_geom_from_meters_grid(self.geom, origin._get_c_point())
+        cdef tg_geom *g2
+        if self.geom == NULL:
+            raise ValueError("Geometry is not initialized")
+        if tg_geom_is_empty(self.geom) != 0:
+            g2 = tg_geom_clone(self.geom)
+            if not g2:
+                raise MemoryError("Failed to clone empty geometry")
+            return _geometry_from_ptr(g2)
+        g2 = tg_geom_from_meters_grid(self.geom, origin._get_c_point())
         if not g2:
             raise ValueError("tgx from meters grid conversion failed")
         return _geometry_from_ptr(g2)
@@ -630,6 +678,8 @@ cdef class Geometry:
             self.geom = NULL
         if other.geom is not NULL:
             self.geom = tg_geom_clone(other.geom)
+            if self.geom == NULL:
+                raise MemoryError("Failed to clone Geometry")
         else:
             self.geom = NULL
 
@@ -811,27 +861,31 @@ cdef class Geometry:
         Create a MultiPoint geometry from an iterable of Point or (x, y) tuples.
         """
         points = list(points)
-        cdef int n = len(points)
+        cdef int n = _checked_c_count(points, "points")
         cdef tg_geom *gptr
         if n == 0:
             gptr = tg_geom_new_multipoint_empty()
             if not gptr:
                 raise ValueError("Failed to create empty MultiPoint")
             return _geometry_from_ptr(gptr)
-        cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_point)):
+            raise OverflowError("points is too large")
+        cdef tg_point *pts = <tg_point *>malloc((<size_t>(<unsigned int>n)) * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for MultiPoint")
         cdef int i
-        for i in range(n):
-            obj = points[i]
-            if isinstance(obj, Point):
-                pts[i] = (<Point>obj)._get_c_point()
-            else:
-                # assume (x, y)
-                pts[i].x = float(obj[0])
-                pts[i].y = float(obj[1])
-        gptr = tg_geom_new_multipoint(pts, n)
-        free(pts)
+        try:
+            for i in range(n):
+                obj = points[i]
+                if isinstance(obj, Point):
+                    pts[i] = (<Point>obj)._get_c_point()
+                else:
+                    # assume (x, y)
+                    pts[i].x = float(obj[0])
+                    pts[i].y = float(obj[1])
+            gptr = tg_geom_new_multipoint(pts, n)
+        finally:
+            free(pts)
         if not gptr:
             raise ValueError("Failed to create MultiPoint")
         return _geometry_from_ptr(gptr)
@@ -842,29 +896,37 @@ cdef class Geometry:
         Create a MultiLineString from an iterable of Line or sequences of (x,y).
         """
         lines = list(lines)
-        cdef int n = len(lines)
+        cdef int n = _checked_c_count(lines, "lines")
         cdef tg_geom *gptr
         if n == 0:
             gptr = tg_geom_new_multilinestring_empty()
             if not gptr:
                 raise ValueError("Failed to create empty MultiLineString")
             return _geometry_from_ptr(gptr)
-        cdef const tg_line **arr = <const tg_line **>malloc(n * sizeof(tg_line *))
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_line *)):
+            raise OverflowError("lines is too large")
+        cdef const tg_line **arr = <const tg_line **>malloc(
+            (<size_t>(<unsigned int>n)) * sizeof(tg_line *)
+        )
         if not arr:
             raise MemoryError("Failed to allocate lines array for MultiLineString")
         cdef int i
         temp_created = []  # keep refs to any temporary Line we create
-        for i in range(n):
-            obj = lines[i]
-            if isinstance(obj, Line):
-                arr[i] = (<Line>obj)._get_c_line()
-            else:
-                # assume it's an iterable of (x, y) tuples
-                tmp = Line(obj)
-                temp_created.append(tmp)
-                arr[i] = tmp._get_c_line()
-        gptr = tg_geom_new_multilinestring(arr, n)
-        free(arr)
+        try:
+            for i in range(n):
+                obj = lines[i]
+                if isinstance(obj, Line):
+                    arr[i] = (<Line>obj)._get_c_line()
+                else:
+                    # assume it's an iterable of (x, y) tuples
+                    tmp = Line(obj)
+                    temp_created.append(tmp)
+                    arr[i] = tmp._get_c_line()
+                if arr[i] == NULL:
+                    raise ValueError(f"line {i} is not initialized")
+            gptr = tg_geom_new_multilinestring(arr, n)
+        finally:
+            free(arr)
         if not gptr:
             raise ValueError("Failed to create MultiLineString")
         return _geometry_from_ptr(gptr)
@@ -873,25 +935,32 @@ cdef class Geometry:
     def from_multipolygon(polys) -> Geometry:
         """Create a MultiPolygon from an iterable of Poly objects."""
         polys = list(polys)
-        cdef int n = len(polys)
+        cdef int n = _checked_c_count(polys, "polys")
         cdef tg_geom *gptr
         if n == 0:
             gptr = tg_geom_new_multipolygon_empty()
             if not gptr:
                 raise ValueError("Failed to create empty MultiPolygon")
             return _geometry_from_ptr(gptr)
-        cdef const tg_poly **arr = <const tg_poly **>malloc(n * sizeof(tg_poly *))
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_poly *)):
+            raise OverflowError("polys is too large")
+        cdef const tg_poly **arr = <const tg_poly **>malloc(
+            (<size_t>(<unsigned int>n)) * sizeof(tg_poly *)
+        )
         if not arr:
             raise MemoryError("Failed to allocate polys array for MultiPolygon")
         cdef int i
-        for i in range(n):
-            obj = polys[i]
-            if not isinstance(obj, Poly):
-                free(arr)
-                raise TypeError("multipolygon expects a sequence of Poly")
-            arr[i] = (<Poly>obj)._get_c_poly()
-        gptr = tg_geom_new_multipolygon(arr, n)
-        free(arr)
+        try:
+            for i in range(n):
+                obj = polys[i]
+                if not isinstance(obj, Poly):
+                    raise TypeError("multipolygon expects a sequence of Poly")
+                arr[i] = (<Poly>obj)._get_c_poly()
+                if arr[i] == NULL:
+                    raise ValueError(f"polygon {i} is not initialized")
+            gptr = tg_geom_new_multipolygon(arr, n)
+        finally:
+            free(arr)
         if not gptr:
             raise ValueError("Failed to create MultiPolygon")
         return _geometry_from_ptr(gptr)
@@ -904,14 +973,18 @@ cdef class Geometry:
         created and freed after cloning.
         """
         geoms = list(geoms)
-        cdef int n = len(geoms)
+        cdef int n = _checked_c_count(geoms, "geoms")
         cdef tg_geom *gptr
         if n == 0:
             gptr = tg_geom_new_geometrycollection_empty()
             if not gptr:
                 raise ValueError("Failed to create empty GeometryCollection")
             return _geometry_from_ptr(gptr)
-        cdef const tg_geom **arr = <const tg_geom **>malloc(n * sizeof(tg_geom *))
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_geom *)):
+            raise OverflowError("geoms is too large")
+        cdef const tg_geom **arr = <const tg_geom **>malloc(
+            (<size_t>(<unsigned int>n)) * sizeof(tg_geom *)
+        )
         if not arr:
             raise MemoryError("Failed to allocate geoms array for GeometryCollection")
         cdef tg_geom **temp_to_free = NULL
@@ -941,7 +1014,12 @@ cdef class Geometry:
                         "Line, Ring, or Poly"
                     )
         if temp_count > 0:
-            temp_to_free = <tg_geom **>malloc(temp_count * sizeof(tg_geom *))
+            if (<size_t>(<unsigned int>temp_count)) > ((<size_t>-1) // sizeof(tg_geom *)):
+                free(arr)
+                raise OverflowError("temp_count is too large")
+            temp_to_free = <tg_geom **>malloc(
+                (<size_t>(<unsigned int>temp_count)) * sizeof(tg_geom *)
+            )
             if not temp_to_free:
                 free(arr)
                 raise MemoryError(
@@ -952,6 +1030,14 @@ cdef class Geometry:
             obj = geoms[i]
             if isinstance(obj, Geometry):
                 arr[i] = (<Geometry>obj)._get_c_geom()
+                if arr[i] == NULL:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError(f"geometry {i} is not initialized")
             elif isinstance(obj, Point):
                 tmpg = tg_geom_new_point((<Point>obj)._get_c_point())
                 if not tmpg:
@@ -1056,10 +1142,14 @@ cdef class Geometry:
     def unary_union(geoms) -> Geometry:
         """Return the unary union of a sequence of geometries using GEOS."""
         geoms = list(geoms)
-        cdef int n = len(geoms)
+        cdef int n = _checked_c_count(geoms, "geoms")
         if n == 0:
             raise ValueError("unary_union requires at least one geometry")
-        cdef const tg_geom **arr = <const tg_geom **>malloc(n * sizeof(tg_geom *))
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_geom *)):
+            raise OverflowError("geoms is too large")
+        cdef const tg_geom **arr = <const tg_geom **>malloc(
+            (<size_t>(<unsigned int>n)) * sizeof(tg_geom *)
+        )
         if not arr:
             raise MemoryError("Failed to allocate geometry array for unary_union")
         cdef tg_geom **temp_to_free = NULL
@@ -1087,7 +1177,12 @@ cdef class Geometry:
                         "unary_union expects Geometry, Point/(x,y), Line, Ring, or Poly"
                     )
         if temp_count > 0:
-            temp_to_free = <tg_geom **>malloc(temp_count * sizeof(tg_geom *))
+            if (<size_t>(<unsigned int>temp_count)) > ((<size_t>-1) // sizeof(tg_geom *)):
+                free(arr)
+                raise OverflowError("temp_count is too large")
+            temp_to_free = <tg_geom **>malloc(
+                (<size_t>(<unsigned int>temp_count)) * sizeof(tg_geom *)
+            )
             if not temp_to_free:
                 free(arr)
                 raise MemoryError(
@@ -1099,10 +1194,26 @@ cdef class Geometry:
             obj = geoms[i]
             if isinstance(obj, Geometry):
                 arr[i] = (<Geometry>obj)._get_c_geom()
+                if arr[i] == NULL:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError(f"geometry {i} is not initialized")
             elif hasattr(obj, "as_geometry") or hasattr(obj, "wkb"):
                 tmp_gobj = _coerce_geometry_or_raise(obj, "geoms", allow_point_tuple=False)
                 coerced_geoms.append(tmp_gobj)
                 arr[i] = (<Geometry>tmp_gobj)._get_c_geom()
+                if arr[i] == NULL:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError(f"geometry {i} is not initialized")
             elif isinstance(obj, Point):
                 tmpg = tg_geom_new_point((<Point>obj)._get_c_point())
                 if not tmpg:
@@ -1199,10 +1310,13 @@ cdef class Geometry:
             raise RuntimeError("Failed to convert TG geometry to GEOS")
         cdef GEOSGeometry *g_union = GEOSUnaryUnion_r(ctx, g_geos)
         if g_union == NULL:
+            GEOSGeom_destroy_r(ctx, g_geos)
             GEOS_finish_r(ctx)
             tg_geom_free(gptr)
             raise RuntimeError("GEOSUnaryUnion failed")
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_union)
+        GEOSGeom_destroy_r(ctx, g_union)
+        GEOSGeom_destroy_r(ctx, g_geos)
         GEOS_finish_r(ctx)
         tg_geom_free(gptr)
         if g_tg == NULL:
@@ -2066,19 +2180,23 @@ cdef class Ring:
 
     def __init__(self, points):
         points = list(points)
-        cdef int n = len(points)
+        cdef int n = _checked_c_count(points, "points")
         cdef int i
         cdef double x
         cdef double y
-        cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_point)):
+            raise OverflowError("points is too large")
+        cdef tg_point *pts = <tg_point *>malloc((<size_t>(<unsigned int>n)) * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for Ring")
-        for i in range(n):
-            x, y = _coerce_xy(points[i], "points")
-            pts[i].x = x
-            pts[i].y = y
-        self.ring = tg_ring_new(pts, n)
-        free(pts)
+        try:
+            for i in range(n):
+                x, y = _coerce_xy(points[i], "points")
+                pts[i].x = x
+                pts[i].y = y
+            self.ring = tg_ring_new(pts, n)
+        finally:
+            free(pts)
         if not self.ring:
             raise ValueError("Failed to create Ring")
         self.owns_pointer = True
@@ -2111,9 +2229,15 @@ cdef class Ring:
 
     @staticmethod
     cdef Ring from_ptr(tg_ring *ptr):
+        if ptr == NULL:
+            raise ValueError("Received NULL Ring pointer")
+        cdef tg_ring *cloned = tg_ring_clone(ptr)
+        if cloned == NULL:
+            raise MemoryError("Failed to clone Ring pointer")
         cdef Ring r = Ring.__new__(Ring)
-        r.ring = ptr
-        r.owns_pointer = False  # Don't free this pointer
+        r.ring = cloned
+        r.owns_pointer = True
+        r._cached_geometry = None
         return r
 
     cdef tg_ring *_get_c_ring(self) noexcept:
@@ -2377,19 +2501,23 @@ cdef class Line:
 
     def __init__(self, points):
         points = list(points)
-        cdef int n = len(points)
+        cdef int n = _checked_c_count(points, "points")
         cdef int i
         cdef double x
         cdef double y
-        cdef tg_point *pts = <tg_point *>malloc(n * sizeof(tg_point))
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_point)):
+            raise OverflowError("points is too large")
+        cdef tg_point *pts = <tg_point *>malloc((<size_t>(<unsigned int>n)) * sizeof(tg_point))
         if not pts:
             raise MemoryError("Failed to allocate points for Line")
-        for i in range(n):
-            x, y = _coerce_xy(points[i], "points")
-            pts[i].x = x
-            pts[i].y = y
-        self.line = tg_line_new(pts, n)
-        free(pts)
+        try:
+            for i in range(n):
+                x, y = _coerce_xy(points[i], "points")
+                pts[i].x = x
+                pts[i].y = y
+            self.line = tg_line_new(pts, n)
+        finally:
+            free(pts)
         if not self.line:
             raise ValueError("Failed to create Line")
         self.owns_pointer = True
@@ -2762,19 +2890,25 @@ cdef class Poly:
             nholes = 0
             holes_arr = NULL
         else:
-            nholes = len(holes)
-            hole_ptrs = <tg_ring **>malloc(nholes * sizeof(tg_ring *))
+            nholes = _checked_c_count(holes, "holes")
+            if (<size_t>(<unsigned int>nholes)) > ((<size_t>-1) // sizeof(tg_ring *)):
+                raise OverflowError("holes is too large")
+            hole_ptrs = <tg_ring **>malloc(
+                (<size_t>(<unsigned int>nholes)) * sizeof(tg_ring *)
+            )
             if not hole_ptrs:
                 raise MemoryError("Failed to allocate holes array")
-            for i in range(nholes):
-                if not isinstance(holes[i], Ring):
-                    free(hole_ptrs)
-                    raise TypeError("holes must be a list of Ring")
-                hole_ptr = (<Ring>holes[i])._get_c_ring()
-                if hole_ptr == NULL:
-                    free(hole_ptrs)
-                    raise ValueError(f"hole {i} Ring is not initialized")
-                hole_ptrs[i] = hole_ptr
+            try:
+                for i in range(nholes):
+                    if not isinstance(holes[i], Ring):
+                        raise TypeError("holes must be a list of Ring")
+                    hole_ptr = (<Ring>holes[i])._get_c_ring()
+                    if hole_ptr == NULL:
+                        raise ValueError(f"hole {i} Ring is not initialized")
+                    hole_ptrs[i] = hole_ptr
+            except Exception:
+                free(hole_ptrs)
+                raise
             holes_arr = hole_ptrs
         self.poly = tg_poly_new(ext_ring, <const tg_ring * const *>holes_arr, nholes)
         if hole_ptrs != NULL:
@@ -2825,9 +2959,15 @@ cdef class Poly:
 
     @staticmethod
     cdef Poly _from_c_poly(tg_poly *ptr):
+        if ptr == NULL:
+            raise ValueError("Received NULL Polygon pointer")
+        cdef tg_poly *cloned = tg_poly_clone(ptr)
+        if cloned == NULL:
+            raise MemoryError("Failed to clone Polygon pointer")
         cdef Poly poly = Poly.__new__(Poly)
-        poly.poly = ptr
-        poly.owns_pointer = False
+        poly.poly = cloned
+        poly.owns_pointer = True
+        poly._cached_geometry = None
         return poly
 
     def hole(self, idx: int) -> Ring:

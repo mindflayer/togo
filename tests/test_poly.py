@@ -1,3 +1,5 @@
+import gc
+
 import pytest
 from togo import Poly, Ring, Rect, Geometry
 
@@ -59,3 +61,13 @@ def test_poly_as_geometry():
     assert g.type_string() == "Polygon"
     rect = g.bounds
     assert rect == (0.0, 0.0, 1.0, 1.0)
+
+
+def test_poly_exterior_survives_parent_gc():
+    poly = Poly(Ring([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)]))
+    exterior = poly.exterior
+    del poly
+    gc.collect()
+
+    assert exterior.num_points == 5
+    assert exterior.area == pytest.approx(4.0)
