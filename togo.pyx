@@ -239,6 +239,9 @@ cdef extern from "geos_c.h":
     GEOSGeometry *GEOSIntersection_r(
         GEOSContextHandle_t handle, const GEOSGeometry *g1, const GEOSGeometry *g2
     )
+    GEOSGeometry *GEOSUnion_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g1, const GEOSGeometry *g2
+    )
     double GEOSProject_r(
         GEOSContextHandle_t handle, const GEOSGeometry *line, const GEOSGeometry *point
     )
@@ -392,6 +395,18 @@ cdef class Geometry:
     def __repr__(self):
         return self.__str__()
 
+    cdef void _ensure_initialized(self, str label) except *:
+        if self.geom == NULL:
+            raise ValueError(f"{label} geometry is not initialized")
+
+    cdef void _ensure_overlay_safe(self, Geometry other_geom) except *:
+        self._ensure_initialized("this")
+        if other_geom.geom == NULL:
+            raise ValueError("other geometry is not initialized")
+        # Temporary hardening: reject non-2D overlays instead of risking UB.
+        if tg_geom_dims(self.geom) > 2 or tg_geom_dims(other_geom.geom) > 2:
+            raise ValueError("only 2D geometries are supported for overlay operations")
+
     def type(self) -> int:
         return tg_geom_typeof(self.geom)
 
@@ -481,35 +496,59 @@ cdef class Geometry:
         return tg_geom_num_geometries(self.geom)
 
     def equals(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_equals(self.geom, other_g.geom) != 0
 
     def disjoint(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_disjoint(self.geom, other_g.geom) != 0
 
     def contains(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_contains(self.geom, other_g.geom) != 0
 
     def within(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_within(self.geom, other_g.geom) != 0
 
     def covers(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_covers(self.geom, other_g.geom) != 0
 
     def coveredby(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_coveredby(self.geom, other_g.geom) != 0
 
     def touches(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_touches(self.geom, other_g.geom) != 0
 
     def intersects(self, other) -> bool:
+        self._ensure_initialized("this")
         cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        if other_g.geom == NULL:
+            raise ValueError("other geometry is not initialized")
         return tg_geom_intersects(self.geom, other_g.geom) != 0
 
     cdef str _to_string(
@@ -704,17 +743,20 @@ cdef class Geometry:
     @property
     def geom_type(self):
         """Returns geometry type string for Shapely compatibility"""
+        self._ensure_initialized("this")
         return self.type_string()
 
     @property
     def bounds(self):
         """Returns (minx, miny, maxx, maxy) for Shapely compatibility"""
+        self._ensure_initialized("this")
         cdef tg_rect r = tg_geom_rect(self.geom)
         return (r.min.x, r.min.y, r.max.x, r.max.y)
 
     @property
     def area(self) -> float:
         """Returns area for Polygon geometries"""
+        self._ensure_initialized("this")
         cdef int t = tg_geom_typeof(self.geom)
         cdef const tg_poly *poly
         cdef double total
@@ -734,6 +776,7 @@ cdef class Geometry:
     @property
     def length(self) -> float:
         """Returns length for LineString geometries"""
+        self._ensure_initialized("this")
         cdef int t = tg_geom_typeof(self.geom)
         cdef const tg_line *line
         cdef const tg_poly *poly
@@ -1469,6 +1512,8 @@ cdef class Geometry:
         RuntimeError
             If the centroid calculation fails
         """
+        self._ensure_initialized("this")
+
         cdef GEOSContextHandle_t ctx = GEOS_init_r()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
@@ -1525,6 +1570,8 @@ cdef class Geometry:
         >>> print(hull.to_wkt())
         POLYGON((0 0,2 0,2 2,0 2,0 0))
         """
+        self._ensure_initialized("this")
+
         cdef GEOSContextHandle_t ctx = GEOS_init_r()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
@@ -1609,6 +1656,12 @@ cdef class Geometry:
             empty = tg_geom_new_geometrycollection_empty()
             return _geometry_from_ptr(empty)
 
+        self._ensure_overlay_safe(other_geom)
+
+        if tg_geom_is_empty(self.geom) != 0 or tg_geom_is_empty(other_geom.geom) != 0:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
         ctx = GEOS_init_r()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
@@ -1640,6 +1693,77 @@ cdef class Geometry:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
 
         GEOSGeom_destroy_r(ctx, g_intersection)
+        GEOSGeom_destroy_r(ctx, g2_geos)
+        GEOSGeom_destroy_r(ctx, g1_geos)
+        GEOS_finish_r(ctx)
+
+        return _geometry_from_ptr(g_tg)
+
+    def union(self, other) -> Geometry:
+        """Return the geometric union of this geometry with another."""
+        cdef GEOSContextHandle_t ctx
+        cdef GEOSGeometry *g1_geos
+        cdef GEOSGeometry *g2_geos
+        cdef GEOSGeometry *g_union
+        cdef tg_geom *g_tg
+        cdef tg_geom *empty
+        cdef tg_geom *cloned
+        cdef Geometry other_geom
+
+        if other is None:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
+        try:
+            other_geom = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
+        self._ensure_overlay_safe(other_geom)
+
+        if tg_geom_is_empty(self.geom) != 0:
+            cloned = tg_geom_clone(other_geom.geom)
+            if cloned == NULL:
+                raise MemoryError("Failed to clone geometry in union")
+            return _geometry_from_ptr(cloned)
+        if tg_geom_is_empty(other_geom.geom) != 0:
+            cloned = tg_geom_clone(self.geom)
+            if cloned == NULL:
+                raise MemoryError("Failed to clone geometry in union")
+            return _geometry_from_ptr(cloned)
+
+        ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        g1_geos = tg_geom_to_geos(ctx, self.geom)
+        if g1_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert first geometry to GEOS")
+
+        g2_geos = tg_geom_to_geos(ctx, other_geom.geom)
+        if g2_geos == NULL:
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert second geometry to GEOS")
+
+        g_union = GEOSUnion_r(ctx, g1_geos, g2_geos)
+        if g_union == NULL:
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("GEOSUnion failed")
+
+        g_tg = tg_geom_from_geos(ctx, g_union)
+        if g_tg == NULL:
+            GEOSGeom_destroy_r(ctx, g_union)
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+
+        GEOSGeom_destroy_r(ctx, g_union)
         GEOSGeom_destroy_r(ctx, g2_geos)
         GEOSGeom_destroy_r(ctx, g1_geos)
         GEOS_finish_r(ctx)
@@ -2095,6 +2219,21 @@ cdef class Point:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
+    def union(self, other) -> Geometry:
+        cdef tg_geom *empty
+
+        if other is None:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().union(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().union(other.as_geometry())
+
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+
 
 cdef class Rect:
     cdef tg_rect rect
@@ -2493,6 +2632,21 @@ cdef class Ring:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
+    def union(self, other) -> Geometry:
+        cdef tg_geom *empty
+
+        if other is None:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().union(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().union(other.as_geometry())
+
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+
 
 cdef class Line:
     cdef tg_line *line
@@ -2811,6 +2965,21 @@ cdef class Line:
             return self.as_geometry().intersection(other.as_geometry())
 
         # Return empty for unrecognized types (Shapely-compatible)
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+
+    def union(self, other) -> Geometry:
+        cdef tg_geom *empty
+
+        if other is None:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().union(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().union(other.as_geometry())
+
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
@@ -3260,6 +3429,21 @@ cdef class Poly:
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
 
+    def union(self, other) -> Geometry:
+        cdef tg_geom *empty
+
+        if other is None:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
+        if isinstance(other, Geometry):
+            return self.as_geometry().union(other)
+        elif hasattr(other, "as_geometry"):
+            return self.as_geometry().union(other.as_geometry())
+
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+
     def intersects(self, other) -> bool:
         """Check if this polygon intersects another geometry (Shapely-compatible).
 
@@ -3615,6 +3799,189 @@ def transform(func, geometry) -> Geometry:
     return _transform_recursive(func, geom)
 
 
+def force_2d(geometry) -> Geometry:
+    """Return a 2D copy of a geometry, dropping any Z/M coordinates.
+
+    Optimized implementation that avoids Python callbacks entirely.
+    """
+    cdef Geometry geom = _coerce_geometry_or_raise(geometry, "geometry")
+    geom._ensure_initialized("this")
+    cdef int geom_type = tg_geom_typeof(geom.geom)
+
+    # Fast path for Point - avoid Python callback entirely
+    if geom_type == 1:
+        return _force_2d_point(geom)
+    # Fast path for LineString - avoid Python callback entirely
+    elif geom_type == 2:
+        return _force_2d_linestring(geom)
+    # Fast path for Polygon - avoid Python callback entirely
+    elif geom_type == 3:
+        return _force_2d_polygon(geom)
+    # Fast path for MultiPoint
+    elif geom_type == 4:
+        return _force_2d_multipoint(geom)
+    # Fast path for MultiLineString
+    elif geom_type == 5:
+        return _force_2d_multilinestring(geom)
+    # Fast path for MultiPolygon
+    elif geom_type == 6:
+        return _force_2d_multipolygon(geom)
+    # GeometryCollection - recurse
+    elif geom_type == 7:
+        return _force_2d_collection(geom)
+    else:
+        raise ValueError(f"Unknown geometry type: {geom_type}")
+
+
+cdef Geometry _force_2d_point(Geometry geom):
+    """Fast point force_2d - no Python callbacks"""
+    cdef tg_point pt = tg_geom_point(geom.geom)
+    return _geometry_from_ptr(tg_geom_new_point(pt))
+
+
+cdef Geometry _force_2d_linestring(Geometry geom):
+    """Fast linestring force_2d - no Python callbacks"""
+    cdef const tg_line *line = tg_geom_line(geom.geom)
+    cdef int n = tg_line_num_points(line)
+    cdef const tg_point *pts = tg_line_points(line)
+    cdef list coords = []
+    cdef int i
+
+    for i in range(n):
+        coords.append((pts[i].x, pts[i].y))
+
+    cdef Line tmp_line = Line(coords)
+    return _geometry_from_ptr(tg_geom_new_linestring(tmp_line._get_c_line()))
+
+
+cdef Geometry _force_2d_polygon(Geometry geom):
+    """Fast polygon force_2d - no Python callbacks"""
+    cdef const tg_poly *poly = tg_geom_poly(geom.geom)
+    cdef const tg_ring *ext_ring = tg_poly_exterior(poly)
+    cdef int n = tg_ring_num_points(ext_ring)
+    cdef const tg_point *pts = tg_ring_points(ext_ring)
+    cdef list ext_coords = []
+    cdef int i, j, nholes, hole_npts
+    cdef const tg_ring *hole
+    cdef const tg_point *hole_pts
+    cdef list holes = []
+
+    # Extract exterior ring coordinates
+    for i in range(n):
+        ext_coords.append((pts[i].x, pts[i].y))
+
+    # Extract holes
+    nholes = tg_poly_num_holes(poly)
+    for j in range(nholes):
+        hole = tg_poly_hole_at(poly, j)
+        hole_npts = tg_ring_num_points(hole)
+        hole_pts = tg_ring_points(hole)
+        hole_coords = []
+        for i in range(hole_npts):
+            hole_coords.append((hole_pts[i].x, hole_pts[i].y))
+        holes.append(Ring(hole_coords))
+
+    cdef Ring ext = Ring(ext_coords)
+    cdef Poly tmp_poly = Poly(ext, holes if holes else None)
+    return _geometry_from_ptr(tg_geom_new_polygon(tmp_poly._get_c_poly()))
+
+
+cdef Geometry _force_2d_multipoint(Geometry geom):
+    """Fast multipoint force_2d - no Python callbacks"""
+    cdef int n = tg_geom_num_points(geom.geom)
+    cdef list coords = []
+    cdef int i
+    cdef tg_point pt
+
+    for i in range(n):
+        pt = tg_geom_point_at(geom.geom, i)
+        coords.append((pt.x, pt.y))
+
+    return Geometry.from_multipoint(coords)
+
+
+cdef Geometry _force_2d_multilinestring(Geometry geom):
+    """Fast multilinestring force_2d - no Python callbacks"""
+    cdef int n = tg_geom_num_lines(geom.geom)
+    cdef list lines = []
+    cdef const tg_line *line
+    cdef int line_npts, i, j
+    cdef const tg_point *pts
+    cdef list coords
+
+    for i in range(n):
+        line = tg_geom_line_at(geom.geom, i)
+        line_npts = tg_line_num_points(line)
+        pts = tg_line_points(line)
+        coords = []
+        for j in range(line_npts):
+            coords.append((pts[j].x, pts[j].y))
+        lines.append(coords)
+
+    return Geometry.from_multilinestring(lines)
+
+
+cdef Geometry _force_2d_multipolygon(Geometry geom):
+    """Fast multipolygon force_2d - no Python callbacks"""
+    cdef int n = tg_geom_num_polys(geom.geom)
+    cdef list polys = []
+    cdef const tg_poly *poly
+    cdef const tg_ring *ext_ring
+    cdef const tg_ring *hole
+    cdef int i, j, k, nholes, npts, hole_npts
+    cdef const tg_point *pts
+    cdef const tg_point *hole_pts
+    cdef list ext_coords, hole_coords, holes
+    cdef Ring ext
+    cdef Poly tmp_poly
+
+    for i in range(n):
+        poly = tg_geom_poly_at(geom.geom, i)
+        ext_ring = tg_poly_exterior(poly)
+        npts = tg_ring_num_points(ext_ring)
+        pts = tg_ring_points(ext_ring)
+        ext_coords = []
+        for j in range(npts):
+            ext_coords.append((pts[j].x, pts[j].y))
+
+        nholes = tg_poly_num_holes(poly)
+        holes = []
+        for j in range(nholes):
+            hole = tg_poly_hole_at(poly, j)
+            hole_npts = tg_ring_num_points(hole)
+            hole_pts = tg_ring_points(hole)
+            hole_coords = []
+            for k in range(hole_npts):
+                hole_coords.append((hole_pts[k].x, hole_pts[k].y))
+            holes.append(Ring(hole_coords))
+
+        ext = Ring(ext_coords)
+        tmp_poly = Poly(ext, holes if holes else None)
+        polys.append(tmp_poly)
+
+    return Geometry.from_multipolygon(polys)
+
+
+cdef Geometry _force_2d_collection(Geometry geom):
+    """Fast geometry collection force_2d - recurse with optimized path"""
+    cdef int n = tg_geom_num_geometries(geom.geom)
+    cdef list children = []
+    cdef const tg_geom *child_geom
+    cdef tg_geom *child_clone
+    cdef Geometry child_geom_obj
+    cdef int i
+
+    for i in range(n):
+        child_geom = tg_geom_geometry_at(geom.geom, i)
+        child_clone = tg_geom_clone(child_geom)
+        if child_clone == NULL:
+            raise MemoryError("Failed to clone geometry in force_2d")
+        child_geom_obj = _geometry_from_ptr(child_clone)
+        children.append(force_2d(child_geom_obj))
+
+    return Geometry.from_geometrycollection(children)
+
+
 cdef tuple _validate_transform_result(object result):
     """
     Validate and convert the result from a transform function.
@@ -3918,6 +4285,24 @@ def intersection(geom1, geom2) -> Geometry:
     return g1.intersection(g2)
 
 
+def union(geom1, geom2) -> Geometry:
+    """Return the geometric union of two geometries."""
+    cdef tg_geom *empty
+
+    try:
+        g1 = _coerce_geometry_or_raise(geom1, "geom1")
+    except TypeError:
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+    try:
+        g2 = _coerce_geometry_or_raise(geom2, "geom2")
+    except TypeError:
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+
+    return g1.union(g2)
+
+
 def convex_hull(geom):
     """
     Return the convex hull of a geometry.
@@ -3963,6 +4348,6 @@ __all__ = [
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
     "unary_union", "nearest_points", "shortest_line", "convex_hull",
-    "intersection", "transform",
+    "intersection", "union", "transform", "force_2d",
     "set_polygon_indexing_mode", "TGIndex"
 ]

@@ -1,4 +1,4 @@
-<img src="https://github.com/mindflayer/togo/blob/main/togo.png?raw=true" width="256px">
+<img src="https://github.com/mindflayer/togo/blob/main/togo.png?raw=true" width="256px" alt="ToGo logo">
 
 Python bindings for [TG](https://github.com/tidwall/tg)
 (Geometry library for C - Fast point-in-polygon)
@@ -10,17 +10,10 @@ Note on pronunciation: "ToGo" is pronounced like the country Togo ("TOH-go"), no
 The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient library for geometric operations, including spatial predicates, format conversions, and spatial indexing. ToGo's API is flexible and allows you to reason in either TG concepts (if you're familiar with the TG library) or Shapely conventions (the de facto standard for geospatial work in Python)—whichever fits your workflow best.
 
 See [SHAPELY_API.md](SHAPELY_API.md) for more details on Shapely compatibility.
-See [CHANGELOG.md](CHANGELOG.md) for version-by-version release notes.
+See the "Error Behavior vs Shapely" section in `SHAPELY_API.md` for overlay and predicate
+compatibility notes.
+See [CHANGELOG.md](./CHANGELOG.md) for version-by-version release notes.
 
-## What's New in v0.4.1
-
-Compared to v0.4.0, v0.4.1 focuses on Shapely-compatibility hardening and memory-safety fixes:
-
-- `LineString.project(other, normalized=False)` now supports `normalized=True` (returns 0.0..1.0).
-- `Geometry.exterior` and `Geometry.interiors` now return safely owned ring objects.
-- `Geometry.boundary` ring extraction is safer for polygon and multipolygon results.
-- `unary_union()` keeps coerced mixed-input geometries alive for the full operation.
-- Added regression tests for normalized `project()` edge cases.
 
 ## Installation
 
@@ -108,7 +101,15 @@ from togo import convex_hull
 concave_poly = Polygon([(0, 0), (2, 0), (2, 2), (1, 1), (0, 2), (0, 0)])
 hull = convex_hull(concave_poly)
 print(hull.to_wkt())  # 'POLYGON((0 0,2 0,2 2,0 2,0 0))'
+
+# Binary union (Shapely-compatible)
+other = Polygon([(3, 3), (5, 3), (5, 5), (3, 5), (3, 3)])
+merged = poly.union(other)
+print(merged.geom_type)
 ```
+
+You can also call the module-level helper with `from togo import union` and then
+`union(poly, other)`.
 
 
 ## Core Classes
@@ -117,26 +118,14 @@ print(hull.to_wkt())  # 'POLYGON((0 0,2 0,2 2,0 2,0 0))'
 
 The base class that wraps tg_geom structures and provides core operations:
 
-```python
-# Create from various formats
-g1 = Geometry('POINT(1 2)', fmt='wkt')
-g2 = Geometry('{"type":"Point","coordinates":[1,2]}', fmt='geojson')
-
-# Geometric predicates
-g1.intersects(g2)
-g1.contains(g2)
-g1.within(g2)
-
-# Format conversion
-g1.to_wkt()
-g1.to_geojson()
-
-# Access sub-geometries by index (e.g., for GeometryCollection, MultiPoint, etc.)
-gc = Geometry('GEOMETRYCOLLECTION(POINT(1 2),POINT(3 4))', fmt='wkt')
-first = gc[0]  # Bound to TG function call tg_geom_geometry_at(idx)
-second = gc[1]
-print(first.type_string())  # 'Point'
-```
+- Create geometries directly from WKT, GeoJSON, HEX, and other supported serialized formats.
+- Use common predicates such as `intersects()`, `contains()`, and `within()` directly on
+  `Geometry` instances.
+- Convert geometries back to WKT/GeoJSON/WKB using `to_wkt()`, `to_geojson()`, and `to_wkb()`.
+- Index collection-like geometries such as `GeometryCollection`, `MultiLineString`, and
+  `MultiPolygon` using `geom[idx]`.
+- High-risk accessor, predicate, and overlay paths now fail with managed exceptions when used on
+  uninitialized base `Geometry()` objects.
 
 ### Point
 
@@ -426,7 +415,7 @@ connecting = shortest_line(g1, g2)
 print(f"Distance: {connecting.length:.2f}")
 ```
 
-For detailed documentation, see [SHORTEST_LINE_QUICK_REFERENCE.md](SHORTEST_LINE_QUICK_REFERENCE.md). For more examples, see `examples/shortest_line_demo.py`.
+For more examples, see the shortest-line tests and `examples/shortest_line_demo.py`.
 
 ## Performance Considerations
 
