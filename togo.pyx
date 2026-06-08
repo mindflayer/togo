@@ -939,6 +939,8 @@ cdef class Geometry:
             if not gptr:
                 raise ValueError("Failed to create empty MultiPolygon")
             return _geometry_from_ptr(gptr)
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_poly *)):
+            raise OverflowError("polys is too large")
         cdef const tg_poly **arr = <const tg_poly **>malloc(
             (<size_t>(<unsigned int>n)) * sizeof(tg_poly *)
         )
