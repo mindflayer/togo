@@ -900,6 +900,8 @@ cdef class Geometry:
             if not gptr:
                 raise ValueError("Failed to create empty MultiLineString")
             return _geometry_from_ptr(gptr)
+        if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_line *)):
+            raise OverflowError("lines is too large")
         cdef const tg_line **arr = <const tg_line **>malloc(
             (<size_t>(<unsigned int>n)) * sizeof(tg_line *)
         )
