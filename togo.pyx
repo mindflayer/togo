@@ -515,12 +515,13 @@ cdef class Geometry:
     cdef str _to_string(
         self, size_t (*writer_func)(const tg_geom*, char*, size_t), str format_name
     ):
+        if self.geom == NULL:
+            raise ValueError("Geometry is not initialized")
         # First call to get the required buffer size
         cdef size_t required_size = writer_func(self.geom, NULL, 0)
         cdef size_t n
         if required_size == 0:
             return ""
-
         # Allocate buffer with an extra byte for the null terminator
         cdef char *buf = <char *>malloc(required_size + 1)
         if not buf:
