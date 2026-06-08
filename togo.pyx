@@ -344,11 +344,12 @@ cdef Geometry _coerce_geometry_or_raise(object obj, str arg_name, bint allow_poi
 
 def _restore_geometry_as(cls, bytes wkb_bytes):
     """Rebuild Geometry (or Geometry subclass) from WKB for pickling."""
-    geom = from_wkb(wkb_bytes)
+    cdef Geometry geom = from_wkb(wkb_bytes)
     if cls is Geometry:
         return geom
     obj = cls.__new__(cls)
-    obj._init_from_geometry(geom)
+    (<Geometry>obj).geom = geom.geom
+    geom.geom = NULL
     return obj
 
 
