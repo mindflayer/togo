@@ -548,6 +548,8 @@ cdef class Geometry:
         size_t (*writer_func)(const tg_geom*, unsigned char*, size_t),
         str format_name
     ):
+        if self.geom == NULL:
+            raise ValueError("Geometry is not initialized")
         # First call to get the required buffer size
         cdef size_t required_size = writer_func(self.geom, NULL, 0)
         cdef size_t n
