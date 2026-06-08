@@ -32,7 +32,7 @@ pip install togo
 - Memory-efficient C implementation with Python-friendly interface
 - Advanced operations via libgeos integration (buffer, unary union, simplify, centroid, convex_hull, etc.)
 - Distance and proximity operations (nearest_points, shortest_line, project)
-- `MultiPolygon` and `MultiLineString` are real Python classes — `isinstance()` checks work correctly
+- `MultiPoint`, `MultiLineString`, `MultiPolygon`, and `GeometryCollection` are real Python classes — `isinstance()` checks work correctly
 - Geometry equality via `==` operator consistent with Shapely semantics
 
 ## Basic Usage
@@ -84,7 +84,7 @@ if poly.contains(point):
 if poly.intersects(Polygon([(3, 3), (5, 3), (5, 5), (3, 5), (3, 3)])):
     print("Polygons intersect!")
 
-# Polygon.boundary — exterior ring as a LineString
+# Polygon.boundary — LineString (no holes) or MultiLineString (with holes)
 boundary = poly.boundary
 print(boundary.length)     # perimeter of polygon
 
@@ -106,6 +106,12 @@ print(hull.to_wkt())  # 'POLYGON((0 0,2 0,2 2,0 2,0 0))'
 other = Polygon([(3, 3), (5, 3), (5, 5), (3, 5), (3, 3)])
 merged = poly.union(other)
 print(merged.geom_type)
+
+# Shapely-style constructors/helpers
+from togo import shape, box
+g1 = shape({"type": "Point", "coordinates": [1, 2]})
+g2 = box(0, 0, 2, 1)
+print(g1.geom_type, g2.geom_type)
 ```
 
 You can also call the module-level helper with `from togo import union` and then
@@ -122,8 +128,9 @@ The base class that wraps tg_geom structures and provides core operations:
 - Use common predicates such as `intersects()`, `contains()`, and `within()` directly on
   `Geometry` instances.
 - Convert geometries back to WKT/GeoJSON/WKB using `to_wkt()`, `to_geojson()`, and `to_wkb()`.
-- Index collection-like geometries such as `GeometryCollection`, `MultiLineString`, and
+- Index collection-like geometries such as `MultiPoint`, `GeometryCollection`, `MultiLineString`, and
   `MultiPolygon` using `geom[idx]`.
+- Access collection members as an immutable tuple via `.geoms` on multi-geometries and geometry collections.
 - High-risk accessor, predicate, and overlay paths now fail with managed exceptions when used on
   uninitialized base `Geometry()` objects.
 
@@ -244,7 +251,7 @@ print(f"Contains point (1.5,1.5): {geom.contains(Point(1.5,1.5).as_geometry())}"
 
 ### MultiGeometries
 
-`MultiPolygon` and `MultiLineString` are real Python classes, so `isinstance()` checks work correctly:
+All multi-geometries are real Python classes, so `isinstance()` checks work correctly:
 
 ```python
 from togo import MultiPoint, MultiLineString, MultiPolygon, Poly, Ring, Geometry
@@ -260,8 +267,17 @@ print(isinstance(multi_poly, Geometry))      # True
 multi_line = MultiLineString([[(0,0), (1,1)], [(2,2), (3,3)]])
 print(isinstance(multi_line, MultiLineString))  # True
 
-# MultiPoint — factory (returns Geometry)
+# MultiPoint — real class, supports isinstance
 multi_point = MultiPoint([(0,0), (1,1), (2,2)])
+print(isinstance(multi_point, MultiPoint))  # True
+
+# GeometryCollection — real class, supports isinstance
+from togo import GeometryCollection
+collection = GeometryCollection([multi_point, multi_line])
+print(isinstance(collection, GeometryCollection))  # True
+
+# Child members
+print(len(collection.geoms))
 
 # Low-level factory methods still available on Geometry
 multi_poly2 = Geometry.from_multipolygon([poly1, poly2])

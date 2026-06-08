@@ -1,11 +1,5 @@
 # Quick Reference: ToGo Shapely-Compatible API
 
-## v0.4.1 Notes (vs v0.4.0)
-
-- `LineString.project(..., normalized=True)` is supported.
-- `Geometry.exterior`, `Geometry.interiors`, and `Geometry.boundary` have safer lifetime handling.
-- Mixed-input `unary_union()` coercion is safer (coerced objects are kept alive during union).
-
 ## Installation
 
 ```bash
@@ -16,7 +10,7 @@ pip install togo
 
 ```python
 from togo import Point, LineString, Polygon, Ring
-from togo import from_wkt, from_geojson, to_wkt, to_geojson
+from togo import from_wkt, from_geojson, to_wkt, to_geojson, shape, box
 ```
 
 ## Create Geometries
@@ -148,6 +142,17 @@ multi = MultiPolygon(polys)
 # GeometryCollection
 geoms = [Point(0, 0), LineString([(1, 1), (2, 2)])]
 collection = GeometryCollection(geoms)
+
+# Access children as a tuple
+parts = collection.geoms
+len(parts)
+```
+
+## shape() and box()
+
+```python
+geom = shape({"type": "Point", "coordinates": [1, 2]})
+rect = box(0, 0, 10, 5)
 ```
 
 ## Common Properties
@@ -266,9 +271,9 @@ poly = Poly(Ring([...]))
 | Feature | Shapely | ToGo |
 |---------|---------|------|
 | Predicates | Work on shapes directly | Work on wrapper objects directly |
-| Multi-geometries | Auto-created | Explicit constructors |
+| Multi-geometries | Class-based | Class-based (`isinstance` works) |
 
 ---
 
 **Status:** Production Ready ✅
-**Last Updated:** December 6, 2025
+**Last Updated:** June 8, 2026

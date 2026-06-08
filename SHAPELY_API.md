@@ -35,10 +35,10 @@ ToGo provides the following Shapely-compatible class names:
 - `Point` - Create points
 - `LineString` - Create linestrings (alias for `Line`)
 - `Polygon` - Create polygons (subclass of `Poly`)
-- `MultiPoint()` - Create multi-point geometries (returns `Geometry`)
+- `MultiPoint` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
 - `MultiLineString` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
 - `MultiPolygon` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
-- `GeometryCollection()` - Create geometry collections (returns `Geometry`)
+- `GeometryCollection` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
 
 ```python
 from togo import MultiPolygon, MultiLineString, Geometry, Poly, Ring
@@ -135,7 +135,7 @@ print(poly.is_empty)          # False
 print(poly.is_valid)          # True
 print(poly.exterior)          # Ring object (exterior ring)
 print(poly.interiors)         # List of Ring objects (holes)
-print(poly.boundary)          # LineString — the exterior ring as a line
+print(poly.boundary)          # LineString (no holes) or MultiLineString (with holes)
 print(poly.wkt)               # 'POLYGON((0 0,4 0,4 4,0 4,0 0))'
 print(poly.wkb)               # bytes object
 print(poly.__geo_interface__) # GeoJSON-like dict
@@ -173,6 +173,21 @@ print(geojson_geom.geom_type)
 wkb_bytes = bytes.fromhex("0101000000000000000000F03F0000000000000040")
 wkb_geom = from_wkb(wkb_bytes)
 print(wkb_geom.geom_type)
+```
+
+### shape() and box()
+
+```python
+from togo import shape, box
+
+# shape() from GeoJSON-like mapping or __geo_interface__ object
+geom = shape({"type": "Point", "coordinates": [1, 2]})
+print(geom.geom_type)  # 'Point'
+
+# box() from bounds
+rect = box(0, 0, 3, 2)
+print(rect.geom_type)  # 'Polygon'
+print(rect.bounds)     # (0.0, 0.0, 3.0, 2.0)
 ```
 
 ### Serialization Functions
@@ -283,7 +298,10 @@ print(poly.exterior)         # Ring: exterior ring
 print(poly.interiors)        # List[Ring]: list of holes
 print(poly.centroid)         # Point: center of mass
 print(poly.boundary)         # LineString: exterior ring as a line
+print(poly_with_hole.boundary)  # MultiLineString: exterior + interior rings
 ```
+
+For multi-geometries and geometry collections, use `.geoms` to access members as a tuple.
 
 ## Spatial Predicates
 
@@ -570,10 +588,10 @@ control flow, while null/uninitialized geometry bugs are surfaced earlier and mo
 1. **Class names**: `Point`, `LineString`, `Polygon`
 2. **Properties**: `geom_type`, `bounds`, `area`, `coords`, `is_empty`, `is_valid`
 3. **Serialization**: `wkt`, `wkb`, `__geo_interface__`
-4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`, `unary_union()`, `union()`, `force_2d()`
+4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`, `shape()`, `box()`, `unary_union()`, `union()`, `force_2d()`
 5. **Predicates**: `contains()`, `intersects()`, `touches()`, `within()`, `covers()`, `coveredby()`, `equals()`
 6. **Operations**: `intersection()`, `union()`, `buffer()`, `simplify()`, `project()`
-7. **Multi-geometry classes**: `MultiPolygon`, `MultiLineString` are real Python classes, `isinstance()` works
+7. **Multi-geometry classes**: `MultiPoint`, `MultiLineString`, `MultiPolygon`, and `GeometryCollection` are real Python classes, `isinstance()` works
 8. **Equality**: `geom1 == geom2` works consistently, geometries are hashable
 
 ### Differences
@@ -634,7 +652,7 @@ print(f"Stop is at {road.project(stop.as_geometry()):.1f}m along the road")  # 4
 bbox = Polygon.from_bounds(0, 0, 10, 5)
 print(f"BBox area: {bbox.area}")   # 50.0
 
-# Polygon.boundary — exterior ring as a LineString
+# Polygon.boundary — LineString (no holes) or MultiLineString (with holes)
 print(f"Perimeter via boundary: {poly.boundary.length:.2f}")  # same as poly.length
 
 # Spatial predicates — no .as_geometry() needed
@@ -777,8 +795,10 @@ The `transform` function works with:
 | `LineString(coords)` | `LineString(coords)` | ✅ |
 | `Polygon(shell, holes)` | `Polygon(shell, holes=[...])` | ✅ |
 | `Polygon.from_bounds(x1,y1,x2,y2)` | `Polygon.from_bounds(x1,y1,x2,y2)` | ✅ |
+| `MultiPoint(points)` | `MultiPoint(points)` | ✅ Real class; `isinstance` works |
 | `MultiPolygon(polys)` | `MultiPolygon(polys)` | ✅ Real class; `isinstance` works |
 | `MultiLineString(lines)` | `MultiLineString(lines)` | ✅ Real class; `isinstance` works |
+| `GeometryCollection(geoms)` | `GeometryCollection(geoms)` | ✅ Real class; `isinstance` works |
 | `geom.geom_type` | `geom.geom_type` | ✅ |
 | `geom.bounds` | `geom.bounds` | ✅ |
 | `geom.area` | `geom.area` | ✅ |
@@ -786,6 +806,7 @@ The `transform` function works with:
 | `geom.centroid` | `geom.centroid` | ✅ via GEOS |
 | `geom.convex_hull` | `geom.convex_hull` | ✅ via GEOS |
 | `geom.boundary` | `poly.boundary` | ✅ on Polygon/Poly |
+| `geom.geoms` | `geom.geoms` | ✅ on multi-geometries and GeometryCollection |
 | `geom.is_empty` | `geom.is_empty` | ✅ |
 | `geom.is_valid` | `geom.is_valid` | ✅ via GEOS |
 | `geom.coords` | `geom.coords` | ✅ Indexable; `coords[i]` and `len()` work |
@@ -797,6 +818,8 @@ The `transform` function works with:
 | `geom1 == geom2` | `geom1 == geom2` | ✅ |
 | `from_wkt()` | `from_wkt()` | ✅ |
 | `from_geojson()` | `from_geojson()` | ✅ |
+| `shape(mapping_or_geo_interface)` | `shape(mapping_or_geo_interface)` | ✅ |
+| `box(minx,miny,maxx,maxy)` | `box(minx,miny,maxx,maxy)` | ✅ |
 | `to_wkt()` | `to_wkt()` | ✅ |
 | `geom.contains(other)` | `geom.contains(other)` | ✅ Accepts wrapper objects directly |
 | `geom.intersects(other)` | `geom.intersects(other)` | ✅ Accepts wrapper objects directly |
@@ -823,9 +846,10 @@ The `transform` function works with:
 ToGo provides a comprehensive Shapely-compatible API that makes it easy to migrate from Shapely or use it as a drop-in replacement for common geometric operations. Key highlights:
 
 - **Wrapper objects are first-class citizens** — all spatial predicates and operations accept `Point`, `LineString`, `Polygon`, etc. directly without calling `.as_geometry()`.
-- **`MultiPolygon` and `MultiLineString` are real Python classes** — `isinstance()` checks work as expected.
+- **`MultiPoint`, `MultiLineString`, `MultiPolygon`, and `GeometryCollection` are real Python classes** — `isinstance()` checks work as expected.
+- **`shape()` and `box()`** are available as module-level Shapely-style helpers.
 - **`unary_union(geoms)`**, **`union(g1, g2)`**, and **`force_2d(geom)`** are proper module-level functions aligned with Shapely's API.
-- **New Polygon conveniences**: `from_bounds()`, `boundary`, `intersects()`.
+- **New Polygon conveniences**: `from_bounds()`, improved `boundary`, `intersects()`.
 - **`LineString.project()`** for measuring distance-along-line projections.
 - **Geometry equality** via `==` and hashability are supported on all geometry types.
 
