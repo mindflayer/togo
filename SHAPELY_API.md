@@ -231,6 +231,10 @@ union2 = unary_union([poly1, poly3])
 print(union2.geom_type)  # 'MultiPolygon'
 ```
 
+`unary_union()` also includes a robustness fallback for conversion edge-cases: if converting an
+intermediate TG GeometryCollection to GEOS fails, ToGo retries by converting/unioning child
+geometries iteratively.
+
 ### force_2d()
 
 `force_2d(geometry)` returns a 2D copy of the input geometry with any Z/M coordinates dropped.
@@ -494,6 +498,33 @@ The `union()` method:
 The `union()` method follows the same high-level conventions as `intersection()`. A module-level
 `union(g1, g2)` helper is also available and mirrors the Shapely-style API.
 
+### Difference
+
+All geometry types support the `difference()` method for computing the geometric difference of two
+geometries (`A - B`):
+
+```python
+from togo import Polygon, difference
+
+# Difference of overlapping polygons
+poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+
+result = poly1.difference(poly2)
+print(result.geom_type)  # 'Polygon' or 'MultiPolygon'
+print(result.area)       # 3.0
+
+# Module-level helper (Shapely-compatible)
+result2 = difference(poly1, poly2)
+print(result2.area)      # 3.0
+```
+
+The `difference()` method:
+- Returns points from the left-hand geometry that are not in the right-hand geometry
+- Accepts wrapper objects directly (e.g. `Polygon`, `LineString`, `Point`)
+- Returns empty geometry for invalid Shapely-style wrapper-facing inputs
+- Uses GEOS overlay and follows the same 2D overlay guardrails as `intersection()` / `union()`
+
 ### Convex Hull
 
 All geometry types support the `convex_hull()` method for computing the smallest convex geometry that encloses all points:
@@ -571,7 +602,8 @@ Behavior to rely on:
 ToGo aims to match Shapely-style calling patterns, but it makes the failure mode explicit for the
 highest-risk paths:
 
-- wrapper-facing module helpers such as `intersection(g1, g2)` and `union(g1, g2)` return empty
+- wrapper-facing module helpers such as `intersection(g1, g2)`, `union(g1, g2)`, and
+  `difference(g1, g2)` return empty
   geometries for invalid or unsupported inputs, mirroring the Shapely-friendly convenience style
 - base `Geometry()` instances now fail fast with `ValueError` when you call unsafe accessor,
   predicate, or overlay operations on an uninitialized geometry
@@ -588,9 +620,9 @@ control flow, while null/uninitialized geometry bugs are surfaced earlier and mo
 1. **Class names**: `Point`, `LineString`, `Polygon`
 2. **Properties**: `geom_type`, `bounds`, `area`, `coords`, `is_empty`, `is_valid`
 3. **Serialization**: `wkt`, `wkb`, `__geo_interface__`
-4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`, `shape()`, `box()`, `unary_union()`, `union()`, `force_2d()`
+4. **Module functions**: `from_wkt()`, `from_geojson()`, `to_wkt()`, `shape()`, `box()`, `unary_union()`, `union()`, `difference()`, `force_2d()`
 5. **Predicates**: `contains()`, `intersects()`, `touches()`, `within()`, `covers()`, `coveredby()`, `equals()`
-6. **Operations**: `intersection()`, `union()`, `buffer()`, `simplify()`, `project()`
+6. **Operations**: `intersection()`, `union()`, `difference()`, `buffer()`, `simplify()`, `project()`
 7. **Multi-geometry classes**: `MultiPoint`, `MultiLineString`, `MultiPolygon`, and `GeometryCollection` are real Python classes, `isinstance()` works
 8. **Equality**: `geom1 == geom2` works consistently, geometries are hashable
 
@@ -600,7 +632,7 @@ control flow, while null/uninitialized geometry bugs are surfaced earlier and mo
    Shapely does not have. Use `.as_geometry()` when you need to pass a wrapper object to
    a function that specifically requires a `Geometry` instance.
 
-2. **GEOS dependency**: Buffer, simplify, centroid, convex_hull, intersection, union, unary_union,
+2. **GEOS dependency**: Buffer, simplify, centroid, convex_hull, intersection, union, difference, unary_union,
    nearest_points, shortest_line, and project all require the bundled `libgeos`.
 
 ## Performance
@@ -831,9 +863,11 @@ The `transform` function works with:
 | `geom.simplify()` | `geom.simplify()` | ✅ via GEOS |
 | `geom.intersection(other)` | `geom.intersection(other)` | ✅ via GEOS; accepts wrappers |
 | `geom.union(other)` | `geom.union(other)` | ✅ via GEOS; accepts wrappers |
+| `geom.difference(other)` | `geom.difference(other)` | ✅ via GEOS; accepts wrappers |
 | `line.project(point, normalized=False)` | `line.project(point, normalized=False)` | ✅ via GEOS |
 | `unary_union(geoms)` | `unary_union(geoms)` | ✅ Module-level; via GEOS |
 | `union(g1, g2)` | `union(g1, g2)` | ✅ Module-level; via GEOS |
+| `difference(g1, g2)` | `difference(g1, g2)` | ✅ Module-level; via GEOS |
 | `force_2d(geom)` | `force_2d(geom)` | ✅ Module-level; drops Z/M ordinates |
 | `transform(fn, geom)` | `transform(fn, geom)` | ✅ |
 | `nearest_points(g1, g2)` | `nearest_points(g1, g2)` | ✅ via GEOS |
@@ -848,7 +882,7 @@ ToGo provides a comprehensive Shapely-compatible API that makes it easy to migra
 - **Wrapper objects are first-class citizens** — all spatial predicates and operations accept `Point`, `LineString`, `Polygon`, etc. directly without calling `.as_geometry()`.
 - **`MultiPoint`, `MultiLineString`, `MultiPolygon`, and `GeometryCollection` are real Python classes** — `isinstance()` checks work as expected.
 - **`shape()` and `box()`** are available as module-level Shapely-style helpers.
-- **`unary_union(geoms)`**, **`union(g1, g2)`**, and **`force_2d(geom)`** are proper module-level functions aligned with Shapely's API.
+- **`unary_union(geoms)`**, **`union(g1, g2)`**, **`difference(g1, g2)`**, and **`force_2d(geom)`** are proper module-level functions aligned with Shapely's API.
 - **New Polygon conveniences**: `from_bounds()`, improved `boundary`, `intersects()`.
 - **`LineString.project()`** for measuring distance-along-line projections.
 - **Geometry equality** via `==` and hashability are supported on all geometry types.

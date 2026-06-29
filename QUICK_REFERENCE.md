@@ -172,7 +172,7 @@ geom.__geo_interface__  # Dict: GeoJSON-like
 ## Geometric Operations
 
 ```python
-from togo import convex_hull, nearest_points, shortest_line
+from togo import convex_hull, difference, nearest_points, shortest_line
 
 # Centroid - center of mass
 poly = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)])
@@ -188,6 +188,16 @@ hull = points.convex_hull  # Property access
 # Buffer - expand/shrink geometry
 line = LineString([(0, 0), (10, 10)])
 buffered = line.buffer(2.0)
+
+# Set operations
+a = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+b = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+overlap = a.intersection(b)
+merged = a.union(b)
+cutout = a.difference(b)
+
+# Module-level equivalent
+cutout2 = difference(a, b)
 
 # Simplify - reduce complexity
 complex_line = LineString([(0, 0), (0.1, 0.1), (1, 1), (2, 2)])

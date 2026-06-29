@@ -10,6 +10,7 @@ Covers:
 7. Operations/predicates accept wrapper geometry objects (Point/LineString/Polygon)
 8. MultiPolygon and MultiLineString are real Python classes
 9. Geometry equality behaves consistently
+10. Difference set-operations are available in method and module forms
 """
 
 import pytest
@@ -75,6 +76,20 @@ class TestUnaryUnion:
     def test_unary_union_is_module_level(self):
         """unary_union is accessible at the togo module level."""
         assert callable(togo.unary_union)
+
+    def test_unary_union_fragment_regression(self):
+        """Regression: fragment polygons should not fail TG->GEOS conversion in unary_union."""
+        frag1 = togo.from_wkt(
+            "POLYGON((-0.04152989791889679 49.96284582619472,-0.05360208037804666 49.99472435266339,-0.0656902329731018 50.026601414028775,-0.07779440359234042 50.05847708901501,-0.08991461246576689 50.09035132352744,-0.10205089834700727 50.12222411693473,-0.11420330012085385 50.15409546618092,-0.12637185679209534 50.1859653682039,-0.05904346830566795 50.19654860260973,-0.04691701001683499 50.164671730344814,-0.034806638272464746 50.13279342311427,-0.022712314198252564 50.10091368395309,-0.010633999039577596 50.06903251589018,0.0014283458601545285 50.03714991943414,0.013474740623997256 50.00526594878062,0.02550520686919014 49.97338059420998,-0.04152989791889679 49.96284582619472))"
+        )
+        frag2 = togo.from_wkt(
+            "POLYGON((-0.0012089070516528855 49.99472435266339,-0.01329705964670802 50.02660141402877,-0.02540123026594665 50.05847708901501,-0.037521439139401536 50.09035132352742,-0.04965772502064192 50.12222411693471,-0.061810126794488496 50.15409546618088,-0.07397868346575842 50.185965368203874,-0.006650294979330146 50.19654860260971,0.005476163309502818 50.16467173034479,0.01758653505390148 50.132793423114265,0.029680859128113662 50.10091368395308,0.04175917428681705 50.06903251589018,0.05382151918654918 50.03714991943415,0.06586791395036348 50.00526594878062,-0.0012089070516528855 49.99472435266339))"
+        )
+
+        result = unary_union([frag1, frag2])
+        assert result is not None
+        assert not result.is_empty
+        assert result.geom_type in ("Polygon", "MultiPolygon")
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +383,24 @@ class TestPredicatesAcceptWrappers:
         result = g.intersection(p)
         assert result.geom_type == "Polygon"
         assert result.area == pytest.approx(1.0, rel=1e-6)
+
+    def test_geometry_difference_polygon_wrapper(self):
+        """Geometry.difference() accepts a Polygon wrapper directly."""
+        g = Geometry("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))", fmt="wkt")
+        p = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+        assert hasattr(g, "difference")
+        result = getattr(g, "difference")(p)
+        assert result.geom_type in ("Polygon", "MultiPolygon")
+        assert result.area == pytest.approx(3.0, rel=1e-6)
+
+    def test_module_difference_available(self):
+        """difference is accessible at module level and behaves like shapely-style set op."""
+        p1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+        p2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+        assert hasattr(togo, "difference")
+        result = togo.difference(p1, p2)
+        assert result.geom_type in ("Polygon", "MultiPolygon")
+        assert result.area == pytest.approx(3.0, rel=1e-6)
 
     def test_polygon_intersects_no_manual_conversion(self):
         """Polygon.intersects() works on another Polygon without as_geometry()."""
