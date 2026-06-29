@@ -11,6 +11,7 @@ pip install togo
 ```python
 from togo import Point, LineString, Polygon, Ring
 from togo import from_wkt, from_geojson, to_wkt, to_geojson, shape, box
+from togo import BaseGeometry
 ```
 
 ## Create Geometries
@@ -167,6 +168,10 @@ geom.is_valid      # Boolean: True if geometry is valid
 geom.wkt           # String: WKT representation
 geom.wkb           # Bytes: WKB representation
 geom.__geo_interface__  # Dict: GeoJSON-like
+
+# Point Geometry results expose x/y (e.g., centroid outputs)
+center = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]).centroid
+center.x, center.y
 ```
 
 ## Geometric Operations
@@ -198,6 +203,12 @@ cutout = a.difference(b)
 
 # Module-level equivalent
 cutout2 = difference(a, b)
+
+# 3D inputs are accepted for topology operations and normalized to 2D
+zpoly = from_wkt("POLYGON Z ((0 0 5,2 0 5,2 2 5,0 2 5,0 0 5))")
+zpoly2 = from_wkt("POLYGON Z ((1 1 9,3 1 9,3 3 9,1 3 9,1 1 9))")
+zmerge = zpoly.union(zpoly2)
+zmerge.has_z  # False
 
 # Simplify - reduce complexity
 complex_line = LineString([(0, 0), (0.1, 0.1), (1, 1), (2, 2)])

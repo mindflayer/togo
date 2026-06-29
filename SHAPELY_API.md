@@ -39,14 +39,16 @@ ToGo provides the following Shapely-compatible class names:
 - `MultiLineString` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
 - `MultiPolygon` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
 - `GeometryCollection` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
+- `BaseGeometry` - alias for `Geometry` for Shapely-style base-type checks
 
 ```python
-from togo import MultiPolygon, MultiLineString, Geometry, Poly, Ring
+from togo import BaseGeometry, MultiPolygon, MultiLineString, Geometry, Poly, Ring
 
 poly1 = Poly(Ring([(0,0), (1,0), (1,1), (0,1), (0,0)]))
 mp = MultiPolygon([poly1])
 print(isinstance(mp, MultiPolygon))  # True
 print(isinstance(mp, Geometry))      # True
+print(isinstance(mp, BaseGeometry))  # True
 
 mls = MultiLineString([[(0,0), (1,1)]])
 print(isinstance(mls, MultiLineString))  # True
@@ -255,6 +257,9 @@ The `force_2d()` helper:
 - works recursively for multi-geometries and geometry collections
 - is module-level and Shapely-like in style
 
+Overlay operations (`intersection`, `union`, `difference`, `unary_union`) now accept 3D
+inputs and normalize to 2D internally (Z/M is ignored for topology).
+
 ## Geometry Properties
 
 All geometry types support these Shapely-compatible properties:
@@ -273,6 +278,11 @@ print(geom.is_valid)           # Boolean: True if geometry is valid (property)
 print(geom.wkt)                # String: WKT representation
 print(geom.wkb)                # Bytes: WKB representation
 print(geom.__geo_interface__)  # Dict: GeoJSON-like interface
+
+# Point-like Geometry results expose x/y like Shapely
+centroid = Geometry("POLYGON((0 0,4 0,4 4,0 4,0 0))", fmt="wkt").centroid
+print(centroid.geom_type)      # 'Point'
+print(centroid.x, centroid.y)  # 2.0 2.0
 ```
 
 ### Type-Specific Properties
@@ -595,7 +605,7 @@ Behavior to rely on:
 - Uninitialized base `Geometry()` objects now raise `ValueError` on unsafe accessor, predicate,
   and overlay paths instead of touching null pointers.
 - Empty geometries use explicit fast-path handling for overlay operations.
-- Binary overlay operations are currently guarded to 2D inputs.
+- Binary overlay operations automatically normalize 3D inputs to 2D.
 
 ### Error Behavior vs Shapely
 
