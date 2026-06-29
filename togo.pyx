@@ -2536,6 +2536,18 @@ cdef class Ring:
         cdef int i
         cdef double x
         cdef double y
+        cdef double first_x, first_y, last_x, last_y
+
+        # Auto-close the ring if it's not already closed (for Shapely compatibility)
+        if n > 0:
+            first_x, first_y = _coerce_xy(points[0], "points[0]")
+            last_x, last_y = _coerce_xy(points[-1], "points[-1]")
+            # Check if first and last points are different (within floating point tolerance)
+            if not (abs(first_x - last_x) < 1e-10 and abs(first_y - last_y) < 1e-10):
+                # Ring is not closed, add first point at the end
+                points.append(points[0])
+                n = _checked_c_count(points, "points")
+
         if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_point)):
             raise OverflowError("points is too large")
         cdef tg_point *pts = <tg_point *>malloc((<size_t>(<unsigned int>n)) * sizeof(tg_point))
