@@ -242,6 +242,9 @@ cdef extern from "geos_c.h":
     GEOSGeometry *GEOSUnion_r(
         GEOSContextHandle_t handle, const GEOSGeometry *g1, const GEOSGeometry *g2
     )
+    GEOSGeometry *GEOSDifference_r(
+        GEOSContextHandle_t handle, const GEOSGeometry *g1, const GEOSGeometry *g2
+    )
     double GEOSProject_r(
         GEOSContextHandle_t handle, const GEOSGeometry *line, const GEOSGeometry *point
     )
@@ -1434,20 +1437,52 @@ cdef class Geometry:
         if ctx == NULL:
             tg_geom_free(gptr)
             raise RuntimeError("Failed to initialize GEOS context")
+        cdef int child_count
+        cdef const tg_geom *child
+        cdef GEOSGeometry *g_next
+        cdef GEOSGeometry *g_accum
+        cdef GEOSGeometry *g_tmp_union
         cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, gptr)
-        if g_geos == NULL:
-            GEOS_finish_r(ctx)
-            tg_geom_free(gptr)
-            raise RuntimeError("Failed to convert TG geometry to GEOS")
-        cdef GEOSGeometry *g_union = GEOSUnaryUnion_r(ctx, g_geos)
-        if g_union == NULL:
-            GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
-            tg_geom_free(gptr)
-            raise RuntimeError("GEOSUnaryUnion failed")
+        cdef GEOSGeometry *g_union = NULL
+        if g_geos != NULL:
+            g_union = GEOSUnaryUnion_r(ctx, g_geos)
+            if g_union == NULL:
+                GEOSGeom_destroy_r(ctx, g_geos)
+                GEOS_finish_r(ctx)
+                tg_geom_free(gptr)
+                raise RuntimeError("GEOSUnaryUnion failed")
+        else:
+            # Fallback to iterative unions when TG->GEOS conversion fails for
+            # the temporary geometry collection itself.
+            child_count = tg_geom_num_geometries(gptr)
+            g_accum = NULL
+            for i in range(child_count):
+                child = tg_geom_geometry_at(gptr, i)
+                g_next = tg_geom_to_geos(ctx, child)
+                if g_next == NULL:
+                    if g_accum != NULL:
+                        GEOSGeom_destroy_r(ctx, g_accum)
+                    GEOS_finish_r(ctx)
+                    tg_geom_free(gptr)
+                    raise RuntimeError(
+                        "Failed to convert TG geometry to GEOS in unary_union fallback"
+                    )
+                if g_accum == NULL:
+                    g_accum = g_next
+                else:
+                    g_tmp_union = GEOSUnion_r(ctx, g_accum, g_next)
+                    GEOSGeom_destroy_r(ctx, g_next)
+                    GEOSGeom_destroy_r(ctx, g_accum)
+                    if g_tmp_union == NULL:
+                        GEOS_finish_r(ctx)
+                        tg_geom_free(gptr)
+                        raise RuntimeError("GEOSUnion failed in unary_union fallback")
+                    g_accum = g_tmp_union
+            g_union = g_accum
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_union)
         GEOSGeom_destroy_r(ctx, g_union)
-        GEOSGeom_destroy_r(ctx, g_geos)
+        if g_geos != NULL:
+            GEOSGeom_destroy_r(ctx, g_geos)
         GEOS_finish_r(ctx)
         tg_geom_free(gptr)
         if g_tg == NULL:
@@ -1852,6 +1887,77 @@ cdef class Geometry:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
 
         GEOSGeom_destroy_r(ctx, g_union)
+        GEOSGeom_destroy_r(ctx, g2_geos)
+        GEOSGeom_destroy_r(ctx, g1_geos)
+        GEOS_finish_r(ctx)
+
+        return _geometry_from_ptr(g_tg)
+
+    def difference(self, other) -> Geometry:
+        """Return the geometric difference of this geometry and another."""
+        cdef GEOSContextHandle_t ctx
+        cdef GEOSGeometry *g1_geos
+        cdef GEOSGeometry *g2_geos
+        cdef GEOSGeometry *g_difference
+        cdef tg_geom *g_tg
+        cdef tg_geom *empty
+        cdef tg_geom *cloned
+        cdef Geometry other_geom
+
+        if other is None:
+            cloned = tg_geom_clone(self.geom)
+            if cloned == NULL:
+                raise MemoryError("Failed to clone geometry in difference")
+            return _geometry_from_ptr(cloned)
+
+        try:
+            other_geom = _coerce_geometry_or_raise(other, "other")
+        except TypeError:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+
+        self._ensure_overlay_safe(other_geom)
+
+        if tg_geom_is_empty(self.geom) != 0:
+            empty = tg_geom_new_geometrycollection_empty()
+            return _geometry_from_ptr(empty)
+        if tg_geom_is_empty(other_geom.geom) != 0:
+            cloned = tg_geom_clone(self.geom)
+            if cloned == NULL:
+                raise MemoryError("Failed to clone geometry in difference")
+            return _geometry_from_ptr(cloned)
+
+        ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        g1_geos = tg_geom_to_geos(ctx, self.geom)
+        if g1_geos == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert first geometry to GEOS")
+
+        g2_geos = tg_geom_to_geos(ctx, other_geom.geom)
+        if g2_geos == NULL:
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert second geometry to GEOS")
+
+        g_difference = GEOSDifference_r(ctx, g1_geos, g2_geos)
+        if g_difference == NULL:
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("GEOSDifference failed")
+
+        g_tg = tg_geom_from_geos(ctx, g_difference)
+        if g_tg == NULL:
+            GEOSGeom_destroy_r(ctx, g_difference)
+            GEOSGeom_destroy_r(ctx, g2_geos)
+            GEOSGeom_destroy_r(ctx, g1_geos)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+
+        GEOSGeom_destroy_r(ctx, g_difference)
         GEOSGeom_destroy_r(ctx, g2_geos)
         GEOSGeom_destroy_r(ctx, g1_geos)
         GEOS_finish_r(ctx)
@@ -4514,6 +4620,24 @@ def union(geom1, geom2) -> Geometry:
     return g1.union(g2)
 
 
+def difference(geom1, geom2) -> Geometry:
+    """Return the geometric difference of two geometries."""
+    cdef tg_geom *empty
+
+    try:
+        g1 = _coerce_geometry_or_raise(geom1, "geom1")
+    except TypeError:
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+    try:
+        g2 = _coerce_geometry_or_raise(geom2, "geom2")
+    except TypeError:
+        empty = tg_geom_new_geometrycollection_empty()
+        return _geometry_from_ptr(empty)
+
+    return g1.difference(g2)
+
+
 def convex_hull(geom):
     """
     Return the convex hull of a geometry.
@@ -4559,6 +4683,6 @@ __all__ = [
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
     "unary_union", "shape", "box", "nearest_points", "shortest_line", "convex_hull",
-    "intersection", "union", "transform", "force_2d",
+    "intersection", "union", "difference", "transform", "force_2d",
     "set_polygon_indexing_mode", "TGIndex"
 ]

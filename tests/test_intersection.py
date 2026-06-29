@@ -9,6 +9,7 @@ from togo import (
     Ring,
     Geometry,
     MultiPolygon,
+    difference,
     intersection,
 )
 
@@ -364,6 +365,61 @@ class TestModuleLevelIntersection:
         result = intersection(poly1, poly2)
         assert result is not None
         assert result.is_empty or result.area == 0.0
+
+
+class TestGeometryDifference:
+    """Test Geometry.difference method."""
+
+    def test_geometry_difference_overlapping_polygons(self):
+        poly1 = Geometry("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))", fmt="wkt")
+        poly2 = Geometry("POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))", fmt="wkt")
+        result = poly1.difference(poly2)
+        assert result is not None
+        assert result.geom_type in ["Polygon", "MultiPolygon"]
+        assert abs(result.area - 3.0) < 0.0001
+
+    def test_geometry_difference_disjoint_polygons(self):
+        poly1 = Geometry("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", fmt="wkt")
+        poly2 = Geometry("POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))", fmt="wkt")
+        result = poly1.difference(poly2)
+        assert result is not None
+        assert result.geom_type == "Polygon"
+        assert abs(result.area - 1.0) < 0.0001
+
+    def test_geometry_difference_none_returns_clone(self):
+        geom = Geometry("POINT(0 0)", fmt="wkt")
+        result = geom.difference(None)
+        assert result is not None
+        assert result.geom_type == "Point"
+        assert result.to_wkt() == "POINT(0 0)"
+
+    def test_geometry_difference_invalid_type_returns_empty(self):
+        geom = Geometry("POINT(0 0)", fmt="wkt")
+        result = geom.difference("not a geometry")
+        assert result is not None
+        assert result.is_empty
+
+
+class TestModuleLevelDifference:
+    """Test module-level difference() function."""
+
+    def test_difference_function_polygons(self):
+        poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+        poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+        result = difference(poly1, poly2)
+        assert result is not None
+        assert result.geom_type in ["Polygon", "MultiPolygon"]
+        assert abs(result.area - 3.0) < 0.0001
+
+    def test_difference_function_none_returns_empty(self):
+        poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)])
+        result1 = difference(None, poly)
+        assert result1 is not None
+        assert result1.is_empty
+
+        result2 = difference(poly, None)
+        assert result2 is not None
+        assert result2.is_empty
 
 
 class TestIntersectionEdgeCases:
