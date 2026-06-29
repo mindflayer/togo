@@ -660,6 +660,10 @@ cdef class Geometry:
         g2 = tg_geom_to_meters_grid(self.geom, origin._get_c_point())
         if not g2:
             raise ValueError("tgx meters grid conversion failed")
+        if tg_geom_error(g2) != NULL:
+            err_msg = tg_geom_error(g2).decode("utf-8")
+            tg_geom_free(g2)
+            raise ValueError(f"tgx meters grid conversion error: {err_msg}")
         return _geometry_from_ptr(g2)
 
     def from_meters_grid(self, origin: Point) -> Geometry:
@@ -675,6 +679,10 @@ cdef class Geometry:
         g2 = tg_geom_from_meters_grid(self.geom, origin._get_c_point())
         if not g2:
             raise ValueError("tgx from meters grid conversion failed")
+        if tg_geom_error(g2) != NULL:
+            err_msg = tg_geom_error(g2).decode("utf-8")
+            tg_geom_free(g2)
+            raise ValueError(f"tgx from meters grid conversion error: {err_msg}")
         return _geometry_from_ptr(g2)
 
     cpdef Point point(self):
@@ -1279,6 +1287,18 @@ cdef class Geometry:
         cdef int n = _checked_c_count(geoms, "geoms")
         if n == 0:
             raise ValueError("unary_union requires at least one geometry")
+        # Pre-validate: reject non-2D native Geometry objects before any C allocation.
+        cdef int _i_pre
+        for _i_pre in range(n):
+            _obj_pre = geoms[_i_pre]
+            if isinstance(_obj_pre, Geometry):
+                if (<Geometry>_obj_pre).geom != NULL and tg_geom_dims(
+                        (<Geometry>_obj_pre).geom
+                ) > 2:
+                    raise ValueError(
+                        f"only 2D geometries are supported for unary_union "
+                        f"(geometry {_i_pre} has {tg_geom_dims((<Geometry>_obj_pre).geom)} dims)"
+                    )
         if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_geom *)):
             raise OverflowError("geoms is too large")
         cdef const tg_geom **arr = <const tg_geom **>malloc(
@@ -1487,6 +1507,10 @@ cdef class Geometry:
         tg_geom_free(gptr)
         if g_tg == NULL:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
+        if tg_geom_error(g_tg) != NULL:
+            err_msg = tg_geom_error(g_tg).decode("utf-8")
+            tg_geom_free(g_tg)
+            raise RuntimeError(f"unary_union: TGX conversion error: {err_msg}")
         return _geometry_from_ptr(g_tg)
 
     def buffer(self, distance: float, quad_segs: int = 16,
@@ -1546,16 +1570,15 @@ cdef class Geometry:
             raise RuntimeError(f"GEOSBuffer failed with distance {distance}")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_buffered)
-        if g_tg == NULL:
-            GEOSGeom_destroy_r(ctx, g_buffered)
-            GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to convert GEOS geometry to TG")
-
         GEOSGeom_destroy_r(ctx, g_buffered)
         GEOSGeom_destroy_r(ctx, g_geos)
         GEOS_finish_r(ctx)
-
+        if g_tg == NULL:
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+        if tg_geom_error(g_tg) != NULL:
+            err_msg = tg_geom_error(g_tg).decode("utf-8")
+            tg_geom_free(g_tg)
+            raise RuntimeError(f"buffer: TGX conversion error: {err_msg}")
         return _geometry_from_ptr(g_tg)
 
     def simplify(self, tolerance: float, preserve_topology: bool = True) -> Geometry:
@@ -1605,16 +1628,15 @@ cdef class Geometry:
             )
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_simplified)
-        if g_tg == NULL:
-            GEOSGeom_destroy_r(ctx, g_simplified)
-            GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to convert GEOS geometry to TG")
-
         GEOSGeom_destroy_r(ctx, g_simplified)
         GEOSGeom_destroy_r(ctx, g_geos)
         GEOS_finish_r(ctx)
-
+        if g_tg == NULL:
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+        if tg_geom_error(g_tg) != NULL:
+            err_msg = tg_geom_error(g_tg).decode("utf-8")
+            tg_geom_free(g_tg)
+            raise RuntimeError(f"simplify: TGX conversion error: {err_msg}")
         return _geometry_from_ptr(g_tg)
 
     @property
@@ -1653,16 +1675,15 @@ cdef class Geometry:
             raise RuntimeError("GEOSGetCentroid failed")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_centroid)
-        if g_tg == NULL:
-            GEOSGeom_destroy_r(ctx, g_centroid)
-            GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to convert GEOS geometry to TG")
-
         GEOSGeom_destroy_r(ctx, g_centroid)
         GEOSGeom_destroy_r(ctx, g_geos)
         GEOS_finish_r(ctx)
-
+        if g_tg == NULL:
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+        if tg_geom_error(g_tg) != NULL:
+            err_msg = tg_geom_error(g_tg).decode("utf-8")
+            tg_geom_free(g_tg)
+            raise RuntimeError(f"centroid: TGX conversion error: {err_msg}")
         return _geometry_from_ptr(g_tg)
 
     @property
@@ -1711,16 +1732,15 @@ cdef class Geometry:
             raise RuntimeError("GEOSConvexHull failed")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_hull)
-        if g_tg == NULL:
-            GEOSGeom_destroy_r(ctx, g_hull)
-            GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to convert GEOS geometry to TG")
-
         GEOSGeom_destroy_r(ctx, g_hull)
         GEOSGeom_destroy_r(ctx, g_geos)
         GEOS_finish_r(ctx)
-
+        if g_tg == NULL:
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+        if tg_geom_error(g_tg) != NULL:
+            err_msg = tg_geom_error(g_tg).decode("utf-8")
+            tg_geom_free(g_tg)
+            raise RuntimeError(f"convex_hull: TGX conversion error: {err_msg}")
         return _geometry_from_ptr(g_tg)
 
     def intersection(self, other) -> Geometry:
@@ -1808,18 +1828,16 @@ cdef class Geometry:
             raise RuntimeError("GEOSIntersection failed")
 
         g_tg = tg_geom_from_geos(ctx, g_intersection)
-        if g_tg == NULL:
-            GEOSGeom_destroy_r(ctx, g_intersection)
-            GEOSGeom_destroy_r(ctx, g2_geos)
-            GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to convert GEOS geometry to TG")
-
         GEOSGeom_destroy_r(ctx, g_intersection)
         GEOSGeom_destroy_r(ctx, g2_geos)
         GEOSGeom_destroy_r(ctx, g1_geos)
         GEOS_finish_r(ctx)
-
+        if g_tg == NULL:
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+        if tg_geom_error(g_tg) != NULL:
+            err_msg = tg_geom_error(g_tg).decode("utf-8")
+            tg_geom_free(g_tg)
+            raise RuntimeError(f"intersection: TGX conversion error: {err_msg}")
         return _geometry_from_ptr(g_tg)
 
     def union(self, other) -> Geometry:
@@ -1879,18 +1897,16 @@ cdef class Geometry:
             raise RuntimeError("GEOSUnion failed")
 
         g_tg = tg_geom_from_geos(ctx, g_union)
-        if g_tg == NULL:
-            GEOSGeom_destroy_r(ctx, g_union)
-            GEOSGeom_destroy_r(ctx, g2_geos)
-            GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
-            raise RuntimeError("Failed to convert GEOS geometry to TG")
-
         GEOSGeom_destroy_r(ctx, g_union)
         GEOSGeom_destroy_r(ctx, g2_geos)
         GEOSGeom_destroy_r(ctx, g1_geos)
         GEOS_finish_r(ctx)
-
+        if g_tg == NULL:
+            raise RuntimeError("Failed to convert GEOS geometry to TG")
+        if tg_geom_error(g_tg) != NULL:
+            err_msg = tg_geom_error(g_tg).decode("utf-8")
+            tg_geom_free(g_tg)
+            raise RuntimeError(f"union: TGX conversion error: {err_msg}")
         return _geometry_from_ptr(g_tg)
 
     def difference(self, other) -> Geometry:
@@ -2016,7 +2032,7 @@ cdef class Geometry:
         # Extract the two coordinates directly (GEOS always returns exactly 2 points)
         cdef double x1, y1, x2, y2
         cdef int ret = GEOSCoordSeq_getXY_r(ctx, coords, 0, &x1, &y1)
-        if ret == -1:
+        if ret != 1:
             GEOSCoordSeq_destroy_r(ctx, coords)
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
@@ -2024,7 +2040,7 @@ cdef class Geometry:
             raise RuntimeError("Failed to get first coordinate")
 
         ret = GEOSCoordSeq_getXY_r(ctx, coords, 1, &x2, &y2)
-        if ret == -1:
+        if ret != 1:
             GEOSCoordSeq_destroy_r(ctx, coords)
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
@@ -4358,9 +4374,10 @@ cdef Geometry _transform_recursive(object func, Geometry geom):
             result = func(pts[i].x, pts[i].y)
             x_new, y_new = _validate_transform_result(result)
             transformed_coords.append((x_new, y_new))
-        return _geometry_from_ptr(tg_geom_new_linestring(
-            (<Line>Line(transformed_coords))._get_c_line())
-        )
+        # Keep an explicit reference so the Line (and its C pointer) stays alive
+        # until tg_geom_new_linestring has consumed the data.
+        tmp_transformed_line = Line(transformed_coords)
+        return _geometry_from_ptr(tg_geom_new_linestring(tmp_transformed_line._get_c_line()))
 
     # Polygon (type 3)
     elif geom_type == 3:
