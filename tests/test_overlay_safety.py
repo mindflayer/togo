@@ -115,3 +115,70 @@ def test_polygon_line_intersection_still_returns_segment():
 
     assert result.geom_type == "LineString"
     assert result.length == pytest.approx(2.0)
+
+
+def test_operation_outputs_expose_expected_compatibility_types():
+    from togo import MultiPolygon, Polygon, unary_union
+
+    poly = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+    centroid = poly.centroid
+    merged = poly.union(Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)]))
+    disjoint = unary_union(
+        [
+            Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]),
+            Polygon([(3, 0), (4, 0), (4, 1), (3, 1), (3, 0)]),
+        ]
+    )
+
+    assert centroid.geom_type == "Point"
+    assert centroid.x == pytest.approx(1.0)
+    assert centroid.y == pytest.approx(1.0)
+    assert merged.geom_type in {"Polygon", "MultiPolygon"}
+    assert isinstance(disjoint, MultiPolygon)
+
+
+def test_line_boundary_endpoints_expose_xy_properties():
+    from togo import LineString
+
+    line = LineString([(1, 2), (5, 2), (8, 9)])
+    endpoints = line.boundary.geoms
+
+    assert len(endpoints) == 2
+    assert endpoints[0].geom_type == "Point"
+    assert endpoints[1].geom_type == "Point"
+    assert (endpoints[0].x, endpoints[0].y) == (1.0, 2.0)
+    assert (endpoints[1].x, endpoints[1].y) == (8.0, 9.0)
+
+
+def test_overlay_methods_accept_3d_inputs_by_normalizing_to_2d():
+    from togo import from_wkt
+
+    left = from_wkt("POLYGON Z ((0 0 5, 2 0 5, 2 2 5, 0 2 5, 0 0 5))")
+    right = from_wkt("POLYGON Z ((1 1 7, 3 1 7, 3 3 7, 1 3 7, 1 1 7))")
+
+    inter = left.intersection(right)
+    uni = left.union(right)
+    diff = left.difference(right)
+
+    assert inter.geom_type == "Polygon"
+    assert inter.has_z is False
+    assert uni.geom_type in {"Polygon", "MultiPolygon"}
+    assert uni.has_z is False
+    assert diff.geom_type in {"Polygon", "MultiPolygon", "GeometryCollection"}
+    assert diff.has_z is False
+
+
+def test_base_geometry_alias_supports_isinstance_checks():
+    import togo
+
+    from togo import GeometryCollection, MultiPoint, Polygon
+
+    base_geometry = getattr(togo, "BaseGeometry", togo.Geometry)
+
+    poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]).as_geometry()
+    mp = MultiPoint([(0, 0), (1, 1)])
+    gc = GeometryCollection([poly])
+
+    assert isinstance(poly, base_geometry)
+    assert isinstance(mp, base_geometry)
+    assert isinstance(gc, base_geometry)

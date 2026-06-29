@@ -118,7 +118,7 @@ class TestOverlayReturnSanity:
 
 
 class TestUnaryUnion2DGuard:
-    """unary_union must reject 3D geometries instead of proceeding silently."""
+    """unary_union should normalize 3D inputs to 2D for topology operations."""
 
     def test_unary_union_2d_list_succeeds(self):
         from togo import Geometry
@@ -127,14 +127,18 @@ class TestUnaryUnion2DGuard:
         result = Geometry.unary_union(polys)
         assert not result.is_empty
 
-    def test_unary_union_rejects_3d_geometry(self):
+    def test_unary_union_normalizes_3d_geometry_to_2d(self):
         from togo import Geometry
 
         # Parse a 3D polygon (has Z coordinate)
         g3d = Geometry("POLYGON Z ((0 0 1, 2 0 1, 2 2 1, 0 2 1, 0 0 1))", fmt="wkt")
         assert g3d.has_z, "test precondition: geometry should be 3D"
-        with pytest.raises((ValueError, RuntimeError), match="2D"):
-            Geometry.unary_union([g3d])
+
+        result = Geometry.unary_union([g3d])
+
+        assert result.geom_type == "Polygon"
+        assert result.has_z is False
+        assert result.area == pytest.approx(4.0)
 
     def test_module_level_unary_union_2d_succeeds(self):
         from togo import unary_union
