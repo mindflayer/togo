@@ -35,12 +35,15 @@ try:
         Ring,
         from_wkt,
         from_geojson,
+        shape,
         to_geojson,
         Geometry,
         transform,
         nearest_points,
         shortest_line,
         intersection,
+        union,
+        difference,
         force_2d,
     )
 except Exception as e:
@@ -64,6 +67,7 @@ try:
             Point as ShpPoint,
             LineString as ShpLineString,
             Polygon as ShpPolygon,
+            shape as shp_shape,
         )
 
         HAVE_SHAPELY2 = True
@@ -253,6 +257,18 @@ def main():
     geojson_point = '{"type":"Point","coordinates":[1,2]}'
     wkt_line = "LINESTRING (0 0, 1 1, 2 2, 3 3, 4 4)"
     ring_pts = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+    point_mapping = {"type": "Point", "coordinates": [1, 2]}
+    polygon_mapping = {
+        "type": "Polygon",
+        "coordinates": [[(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]],
+    }
+    multipolygon_mapping = {
+        "type": "MultiPolygon",
+        "coordinates": [
+            [[(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]],
+            [[(3, 0), (4, 0), (4, 1), (3, 1), (3, 0)]],
+        ],
+    }
 
     # Parsing WKT
     bench_case(
@@ -272,6 +288,24 @@ def main():
         lambda: from_geojson(TOGO_JSON),
         lambda: shp_from_geojson(TOGO_JSON),
         iters=200,
+    )
+    bench_case(
+        "shape mapping (point)",
+        lambda: shape(point_mapping),
+        lambda: shp_shape(point_mapping),
+        iters=2000,
+    )
+    bench_case(
+        "shape mapping (polygon)",
+        lambda: shape(polygon_mapping),
+        lambda: shp_shape(polygon_mapping),
+        iters=1500,
+    )
+    bench_case(
+        "shape mapping (multipolygon)",
+        lambda: shape(multipolygon_mapping),
+        lambda: shp_shape(multipolygon_mapping),
+        iters=1000,
     )
 
     # Serialization
@@ -495,6 +529,22 @@ def main():
         lambda: shp_centroid_big_poly.centroid,
         iters=500,
     )
+    bench_case(
+        "centroid x/y access (polygon - square)",
+        lambda: (centroid_poly.centroid.x, centroid_poly.centroid.y),
+        lambda: (shp_centroid_poly.centroid.x, shp_centroid_poly.centroid.y),
+        iters=1000,
+    )
+
+    # Boundary / concrete access operations
+    boundary_line = LineString([(1, 2), (5, 2), (8, 9)])
+    shp_boundary_line = ShpLineString([(1, 2), (5, 2), (8, 9)])
+    bench_case(
+        "line boundary.geoms endpoint access",
+        lambda: tuple((p.x, p.y) for p in boundary_line.boundary.geoms),
+        lambda: tuple((p.x, p.y) for p in shp_boundary_line.boundary.geoms),
+        iters=1000,
+    )
 
     # Convex hull operations
     convex_point = from_wkt("POINT (1 2)")
@@ -602,6 +652,33 @@ def main():
         lambda: intersection(int_line1, int_line2),
         lambda: shp_int_line1.intersection(shp_int_line2),
         iters=2000,
+    )
+
+    # Binary overlay operations
+    union_poly1 = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+    shp_union_poly1 = ShpPolygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+    union_poly2 = Polygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+    shp_union_poly2 = ShpPolygon([(1, 1), (3, 1), (3, 3), (1, 3), (1, 1)])
+    disjoint_poly = Polygon([(5, 0), (6, 0), (6, 1), (5, 1), (5, 0)])
+    shp_disjoint_poly = ShpPolygon([(5, 0), (6, 0), (6, 1), (5, 1), (5, 0)])
+
+    bench_case(
+        "union (overlapping polygons)",
+        lambda: union(union_poly1, union_poly2),
+        lambda: shp_union_poly1.union(shp_union_poly2),
+        iters=1000,
+    )
+    bench_case(
+        "union (disjoint polygons)",
+        lambda: union(union_poly1, disjoint_poly),
+        lambda: shp_union_poly1.union(shp_disjoint_poly),
+        iters=1000,
+    )
+    bench_case(
+        "difference (polygon minus polygon)",
+        lambda: difference(union_poly1, union_poly2),
+        lambda: shp_union_poly1.difference(shp_union_poly2),
+        iters=1000,
     )
 
     # Nearest points operations
