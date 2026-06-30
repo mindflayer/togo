@@ -9,7 +9,7 @@ pip install togo
 ## Import Shapely-Compatible Classes
 
 ```python
-from togo import Point, LineString, Polygon, Ring
+from togo import Point, LineString, LinearRing, Polygon, Ring
 from togo import from_wkt, from_geojson, to_wkt, to_geojson, shape, box
 from togo import BaseGeometry
 ```
@@ -48,7 +48,7 @@ poly = Polygon(exterior, holes=[hole])
 # Properties
 poly.area          # Polygon area
 poly.bounds        # Bounding box
-poly.exterior    # Get exterior Ring
+poly.exterior      # Get exterior LinearRing (also LineString-compatible)
 poly.interiors     # List of holes
 poly.geom_type     # 'Polygon'
 ```
@@ -160,6 +160,21 @@ len(parts)
 # Collection geometries implement len() directly
 len(collection)   # 2
 len(multi)        # size of the corresponding Multi*
+
+# Single-part Geometry values also expose singleton .geoms for mixed-result flows
+single = LineString([(0, 0), (2, 0)]).intersection(
+    Polygon([(1, -1), (3, -1), (3, 1), (1, 1), (1, -1)])
+)
+len(single.geoms)  # 1
+```
+
+## Geometry Truthiness
+
+```python
+from togo import Geometry
+
+bool(Geometry("LINESTRING(0 0, 1 1)", fmt="wkt"))       # True
+bool(Geometry("GEOMETRYCOLLECTION EMPTY", fmt="wkt"))   # False
 ```
 
 ## shape() and box()

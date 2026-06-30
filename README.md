@@ -36,6 +36,8 @@ pip install togo
 - `BaseGeometry` is available for Shapely-style base-type checks across concrete ToGo geometry classes
 - Geometry equality via `==` operator consistent with Shapely semantics
 - Overlay/unary union operations accept 3D input and normalize topology to 2D
+- `Polygon.exterior` returns `LinearRing` (also `LineString`-compatible) and preserves `LinearRing` GeoInterface semantics
+- Geometry truthiness is safe (`bool(geom)` follows emptiness semantics)
 
 ## Basic Usage
 
@@ -104,6 +106,10 @@ line = LineString([(1, 2), (5, 2), (8, 9)])
 endpoints = line.boundary.geoms
 print(endpoints[0].x, endpoints[0].y)  # 1.0 2.0
 
+# For mixed-result flows, single-part Geometry values also expose a singleton .geoms tuple
+single = line.intersection(Polygon([(0, -1), (3, -1), (3, 1), (0, 1), (0, -1)]))
+print(len(single.geoms))  # 1
+
 # Convex hull (Shapely-compatible)
 from togo import convex_hull
 concave_poly = Polygon([(0, 0), (2, 0), (2, 2), (1, 1), (0, 2), (0, 0)])
@@ -130,7 +136,7 @@ For compatibility with Shapely-style base checks, `BaseGeometry` supports `isins
 across concrete public geometry classes:
 
 ```python
-from togo import BaseGeometry, MultiPolygon, unary_union, from_wkt
+from togo import BaseGeometry, Geometry, MultiPolygon, unary_union, from_wkt
 
 u = unary_union([
     from_wkt("POLYGON Z ((0 0 1,1 0 1,1 1 1,0 1 1,0 0 1))"),
@@ -140,6 +146,10 @@ u = unary_union([
 print(isinstance(u, BaseGeometry))  # True
 print(u.geom_type)                  # 'MultiPolygon'
 print(u.has_z)                      # False (topology normalized to 2D)
+
+# Geometry truthiness follows emptiness semantics
+print(bool(u))                      # True
+print(bool(Geometry("GEOMETRYCOLLECTION EMPTY", fmt="wkt")))  # False
 ```
 
 

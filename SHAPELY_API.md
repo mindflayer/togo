@@ -6,7 +6,7 @@ ToGo now provides a Shapely-compatible API, making it easy to migrate from Shape
 ## Quick Start
 
 ```python
-from togo import Point, LineString, Polygon
+from togo import Point, LineString, LinearRing, Polygon
 from togo import from_wkt, from_geojson, to_wkt
 
 # Create geometries using Shapely-like constructors
@@ -34,6 +34,7 @@ ToGo provides the following Shapely-compatible class names:
 
 - `Point` - Create points
 - `LineString` - Create linestrings (alias for `Line`)
+- `LinearRing` - Ring-like line type (subclass of `Line` / `LineString`) used by `Polygon.exterior`
 - `Polygon` - Create polygons (subclass of `Poly`)
 - `MultiPoint` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
 - `MultiLineString` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
@@ -145,7 +146,7 @@ print(poly.area)              # 16.0
 print(poly.centroid)          # Point geometry (center of mass; concrete Point when non-empty)
 print(poly.is_empty)          # False
 print(poly.is_valid)          # True
-print(poly.exterior)          # Ring object (exterior ring)
+print(poly.exterior)          # LinearRing object (also LineString-compatible)
 print(poly.interiors)         # List of Ring objects (holes)
 print(poly.boundary)          # LineString (no holes) or MultiLineString (with holes)
 print(poly.wkt)               # 'POLYGON((0 0,4 0,4 4,0 4,0 0))'
@@ -333,7 +334,7 @@ print(line.project(point))   # Float: distance along line to projected point
 # Polygon
 poly = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
 print(poly.area)             # Float: area of polygon
-print(poly.exterior)         # Ring: exterior ring
+print(poly.exterior)         # LinearRing: exterior ring (LineString-compatible)
 print(poly.interiors)        # List[Ring]: list of holes
 print(poly.centroid)         # Point: center of mass
 print(poly.boundary)         # LineString: exterior ring as a line
@@ -346,8 +347,12 @@ print(endpoints[0].x, endpoints[0].y)  # 1.0 2.0
 ```
 
 For multi-geometries and geometry collections, use `.geoms` to access members as a tuple.
-These collection-like geometries also support `len(geom)`, while non-collection
+Collection-like geometries also support `len(geom)`, while non-collection
 types (for example `Point` and `Polygon`) raise `TypeError`.
+
+For compatibility in mixed-result overlay flows, single-part `Geometry` values
+(`Point`, `LineString`, `Polygon`) also expose `.geoms` as a singleton tuple
+containing the geometry itself.
 
 ```python
 from togo import GeometryCollection, Point, Polygon
@@ -359,6 +364,18 @@ try:
     len(Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]))
 except TypeError:
     print("Polygon does not define len()")
+```
+
+Geometry values are safe in boolean contexts and follow emptiness semantics:
+
+```python
+from togo import Geometry
+
+g1 = Geometry("LINESTRING(0 0, 1 1)", fmt="wkt")
+g2 = Geometry("GEOMETRYCOLLECTION EMPTY", fmt="wkt")
+
+print(bool(g1))  # True
+print(bool(g2))  # False
 ```
 
 ## Spatial Predicates
