@@ -11,6 +11,7 @@ Covers:
 8. MultiPolygon and MultiLineString are real Python classes
 9. Geometry equality behaves consistently
 10. Difference set-operations are available in method and module forms
+11. Wrapper forwarding and Geometry protocol parity regressions
 """
 
 import pytest
@@ -550,3 +551,62 @@ class TestGeometryEquality:
         g2 = Geometry("POINT(1 2)", fmt="wkt")
         s = {g1, g2}
         assert len(s) == 1  # same geometry, should deduplicate
+
+
+# ---------------------------------------------------------------------------
+# 11. Wrapper forwarding and Geometry protocol parity regressions
+# ---------------------------------------------------------------------------
+
+
+class TestWrapperAndProtocolParity:
+    def test_polygon_wrapper_forwards_difference_equals_covers(self):
+        left = Polygon([(0, 0), (3, 0), (3, 3), (0, 3), (0, 0)])
+        right = Polygon([(2, 2), (4, 2), (4, 4), (2, 4), (2, 2)])
+
+        diff = left.difference(right)
+        assert diff.geom_type in {"Polygon", "MultiPolygon"}
+        assert left.equals(left) is True
+        assert left.covers(Point(1, 1)) is True
+
+    def test_geometry_project_available_on_geometry_linestring(self):
+        line_geom = Geometry("LINESTRING(0 0, 10 0)", fmt="wkt")
+
+        distance = line_geom.project(Point(3, 4))
+        normalized = line_geom.project(Point(3, 4), normalized=True)
+
+        assert distance == pytest.approx(3.0, rel=1e-9)
+        assert normalized == pytest.approx(0.3, rel=1e-9)
+
+    def test_geometry_len_for_collections_and_multi(self):
+        multipoly = MultiPolygon(
+            [
+                ([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)],),
+                ([(2, 0), (3, 0), (3, 1), (2, 1), (2, 0)],),
+            ]
+        )
+
+        assert len(multipoly) == 2
+        assert len(multipoly.geoms) == 2
+
+    def test_geometry_len_raises_for_non_collections(self):
+        geom = Geometry("POINT(0 0)", fmt="wkt")
+        with pytest.raises(TypeError):
+            len(geom)
+
+    def test_from_geojson_materializes_multipolygon_class(self):
+        geom = togo.from_geojson(
+            '{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,1],[0,0]]]]}'
+        )
+        assert isinstance(geom, MultiPolygon)
+        assert geom.geom_type == "MultiPolygon"
+
+    def test_linestring_wrapper_forwards_difference(self):
+        line = LineString([(0, 0), (5, 0)])
+        clip = Polygon([(2, -1), (3, -1), (3, 1), (2, 1), (2, -1)])
+
+        result = line.difference(clip)
+        assert result.geom_type in {
+            "LineString",
+            "MultiLineString",
+            "GeometryCollection",
+        }

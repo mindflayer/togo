@@ -769,6 +769,22 @@ cdef class Geometry:
         else:
             raise IndexError("Indexing not supported for this geometry type")
 
+    def __len__(self) -> int:
+        cdef int t
+        self._ensure_initialized("this")
+        t = tg_geom_typeof(self.geom)
+        if t == 4:
+            return tg_geom_num_points(self.geom)
+        if t == 5:
+            return tg_geom_num_lines(self.geom)
+        if t == 6:
+            return tg_geom_num_polys(self.geom)
+        if t == 7:
+            return tg_geom_num_geometries(self.geom)
+        raise TypeError(
+            f"object of type '{self.__class__.__module__}.{self.__class__.__name__}' has no len()"
+        )
+
     @staticmethod
     def from_linestring(points) -> Geometry:
         """Create LineString geometry from points"""
@@ -2054,6 +2070,56 @@ cdef class Geometry:
 
         return _geometry_from_ptr_concrete(g_tg)
 
+    def project(self, point, normalized: bool = False) -> float:
+        """Return distance along a linear geometry to the nearest point projection."""
+        cdef GEOSContextHandle_t ctx
+        cdef GEOSGeometry *g_line
+        cdef GEOSGeometry *g_point
+        cdef double result
+        cdef Geometry point_geom
+        cdef double total_len
+        cdef int t
+
+        self._ensure_initialized("this")
+        t = tg_geom_typeof(self.geom)
+        if t not in (2, 5):
+            raise TypeError(
+                "project() is only defined for LineString and MultiLineString geometries"
+            )
+
+        point_geom = _coerce_geometry_or_raise(point, "point")
+
+        ctx = GEOS_init_r()
+        if ctx == NULL:
+            raise RuntimeError("Failed to initialize GEOS context")
+
+        g_line = tg_geom_to_geos(ctx, self.geom)
+        if g_line == NULL:
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert line geometry to GEOS")
+
+        g_point = tg_geom_to_geos(ctx, point_geom._get_c_geom())
+        if g_point == NULL:
+            GEOSGeom_destroy_r(ctx, g_line)
+            GEOS_finish_r(ctx)
+            raise RuntimeError("Failed to convert point geometry to GEOS")
+
+        result = GEOSProject_r(ctx, g_line, g_point)
+        GEOSGeom_destroy_r(ctx, g_point)
+        GEOSGeom_destroy_r(ctx, g_line)
+        GEOS_finish_r(ctx)
+
+        if result < 0:
+            raise RuntimeError("GEOSProject failed")
+
+        if normalized:
+            total_len = self.length
+            if total_len <= 0.0:
+                return 0.0
+            return max(0.0, min(1.0, result / total_len))
+
+        return result
+
     cdef tuple _get_nearest_point_coords(self, Geometry other):
         """
         Private helper method to extract nearest point coordinates using GEOS.
@@ -2265,6 +2331,10 @@ cdef class Point:
 
     def __reduce__(self):
         return (Point, (self.pt.x, self.pt.y))
+
+    def __getattr__(self, name):
+        # Delegate missing Shapely-style methods/properties to the Geometry view.
+        return getattr(self.as_geometry(), name)
 
     @property
     def x(self) -> float:
@@ -2668,6 +2738,10 @@ cdef class Ring:
     def __reduce__(self):
         return (Ring, (self.points(as_tuples=True),))
 
+    def __getattr__(self, name):
+        # Delegate missing Shapely-style methods/properties to the Geometry view.
+        return getattr(self.as_geometry(), name)
+
     @staticmethod
     cdef Ring from_ptr(tg_ring *ptr):
         if ptr == NULL:
@@ -3015,6 +3089,10 @@ cdef class Line:
 
     def __reduce__(self):
         return (Line, (self.points(as_tuples=True),))
+
+    def __getattr__(self, name):
+        # Delegate missing Shapely-style methods/properties to the Geometry view.
+        return getattr(self.as_geometry(), name)
 
     @property
     def num_points(self) -> int:
@@ -3451,6 +3529,10 @@ cdef class Poly:
                 [self.hole(i).points(as_tuples=True) for i in range(self.num_holes())],
             ),
         )
+
+    def __getattr__(self, name):
+        # Delegate missing Shapely-style methods/properties to the Geometry view.
+        return getattr(self.as_geometry(), name)
 
     @property
     def exterior(self) -> Ring:
@@ -4107,12 +4189,12 @@ def box(minx, miny, maxx, maxy, ccw=True) -> Polygon:
 # Shapely-compatible module-level functions
 def from_wkt(wkt_string: str) -> Geometry:
     """Create a Geometry from a WKT string (Shapely-compatible)"""
-    return Geometry(wkt_string, fmt="wkt")
+    return _materialize_concrete_geometry(Geometry(wkt_string, fmt="wkt"))
 
 
 def from_geojson(geojson_string: str) -> Geometry:
     """Create a Geometry from a GeoJSON string (Shapely-compatible)"""
-    return Geometry(geojson_string, fmt="geojson")
+    return _materialize_concrete_geometry(Geometry(geojson_string, fmt="geojson"))
 
 
 def from_wkb(wkb_bytes: bytes) -> Geometry:
@@ -4137,7 +4219,7 @@ def from_wkb(wkb_bytes: bytes) -> Geometry:
         tg_geom_free(g)
         raise ValueError(err.decode("utf-8"))
 
-    return _geometry_from_ptr(g)
+    return _geometry_from_ptr_concrete(g)
 
 
 def to_wkt(geom) -> str:
