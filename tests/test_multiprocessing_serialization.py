@@ -237,7 +237,7 @@ class TestSubGeometryPickleRoundtrip:
         poly = Polygon.from_bounds(0, 0, 1, 1)
         ring = poly.exterior
 
-        assert type(pickle.loads(pickle.dumps(ring))) is Ring
+        assert type(pickle.loads(pickle.dumps(ring))) is type(ring)
         assert type(pickle.loads(pickle.dumps(poly))) is Polygon
 
     def test_repeated_roundtrip_stable(self):

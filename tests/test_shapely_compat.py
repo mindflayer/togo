@@ -595,6 +595,30 @@ class TestWrapperAndProtocolParity:
         with pytest.raises(TypeError):
             len(geom)
 
+    def test_geometry_truthiness_uses_emptiness_not_len(self):
+        non_empty = Geometry("LINESTRING(0 0, 1 1)", fmt="wkt")
+        empty = Geometry("GEOMETRYCOLLECTION EMPTY", fmt="wkt")
+
+        assert bool(non_empty) is True
+        assert bool(empty) is False
+
+    def test_singleton_geoms_available_for_single_part_results(self):
+        line = LineString([(0, 0), (2, 0)])
+        clip = Polygon([(1, -1), (3, -1), (3, 1), (1, 1), (1, -1)])
+
+        result = line.intersection(clip)
+
+        assert result.geom_type == "LineString"
+        assert isinstance(result.geoms, tuple)
+        assert len(result.geoms) == 1
+        assert result.geoms[0].geom_type == "LineString"
+
+    def test_polygon_exterior_is_linestring_compatible(self):
+        polygon = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+
+        assert isinstance(polygon.exterior, LineString)
+        assert polygon.exterior.coords[0] == (0.0, 0.0)
+
     def test_from_geojson_materializes_multipolygon_class(self):
         geom = togo.from_geojson(
             '{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,1],[0,0]]]]}'

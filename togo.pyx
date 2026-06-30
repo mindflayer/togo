@@ -804,6 +804,11 @@ cdef class Geometry:
             f"object of type '{self.__class__.__module__}.{self.__class__.__name__}' has no len()"
         )
 
+    def __bool__(self) -> bool:
+        """Shapely-compatible truthiness: empty geometries are falsey."""
+        self._ensure_initialized("this")
+        return tg_geom_is_empty(self.geom) == 0
+
     @staticmethod
     def from_linestring(points) -> Geometry:
         """Create LineString geometry from points"""
@@ -1074,6 +1079,9 @@ cdef class Geometry:
                 if g != NULL:
                     result.append(_geometry_from_ptr_concrete(tg_geom_clone(g)))
             return tuple(result)
+        if t in (1, 2, 3):
+            # Tolerate collection-style access for singleton geometries in Shapely-compat flows.
+            return (self,)
         raise AttributeError(f"geoms not available for {self.type_string()}")
 
     @property
@@ -2351,6 +2359,9 @@ cdef class Point:
     def __hash__(self):
         return hash((self.pt.x, self.pt.y))
 
+    def __bool__(self) -> bool:
+        return True
+
     def __reduce__(self):
         return (Point, (self.pt.x, self.pt.y))
 
@@ -2757,6 +2768,9 @@ cdef class Ring:
     def __hash__(self):
         return hash(self.as_geometry().to_wkb())
 
+    def __bool__(self) -> bool:
+        return not self.is_empty
+
     def __reduce__(self):
         return (Ring, (self.points(as_tuples=True),))
 
@@ -3108,6 +3122,9 @@ cdef class Line:
 
     def __hash__(self):
         return hash(self.as_geometry().to_wkb())
+
+    def __bool__(self) -> bool:
+        return not self.is_empty
 
     def __reduce__(self):
         return (Line, (self.points(as_tuples=True),))
@@ -3541,6 +3558,9 @@ cdef class Poly:
 
     def __hash__(self):
         return hash(self.as_geometry().to_wkb())
+
+    def __bool__(self) -> bool:
+        return not self.is_empty
 
     def __reduce__(self):
         return (
@@ -3997,6 +4017,27 @@ def set_polygon_indexing_mode(ix: TGIndex) -> None:
 LineString = Line
 
 
+class LinearRing(Line):
+    """Shapely-compatible LinearRing that remains LineString-compatible."""
+
+    def __init__(self, points):
+        points = list(points)
+        if points and points[0] != points[-1]:
+            points.append(points[0])
+        super().__init__(points)
+
+    @property
+    def geom_type(self) -> str:
+        return "LinearRing"
+
+    @property
+    def __geo_interface__(self) -> dict:
+        return {"type": "LinearRing", "coordinates": self.points(as_tuples=True)}
+
+    def __reduce__(self):
+        return (LinearRing, (self.points(as_tuples=True),))
+
+
 class Polygon(Poly):
     """Shapely-compatible Polygon class that extends Poly.
 
@@ -4047,6 +4088,11 @@ class Polygon(Poly):
             (minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy), (minx, miny)
         ]
         return cls(coords)
+
+    @property
+    def exterior(self) -> LinearRing:
+        """Return the exterior as a LinearRing (also a LineString)."""
+        return LinearRing(super().exterior.points(as_tuples=True))
 
 
 class MultiPolygon(Geometry):
@@ -4898,7 +4944,7 @@ def convex_hull(geom):
 
 __all__ = [
     "Geometry", "BaseGeometry", "Point", "Rect", "Ring", "Line", "Poly", "Segment",
-    "LineString", "Polygon",
+    "LineString", "LinearRing", "Polygon",
     "MultiPoint", "MultiLineString", "MultiPolygon", "GeometryCollection",
     "from_wkt", "from_geojson", "from_wkb",
     "to_wkt", "to_geojson", "to_wkb",
