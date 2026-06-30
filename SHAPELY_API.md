@@ -39,16 +39,21 @@ ToGo provides the following Shapely-compatible class names:
 - `MultiLineString` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
 - `MultiPolygon` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
 - `GeometryCollection` - **Real Python class** inheriting from `Geometry`; `isinstance()` checks work
-- `BaseGeometry` - alias for `Geometry` for Shapely-style base-type checks
+- `BaseGeometry` - Shapely-style base-type check target for concrete ToGo geometry classes (`Geometry`, `Point`, `LineString`, `Polygon`, `Multi*`, `GeometryCollection`)
 
 ```python
-from togo import BaseGeometry, MultiPolygon, MultiLineString, Geometry, Poly, Ring
+from togo import BaseGeometry, MultiPolygon, MultiLineString, Geometry, Point, Polygon, Poly, Ring
 
 poly1 = Poly(Ring([(0,0), (1,0), (1,1), (0,1), (0,0)]))
 mp = MultiPolygon([poly1])
 print(isinstance(mp, MultiPolygon))  # True
 print(isinstance(mp, Geometry))      # True
 print(isinstance(mp, BaseGeometry))  # True
+
+pt = Point(1, 2)
+poly = Polygon([(0, 0), (1, 0), (1, 1), (0, 0)])
+print(isinstance(pt, BaseGeometry))    # True
+print(isinstance(poly, BaseGeometry))  # True
 
 mls = MultiLineString([[(0,0), (1,1)]])
 print(isinstance(mls, MultiLineString))  # True
@@ -137,7 +142,7 @@ poly_with_hole = Polygon(exterior, holes=[hole])
 print(poly.geom_type)         # 'Polygon'
 print(poly.bounds)            # (0, 0, 4, 4)
 print(poly.area)              # 16.0
-print(poly.centroid)          # Point geometry (center of mass)
+print(poly.centroid)          # Point geometry (center of mass; concrete Point when non-empty)
 print(poly.is_empty)          # False
 print(poly.is_valid)          # True
 print(poly.exterior)          # Ring object (exterior ring)
@@ -181,7 +186,14 @@ wkb_bytes = bytes.fromhex("0101000000000000000000F03F0000000000000040")
 wkb_geom = from_wkb(wkb_bytes)
 print(wkb_geom.geom_type)
 
-# Parsing helpers materialize concrete multi classes when determinable
+# Parsing helpers materialize concrete classes when determinable
+pt = from_geojson('{"type":"Point","coordinates":[1,2]}')
+print(type(pt).__name__)  # Point
+
+poly = from_geojson('{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}')
+print(type(poly).__name__)  # Geometry (use shape() for concrete Polygon materialization)
+
+# Multi geometries are materialized directly
 mp = from_geojson('{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,1],[0,0]]]]}')
 print(type(mp).__name__)  # MultiPolygon
 ```
@@ -194,6 +206,10 @@ from togo import shape, box
 # shape() from GeoJSON-like mapping or __geo_interface__ object
 geom = shape({"type": "Point", "coordinates": [1, 2]})
 print(geom.geom_type)  # 'Point'
+print(type(geom).__name__)  # Point
+
+poly = shape({"type": "Polygon", "coordinates": [[(0, 0), (1, 0), (1, 1), (0, 0)]]})
+print(type(poly).__name__)  # Polygon
 
 # box() from bounds
 rect = box(0, 0, 3, 2)
@@ -322,6 +338,11 @@ print(poly.interiors)        # List[Ring]: list of holes
 print(poly.centroid)         # Point: center of mass
 print(poly.boundary)         # LineString: exterior ring as a line
 print(poly_with_hole.boundary)  # MultiLineString: exterior + interior rings
+
+line = LineString([(1, 2), (5, 2), (8, 9)])
+endpoints = line.boundary.geoms
+print(type(endpoints[0]).__name__)  # Point
+print(endpoints[0].x, endpoints[0].y)  # 1.0 2.0
 ```
 
 For multi-geometries and geometry collections, use `.geoms` to access members as a tuple.

@@ -305,6 +305,25 @@ cdef object _geometry_from_ptr_concrete(tg_geom *ptr):
     return _materialize_concrete_geometry(_geometry_from_ptr(ptr))
 
 
+def _shape_materialize_concrete(Geometry geom):
+    """Materialize shape()/GeoJSON results to concrete public classes where deterministic."""
+    cdef int t
+    if geom is None or geom.geom == NULL:
+        return geom
+
+    t = tg_geom_typeof(geom.geom)
+    if t == 1:
+        return Point(geom.x, geom.y)
+    if t == 2:
+        return Line(geom.coords)
+    if t == 3:
+        return Polygon(
+            geom.exterior.points(as_tuples=True),
+            [ring.points(as_tuples=True) for ring in geom.interiors],
+        )
+    return _materialize_concrete_geometry(geom)
+
+
 cdef Line _line_from_ptr(tg_line *ptr):
     if ptr == NULL:
         raise ValueError("Received NULL LineString pointer")
@@ -1034,7 +1053,7 @@ cdef class Geometry:
             n = tg_geom_num_points(self.geom)
             for i in range(n):
                 pt = tg_geom_point_at(self.geom, i)
-                result.append(_geometry_from_ptr_concrete(tg_geom_new_point(pt)))
+                result.append(Point(pt.x, pt.y))
             return tuple(result)
         if t == 5:
             n = tg_geom_num_lines(self.geom)
@@ -1703,7 +1722,7 @@ cdef class Geometry:
         return _geometry_from_ptr_concrete(g_tg)
 
     @property
-    def centroid(self) -> Geometry:
+    def centroid(self):
         """
         Return the centroid of the geometry.
 
@@ -1747,7 +1766,10 @@ cdef class Geometry:
             err_msg = tg_geom_error(g_tg).decode("utf-8")
             tg_geom_free(g_tg)
             raise RuntimeError(f"centroid: TGX conversion error: {err_msg}")
-        return _geometry_from_ptr_concrete(g_tg)
+        cdef Geometry centroid_geom = _geometry_from_ptr(g_tg)
+        if tg_geom_typeof(centroid_geom.geom) == 1 and tg_geom_is_empty(centroid_geom.geom) == 0:
+            return Point(centroid_geom.x, centroid_geom.y)
+        return _materialize_concrete_geometry(centroid_geom)
 
     @property
     def convex_hull(self) -> Geometry:
@@ -2510,7 +2532,7 @@ cdef class Point:
         raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
     @property
-    def centroid(self) -> Geometry:
+    def centroid(self):
         """
         Return the centroid of the point (which is the point itself).
 
@@ -2947,7 +2969,7 @@ cdef class Ring:
             raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
     @property
-    def centroid(self) -> Geometry:
+    def centroid(self):
         """
         Return the centroid of the ring.
 
@@ -3304,7 +3326,7 @@ cdef class Line:
             raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
     @property
-    def centroid(self) -> Geometry:
+    def centroid(self):
         """
         Return the centroid of the linestring.
 
@@ -3773,7 +3795,7 @@ cdef class Poly:
             raise ValueError(f"other must be a Geometry object, got {type(other)}")
 
     @property
-    def centroid(self) -> Geometry:
+    def centroid(self):
         """
         Return the centroid of the polygon.
 
@@ -3973,7 +3995,6 @@ def set_polygon_indexing_mode(ix: TGIndex) -> None:
 
 # Shapely-compatible aliases
 LineString = Line
-BaseGeometry = Geometry
 
 
 class Polygon(Poly):
@@ -4111,6 +4132,19 @@ class GeometryCollection(Geometry):
         return f"GeometryCollection({self.to_wkt()})"
 
 
+# Keep isinstance(BaseGeometry, ...) compatibility across all concrete public classes.
+BaseGeometry = (
+    Geometry,
+    Point,
+    Line,
+    Polygon,
+    MultiPoint,
+    MultiLineString,
+    MultiPolygon,
+    GeometryCollection,
+)
+
+
 def unary_union(geoms) -> Geometry:
     """Return the unary union of a sequence of geometries using GEOS (Shapely-compatible).
 
@@ -4134,7 +4168,7 @@ def unary_union(geoms) -> Geometry:
     return Geometry.unary_union(list(geoms))
 
 
-def shape(obj) -> Geometry:
+def shape(obj):
     """Create a Geometry from a GeoJSON-like mapping or JSON text.
 
     Accepts all standard GeoJSON types plus ``LinearRing``, which is
@@ -4154,7 +4188,7 @@ def shape(obj) -> Geometry:
         obj = obj.decode("utf-8")
 
     if isinstance(obj, str):
-        return from_geojson(obj)
+        return _shape_materialize_concrete(from_geojson(obj))
 
     if isinstance(obj, dict):
         # TG's GeoJSON parser does not recognise "LinearRing".  Normalise it
@@ -4168,7 +4202,7 @@ def shape(obj) -> Geometry:
             if not coords:
                 coords = []
             return Ring(coords).as_geometry()
-        return from_geojson(json.dumps(obj))
+        return _shape_materialize_concrete(from_geojson(json.dumps(obj)))
 
     raise TypeError("shape() requires a GeoJSON mapping/string or __geo_interface__ object")
 

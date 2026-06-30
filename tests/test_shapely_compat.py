@@ -18,6 +18,7 @@ import pytest
 
 import togo
 from togo import (
+    BaseGeometry,
     Geometry,
     Line,
     LineString,
@@ -27,6 +28,7 @@ from togo import (
     Poly,
     Polygon,
     Ring,
+    shape,
     unary_union,
 )
 
@@ -610,3 +612,54 @@ class TestWrapperAndProtocolParity:
             "MultiLineString",
             "GeometryCollection",
         }
+
+    def test_base_geometry_isinstance_for_single_geometries(self):
+        point = Point(0, 0)
+        polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 0)])
+
+        assert isinstance(point, BaseGeometry)
+        assert isinstance(polygon, BaseGeometry)
+
+    def test_shape_materializes_polygon_and_multipolygon_concrete_types(self):
+        polygon = shape(
+            {
+                "type": "Polygon",
+                "coordinates": [[(0, 0), (1, 0), (1, 1), (0, 0)]],
+            }
+        )
+        multipolygon = shape(
+            {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [[(0, 0), (1, 0), (1, 1), (0, 0)]],
+                    [[(2, 2), (3, 2), (3, 3), (2, 2)]],
+                ],
+            }
+        )
+
+        assert isinstance(polygon, Polygon)
+        assert isinstance(multipolygon, MultiPolygon)
+        assert isinstance(multipolygon, BaseGeometry)
+
+    def test_centroid_materializes_point_with_xy_accessors(self):
+        geom = shape(
+            {
+                "type": "Polygon",
+                "coordinates": [[(0, 0), (1, 0), (1, 1), (0, 0)]],
+            }
+        )
+
+        centroid = geom.centroid
+
+        assert isinstance(centroid, Point)
+        assert hasattr(centroid, "x") and hasattr(centroid, "y")
+
+    def test_line_boundary_geoms_materialize_points(self):
+        line = LineString([(1, 2), (5, 2), (8, 9)])
+        endpoints = line.boundary.geoms
+
+        assert len(endpoints) == 2
+        assert isinstance(endpoints[0], Point)
+        assert isinstance(endpoints[1], Point)
+        assert (endpoints[0].x, endpoints[0].y) == (1.0, 2.0)
+        assert (endpoints[1].x, endpoints[1].y) == (8.0, 9.0)

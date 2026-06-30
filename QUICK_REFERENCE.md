@@ -166,6 +166,11 @@ len(multi)        # size of the corresponding Multi*
 
 ```python
 geom = shape({"type": "Point", "coordinates": [1, 2]})
+type(geom).__name__  # 'Point'
+
+poly = shape({"type": "Polygon", "coordinates": [[(0, 0), (1, 0), (1, 1), (0, 0)]]})
+type(poly).__name__  # 'Polygon'
+
 rect = box(0, 0, 10, 5)
 ```
 
@@ -185,6 +190,10 @@ geom.__geo_interface__  # Dict: GeoJSON-like
 # Point Geometry results expose x/y (e.g., centroid outputs)
 center = Polygon([(0, 0), (4, 0), (4, 4), (0, 4), (0, 0)]).centroid
 center.x, center.y
+
+# Line boundary endpoints are exposed as Point-like values
+endpoints = LineString([(1, 2), (5, 2), (8, 9)]).boundary.geoms
+endpoints[0].x, endpoints[0].y
 ```
 
 ## Geometric Operations

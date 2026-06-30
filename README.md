@@ -33,7 +33,7 @@ pip install togo
 - Advanced operations via libgeos integration (buffer, unary union, union/difference, simplify, centroid, convex_hull, etc.)
 - Distance and proximity operations (nearest_points, shortest_line, project)
 - `MultiPoint`, `MultiLineString`, `MultiPolygon`, and `GeometryCollection` are real Python classes — `isinstance()` checks work correctly
-- `BaseGeometry` alias is available for Shapely-style base-type checks
+- `BaseGeometry` is available for Shapely-style base-type checks across concrete ToGo geometry classes
 - Geometry equality via `==` operator consistent with Shapely semantics
 - Overlay/unary union operations accept 3D input and normalize topology to 2D
 
@@ -95,9 +95,14 @@ bbox = Polygon.from_bounds(0, 0, 10, 5)
 print(bbox.area)           # 50.0
 
 # Centroid (Shapely-compatible)
-centroid = poly.centroid  # Returns a Point geometry
+centroid = poly.centroid  # Returns a concrete Point for non-empty geometries
 print(centroid.to_wkt())  # e.g., 'POINT (2 2)'
 print(centroid.x, centroid.y)  # 2.0 2.0
+
+# Line boundaries expose point-like endpoints via .geoms
+line = LineString([(1, 2), (5, 2), (8, 9)])
+endpoints = line.boundary.geoms
+print(endpoints[0].x, endpoints[0].y)  # 1.0 2.0
 
 # Convex hull (Shapely-compatible)
 from togo import convex_hull
@@ -115,13 +120,14 @@ from togo import shape, box
 g1 = shape({"type": "Point", "coordinates": [1, 2]})
 g2 = box(0, 0, 2, 1)
 print(g1.geom_type, g2.geom_type)
+print(type(g1).__name__, type(g2).__name__)  # Point Polygon
 ```
 
 You can also call module-level helpers with `from togo import union, difference` and then
 `union(poly, other)` or `difference(poly, other)`.
 
-For compatibility with Shapely-style base checks, `BaseGeometry` is exported as an alias of
-`Geometry`:
+For compatibility with Shapely-style base checks, `BaseGeometry` supports `isinstance(...)`
+across concrete public geometry classes:
 
 ```python
 from togo import BaseGeometry, MultiPolygon, unary_union, from_wkt
