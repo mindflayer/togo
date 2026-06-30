@@ -298,6 +298,10 @@ print(isinstance(collection, GeometryCollection))  # True
 # Child members
 print(len(collection.geoms))
 
+# Collection protocol
+print(len(collection))  # same count as len(collection.geoms)
+print(len(multi_poly))  # Multi* geometries implement len()
+
 # Low-level factory methods still available on Geometry
 multi_poly2 = Geometry.from_multipolygon([poly1, poly2])
 ```
@@ -323,6 +327,11 @@ print(line.project(Point(5, 3).as_geometry()))   # 5.0
 # Normalized distance in [0.0, 1.0]
 print(line.project(Point(5, 0).as_geometry(), normalized=True))   # 0.5
 print(line.project(Point(10, 0).as_geometry(), normalized=True))  # 1.0
+
+# Geometry values that are line-like also support project()
+line_geom = line.as_geometry()
+print(line_geom.project(Point(5, 3)))                    # 5.0
+print(line_geom.project(Point(5, 3), normalized=True))   # 0.5
 ```
 
 ## Polygon Indexing

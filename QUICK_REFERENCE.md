@@ -66,6 +66,10 @@ geom = from_geojson('{"type":"Point","coordinates":[1,2]}')
 
 # From WKB
 geom = from_wkb(wkb_bytes)
+
+# Multi geometries are materialized as concrete classes when determinable
+mp = from_geojson('{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,1],[0,0]]]]}')
+type(mp).__name__  # 'MultiPolygon'
 ```
 
 ## Convert to Different Formats
@@ -120,6 +124,11 @@ p = Point(5, 3)
 
 line.project(p)                       # 5.0 (distance along line)
 line.project(p, normalized=True)      # 0.5 (fraction of line length)
+
+# Geometry values that are line-like also support project()
+line_geom = line.as_geometry()
+line_geom.project(p)                  # 5.0
+line_geom.project(p, normalized=True) # 0.5
 ```
 
 ## Multi-Geometries
@@ -147,6 +156,10 @@ collection = GeometryCollection(geoms)
 # Access children as a tuple
 parts = collection.geoms
 len(parts)
+
+# Collection geometries implement len() directly
+len(collection)   # 2
+len(multi)        # size of the corresponding Multi*
 ```
 
 ## shape() and box()

@@ -113,6 +113,11 @@ print(line.project(Point(10, 0).as_geometry()))  # 10.0 — end of line
 # project(..., normalized=True) — fraction in [0.0, 1.0]
 print(line.project(Point(5, 0).as_geometry(), normalized=True))   # 0.5
 print(line.project(Point(10, 0).as_geometry(), normalized=True))  # 1.0
+
+# Geometry objects that are line-like also support project()
+line_geom = line.as_geometry()
+print(line_geom.project(Point(5, 3)))                   # 5.0
+print(line_geom.project(Point(5, 3), normalized=True))  # 0.5
 ```
 
 ### Polygon
@@ -175,6 +180,10 @@ print(geojson_geom.geom_type)
 wkb_bytes = bytes.fromhex("0101000000000000000000F03F0000000000000040")
 wkb_geom = from_wkb(wkb_bytes)
 print(wkb_geom.geom_type)
+
+# Parsing helpers materialize concrete multi classes when determinable
+mp = from_geojson('{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,1],[0,0]]]]}')
+print(type(mp).__name__)  # MultiPolygon
 ```
 
 ### shape() and box()
@@ -316,6 +325,20 @@ print(poly_with_hole.boundary)  # MultiLineString: exterior + interior rings
 ```
 
 For multi-geometries and geometry collections, use `.geoms` to access members as a tuple.
+These collection-like geometries also support `len(geom)`, while non-collection
+types (for example `Point` and `Polygon`) raise `TypeError`.
+
+```python
+from togo import GeometryCollection, Point, Polygon
+
+collection = GeometryCollection([Point(0, 0), Point(1, 1)])
+print(len(collection))  # 2
+
+try:
+    len(Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]))
+except TypeError:
+    print("Polygon does not define len()")
+```
 
 ## Spatial Predicates
 
@@ -344,6 +367,10 @@ print(geom1.within(poly2))      # False
 print(geom1.covers(point))      # True
 print(geom1.coveredby(poly2))    # False
 ```
+
+The same forwarding behavior applies to operations and line-reference helpers,
+so wrappers expose methods like `.difference()`, `.union()`, `.equals()`,
+`.covers()`, and `.project()` without manual conversion.
 
 ## Geometric Operations
 
@@ -849,6 +876,7 @@ The `transform` function works with:
 | `geom.convex_hull` | `geom.convex_hull` | ✅ via GEOS |
 | `geom.boundary` | `poly.boundary` | ✅ on Polygon/Poly |
 | `geom.geoms` | `geom.geoms` | ✅ on multi-geometries and GeometryCollection |
+| `len(geom)` (collections only) | `len(geom)` | ✅ on Multi* and GeometryCollection; TypeError otherwise |
 | `geom.is_empty` | `geom.is_empty` | ✅ |
 | `geom.is_valid` | `geom.is_valid` | ✅ via GEOS |
 | `geom.coords` | `geom.coords` | ✅ Indexable; `coords[i]` and `len()` work |
@@ -860,6 +888,7 @@ The `transform` function works with:
 | `geom1 == geom2` | `geom1 == geom2` | ✅ |
 | `from_wkt()` | `from_wkt()` | ✅ |
 | `from_geojson()` | `from_geojson()` | ✅ |
+| `from_wkb()` | `from_wkb()` | ✅ |
 | `shape(mapping_or_geo_interface)` | `shape(mapping_or_geo_interface)` | ✅ |
 | `box(minx,miny,maxx,maxy)` | `box(minx,miny,maxx,maxy)` | ✅ |
 | `to_wkt()` | `to_wkt()` | ✅ |
@@ -875,6 +904,7 @@ The `transform` function works with:
 | `geom.union(other)` | `geom.union(other)` | ✅ via GEOS; accepts wrappers |
 | `geom.difference(other)` | `geom.difference(other)` | ✅ via GEOS; accepts wrappers |
 | `line.project(point, normalized=False)` | `line.project(point, normalized=False)` | ✅ via GEOS |
+| `geom.project(point, normalized=False)` | `geom.project(point, normalized=False)` | ✅ for LineString/MultiLineString geometries |
 | `unary_union(geoms)` | `unary_union(geoms)` | ✅ Module-level; via GEOS |
 | `union(g1, g2)` | `union(g1, g2)` | ✅ Module-level; via GEOS |
 | `difference(g1, g2)` | `difference(g1, g2)` | ✅ Module-level; via GEOS |
