@@ -13,6 +13,7 @@ def _platform_id():
 extra_compile_args = [
     "-ffunction-sections",  # Enable function-level sections
     "-fdata-sections",  # Enable data-level sections
+    "-O2",  # Default optimization for non-ASAN builds
 ]
 # Avoid gc-sections when statically linking C++ libs with RTTI/vtables
 extra_link_args = [
@@ -22,8 +23,10 @@ extra_link_args = [
 
 # Enable optional AddressSanitizer build via env var ASAN=1
 if os.environ.get("ASAN") == "1":
-    # Favor debuggability over speed
-    extra_compile_args += [
+    # Favor debuggability over speed; replace -O2 with lower optimization.
+    extra_compile_args = [
+        "-ffunction-sections",
+        "-fdata-sections",
         "-O1",
         "-g",
         "-fno-omit-frame-pointer",

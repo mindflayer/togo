@@ -105,6 +105,17 @@ class TestPointShapelyAPI:
         assert geo["type"] == "Point"
         assert geo["coordinates"] == [1.5, 2.5]
 
+    def test_point_geo_interface_repeated_access_is_stable(self):
+        from togo import Point
+
+        p = Point(1.5, 2.5)
+        geo1 = p.__geo_interface__
+        geo1["coordinates"][0] = 999
+
+        geo2 = p.__geo_interface__
+        assert geo2["type"] == "Point"
+        assert geo2["coordinates"] == [1.5, 2.5]
+
     def test_point_negative_coords(self):
         from togo import Point
 
@@ -642,7 +653,7 @@ class TestMultiGeometries:
         points = [(0, 0), (1, 1), (2, 2)]
         multi = MultiPoint(points)
         assert multi.geom_type == "MultiPoint"
-    
+
     def test_multipoint_getitem_returns_point(self):
         from togo import MultiPoint
 
@@ -710,10 +721,12 @@ class TestMultiGeometries:
     def test_multipolygon_geoms_property(self):
         from togo import MultiPolygon, Polygon
 
-        multi = MultiPolygon([
-            Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)]),
-            Polygon([(3, 3), (4, 3), (4, 4), (3, 4), (3, 3)]),
-        ])
+        multi = MultiPolygon(
+            [
+                Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)]),
+                Polygon([(3, 3), (4, 3), (4, 4), (3, 4), (3, 3)]),
+            ]
+        )
         children = multi.geoms
         assert isinstance(children, tuple)
         assert [g.geom_type for g in children] == ["Polygon", "Polygon"]

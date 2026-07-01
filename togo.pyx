@@ -258,6 +258,8 @@ cdef extern from "tgx.h":
 
 from libc.limits cimport INT_MAX
 from libc.stdlib cimport malloc, free
+import copy as _copy
+import json as _json
 
 
 cdef Geometry _geometry_from_ptr(tg_geom *ptr):
@@ -349,6 +351,14 @@ cdef int _checked_c_count(object values, str arg_name):
 cdef tuple _coerce_xy(object value, str arg_name):
     cdef double x
     cdef double y
+    # Fast path for the common tuple/list coordinate input.
+    if isinstance(value, (tuple, list)):
+        try:
+            x = float(value[0])
+            y = float(value[1])
+            return (x, y)
+        except Exception:
+            pass
     if isinstance(value, Point):
         return ((<Point>value).pt.x, (<Point>value).pt.y)
     if hasattr(value, "x") and hasattr(value, "y"):
@@ -364,6 +374,13 @@ cdef tuple _coerce_xy(object value, str arg_name):
         return (x, y)
     except Exception:
         raise TypeError(f"{arg_name} must contain point-like entries")
+
+
+cdef list _ring_points_as_tuples_from_ptr(const tg_ring *ring):
+    cdef int n = tg_ring_num_points(ring)
+    cdef const tg_point *pts = tg_ring_points(ring)
+    cdef int i
+    return [(pts[i].x, pts[i].y) for i in range(n)]
 
 
 cdef Geometry _coerce_geometry_or_raise(object obj, str arg_name, bint allow_point_tuple=False):
@@ -421,9 +438,11 @@ def _restore_poly_as(cls, exterior_coords, hole_coords):
 
 cdef class Geometry:
     cdef tg_geom *geom
+    cdef object _cached_geo_interface
 
     def __cinit__(self, data=None, fmt: str = "geojson"):
         self.geom = NULL
+        self._cached_geo_interface = None
         if data is not None and not isinstance(data, str):
             # Non-string data is handled by subclass __init__
             if type(self) is Geometry:
@@ -1087,9 +1106,11 @@ cdef class Geometry:
     @property
     def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
-        import json
-        geojson_str = self.to_geojson()
-        return json.loads(geojson_str)
+        if self._cached_geo_interface is None:
+            geojson_str = self.to_geojson()
+            self._cached_geo_interface = _json.loads(geojson_str)
+        # Return a deep copy so callers can mutate without affecting subsequent reads.
+        return _copy.deepcopy(self._cached_geo_interface)
 
     # --- Factory methods ---
     @staticmethod
@@ -1097,7 +1118,8 @@ cdef class Geometry:
         """
         Create a MultiPoint geometry from an iterable of Point or (x, y) tuples.
         """
-        points = list(points)
+        if not isinstance(points, list):
+            points = list(points)
         cdef int n = _checked_c_count(points, "points")
         cdef tg_geom *gptr
         if n == 0:
@@ -1114,12 +1136,15 @@ cdef class Geometry:
         try:
             for i in range(n):
                 obj = points[i]
-                if isinstance(obj, Point):
-                    pts[i] = (<Point>obj)._get_c_point()
-                else:
-                    # assume (x, y)
+                try:
+                    # Fast path for tuple/list-like coordinate entries.
                     pts[i].x = float(obj[0])
                     pts[i].y = float(obj[1])
+                except TypeError:
+                    if isinstance(obj, Point):
+                        pts[i] = (<Point>obj)._get_c_point()
+                    else:
+                        raise
             gptr = tg_geom_new_multipoint(pts, n)
         finally:
             free(pts)
@@ -1132,7 +1157,8 @@ cdef class Geometry:
         """
         Create a MultiLineString from an iterable of Line or sequences of (x,y).
         """
-        lines = list(lines)
+        if not isinstance(lines, list):
+            lines = list(lines)
         cdef int n = _checked_c_count(lines, "lines")
         cdef tg_geom *gptr
         if n == 0:
@@ -1171,7 +1197,8 @@ cdef class Geometry:
     @staticmethod
     def from_multipolygon(polys) -> Geometry:
         """Create a MultiPolygon from an iterable of Poly objects."""
-        polys = list(polys)
+        if not isinstance(polys, list):
+            polys = list(polys)
         cdef int n = _checked_c_count(polys, "polys")
         cdef tg_geom *gptr
         if n == 0:
@@ -1209,7 +1236,8 @@ cdef class Geometry:
         Ring, or Poly. For Point or (x,y) input, temporary tg_geom objects are
         created and freed after cloning.
         """
-        geoms = list(geoms)
+        if not isinstance(geoms, list):
+            geoms = list(geoms)
         cdef int n = _checked_c_count(geoms, "geoms")
         cdef tg_geom *gptr
         if n == 0:
@@ -1378,7 +1406,8 @@ cdef class Geometry:
     @staticmethod
     def unary_union(geoms) -> Geometry:
         """Return the unary union of a sequence of geometries using GEOS."""
-        geoms = list(geoms)
+        if not isinstance(geoms, list):
+            geoms = list(geoms)
         cdef int n = _checked_c_count(geoms, "geoms")
         if n == 0:
             raise ValueError("unary_union requires at least one geometry")
@@ -2708,12 +2737,16 @@ cdef class Ring:
     cdef object _cached_geometry
 
     def __init__(self, points):
-        points = list(points)
+        if not isinstance(points, list):
+            points = list(points)
         cdef int n = _checked_c_count(points, "points")
         cdef int i
         cdef double x
         cdef double y
         cdef double first_x, first_y, last_x, last_y
+        cdef bint appended_first
+
+        appended_first = False
 
         # Auto-close the ring if it's not already closed (for Shapely compatibility)
         if n > 0:
@@ -2724,6 +2757,7 @@ cdef class Ring:
                 # Ring is not closed, add first point at the end
                 points.append(points[0])
                 n = _checked_c_count(points, "points")
+                appended_first = True
 
         if (<size_t>(<unsigned int>n)) > ((<size_t>-1) // sizeof(tg_point)):
             raise OverflowError("points is too large")
@@ -2731,7 +2765,19 @@ cdef class Ring:
         if not pts:
             raise MemoryError("Failed to allocate points for Ring")
         try:
-            for i in range(n):
+            if n > 0:
+                # Reuse already-coerced endpoints to avoid duplicate coercion work.
+                pts[0].x = first_x
+                pts[0].y = first_y
+            for i in range(1, n):
+                if i == n - 1:
+                    if appended_first:
+                        pts[i].x = first_x
+                        pts[i].y = first_y
+                        continue
+                    pts[i].x = last_x
+                    pts[i].y = last_y
+                    continue
                 x, y = _coerce_xy(points[i], "points")
                 pts[i].x = x
                 pts[i].y = y
@@ -3071,7 +3117,8 @@ cdef class Line:
     cdef object _cached_geometry
 
     def __init__(self, points):
-        points = list(points)
+        if not isinstance(points, list):
+            points = list(points)
         cdef int n = _checked_c_count(points, "points")
         cdef int i
         cdef double x
@@ -3563,12 +3610,17 @@ cdef class Poly:
         return not self.is_empty
 
     def __reduce__(self):
+        cdef int i
+        cdef int nholes = tg_poly_num_holes(self.poly)
+        cdef list hole_coords = []
+        for i in range(nholes):
+            hole_coords.append(_ring_points_as_tuples_from_ptr(tg_poly_hole_at(self.poly, i)))
         return (
             _restore_poly_as,
             (
                 type(self),
-                self.exterior.points(as_tuples=True),
-                [self.hole(i).points(as_tuples=True) for i in range(self.num_holes())],
+                _ring_points_as_tuples_from_ptr(tg_poly_exterior(self.poly)),
+                hole_coords,
             ),
         )
 
@@ -3697,11 +3749,15 @@ cdef class Poly:
     @property
     def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
-        ext_coords = self.exterior.points(as_tuples=True)
-        if self.num_holes() == 0:
+        cdef int i
+        cdef int nholes = tg_poly_num_holes(self.poly)
+        ext_coords = _ring_points_as_tuples_from_ptr(tg_poly_exterior(self.poly))
+        if nholes == 0:
             return {"type": "Polygon", "coordinates": [ext_coords]}
         else:
-            hole_coords = [self.hole(i).points(as_tuples=True) for i in range(self.num_holes())]
+            hole_coords = []
+            for i in range(nholes):
+                hole_coords.append(_ring_points_as_tuples_from_ptr(tg_poly_hole_at(self.poly, i)))
             return {"type": "Polygon", "coordinates": [ext_coords] + hole_coords}
 
     def buffer(self, distance: float, quad_segs: int = 16,
@@ -4021,7 +4077,8 @@ class LinearRing(Line):
     """Shapely-compatible LinearRing that remains LineString-compatible."""
 
     def __init__(self, points):
-        points = list(points)
+        if not isinstance(points, list):
+            points = list(points)
         if points and points[0] != points[-1]:
             points.append(points[0])
         super().__init__(points)
@@ -4108,6 +4165,11 @@ class MultiPolygon(Geometry):
         if polys is None:
             tmp = Geometry.from_multipolygon([])
         else:
+            polys = list(polys)
+            if all(isinstance(p, Poly) for p in polys):
+                tmp = Geometry.from_multipolygon(polys)
+                self._init_from_geometry(tmp)
+                return
             # Convert Polygon objects / coordinate sequences to Poly for from_multipolygon
             converted = []
             for p in polys:
@@ -4211,7 +4273,9 @@ def unary_union(geoms) -> Geometry:
     RuntimeError
         If the union operation fails
     """
-    return Geometry.unary_union(list(geoms))
+    if not isinstance(geoms, list):
+        geoms = list(geoms)
+    return Geometry.unary_union(geoms)
 
 
 def shape(obj):
@@ -4222,8 +4286,6 @@ def shape(obj):
     through ``__geo_interface__`` (e.g. from ``Ring`` or ``Polygon.exterior``)
     never raise a parse error.
     """
-    import json
-
     if obj is None:
         raise TypeError("shape() argument cannot be None")
 
@@ -4248,7 +4310,7 @@ def shape(obj):
             if not coords:
                 coords = []
             return Ring(coords).as_geometry()
-        return _shape_materialize_concrete(from_geojson(json.dumps(obj)))
+        return _shape_materialize_concrete(from_geojson(_json.dumps(obj)))
 
     raise TypeError("shape() requires a GeoJSON mapping/string or __geo_interface__ object")
 
