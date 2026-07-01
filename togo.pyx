@@ -1134,7 +1134,7 @@ cdef class Geometry:
             tg_geom_geojson(self.geom, p_buf, n + 1)
 
         try:
-            res = _json.loads(p_buf.decode("utf-8"))
+            res = _json.loads(p_buf[:n].decode("utf-8"))
             self._cached_geo_interface = res
             return _clone_geo_interface_payload(res)
         finally:
@@ -3744,6 +3744,7 @@ cdef class Poly:
         poly.poly = cloned
         poly.owns_pointer = True
         poly._cached_geometry = None
+        poly._cached_geo_interface = None
         return poly
 
     def hole(self, idx: int) -> Ring:
@@ -4617,7 +4618,7 @@ cdef Geometry _force_2d_polygon(Geometry geom):
     cdef int n = tg_ring_num_points(ext_ring)
     cdef const tg_point *pts = tg_ring_points(ext_ring)
     cdef list ext_coords = []
-    cdef int i, j, nholes, hole_npts
+    cdef int i, j, k, nholes, hole_npts
     cdef const tg_ring *hole
     cdef const tg_point *hole_pts
     cdef list holes = []
