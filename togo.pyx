@@ -356,7 +356,7 @@ cdef tuple _coerce_xy(object value, str arg_name):
             x = float(value[0])
             y = float(value[1])
             return (x, y)
-        except Exception:
+        except (TypeError, IndexError, ValueError, OverflowError):
             pass
     if isinstance(value, Point):
         return ((<Point>value).pt.x, (<Point>value).pt.y)
