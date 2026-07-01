@@ -149,3 +149,21 @@ def test_ring_as_geometry():
     assert isinstance(g, Geometry)
     assert g.type_string() == "Polygon"
     assert g.bounds == (0.0, 0.0, 1.0, 1.0)
+
+
+def test_ring_intersects():
+    ring = Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+
+    assert ring.intersects(Point(5, 5)) is True
+    assert ring.intersects(Point(20, 20)) is False
+
+
+def test_ring_boundary():
+    points = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]
+    ring = Ring(points)
+
+    boundary = ring.boundary
+
+    assert boundary.geom_type == "LineString"
+    assert boundary.length == pytest.approx(ring.length)
+    assert boundary.coords == points

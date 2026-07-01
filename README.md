@@ -12,8 +12,6 @@ The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient
 See [SHAPELY_API.md](SHAPELY_API.md) for more details on Shapely compatibility.
 See the "Error Behavior vs Shapely" section in `SHAPELY_API.md` for overlay and predicate
 compatibility notes.
-See [CHANGELOG.md](./CHANGELOG.md) for version-by-version release notes.
-
 
 ## Installation
 
@@ -254,6 +252,14 @@ print(f"Is clockwise: {ring.is_clockwise()}")
 # Get bounding box
 min_pt, max_pt = ring.rect().min, ring.rect().max
 print(f"Bounding box: {min_pt.as_tuple()}, {max_pt.as_tuple()}")
+
+# Shapely-compatible predicate — no .as_geometry() needed
+from togo import Point
+print(ring.intersects(Point(5, 5)))   # True
+print(ring.intersects(Point(20, 20))) # False
+
+# Shapely-compatible boundary property
+boundary = ring.boundary  # Line (no holes) or MultiLineString (with holes)
 ```
 
 ### Poly

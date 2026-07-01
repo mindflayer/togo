@@ -116,6 +116,17 @@ poly_geom = poly.as_geometry()
 poly_geom.contains(point)
 ```
 
+## Ring Helpers
+
+```python
+ring = Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+
+# Shapely-style helpers exposed via the ring's geometry view
+ring.intersects(Point(5, 5))   # True
+ring.boundary.geom_type         # 'LineString'
+ring.boundary.length            # perimeter of the ring
+```
+
 ## LineString Projection
 
 ```python

@@ -30,8 +30,11 @@ if TESTS_DIR not in sys.path:
 # Import togo classes - using new Shapely-compatible API
 try:
     from togo import (
+        Point,
         LineString,
         Polygon,
+        MultiPoint,
+        GeometryCollection,
         Ring,
         from_wkt,
         from_geojson,
@@ -67,6 +70,8 @@ try:
             Point as ShpPoint,
             LineString as ShpLineString,
             Polygon as ShpPolygon,
+            MultiPoint as ShpMultiPoint,
+            GeometryCollection as ShpGeometryCollection,
             shape as shp_shape,
         )
 
@@ -79,6 +84,8 @@ try:
             Point as ShpPoint,
             LineString as ShpLineString,
             Polygon as ShpPolygon,
+            MultiPoint as ShpMultiPoint,
+            GeometryCollection as ShpGeometryCollection,
             mapping as shp_mapping,
         )
 
@@ -913,6 +920,69 @@ def main():
         iters=500,
     )
 
+    # 1. MultiPoint creation (Testing fast paths for Point objects and tuples)
+    num_pts = 100
+    list_of_tuples = [(float(i), float(i)) for i in range(num_pts)]
+    list_of_togo_points = [Point(x, y) for x, y in list_of_tuples]
+    list_of_shp_points = [ShpPoint(x, y) for x, y in list_of_tuples]
+
+    bench_case(
+        "MultiPoint from list of tuples (n=100)",
+        lambda: MultiPoint(list_of_tuples),
+        lambda: ShpMultiPoint(list_of_tuples),
+        iters=1000,
+    )
+    bench_case(
+        "MultiPoint from list of Point objects (n=100)",
+        lambda: MultiPoint(list_of_togo_points),
+        lambda: ShpMultiPoint(list_of_shp_points),
+        iters=1000,
+    )
+
+    # 2. __geo_interface__ caching (Testing the speed of repeated access)
+    geo_togo = from_geojson(TOGO_JSON)
+    # Ensure it's cached once first (warmup handles this, but let's be explicit about what we bench)
+    _ = geo_togo.__geo_interface__
+
+    geo_shp = shp_from_geojson(TOGO_JSON)
+
+    bench_case(
+        "__geo_interface__ access (cached/repeated)",
+        lambda: geo_togo.__geo_interface__,
+        lambda: (
+            geo_shp.__geo_interface__
+            if hasattr(geo_shp, "__geo_interface__")
+            else shp_mapping(geo_shp)
+        ),
+        iters=5000,
+    )
+
+    # 3. GeometryCollection creation (Testing factory method optimizations)
+    num_geoms = 50
+    gc_togo_elements = []
+    gc_shp_elements = []
+    for i in range(num_geoms):
+        if i % 3 == 0:
+            gc_togo_elements.append(Point(i, i))
+            gc_shp_elements.append(ShpPoint(i, i))
+        elif i % 3 == 1:
+            gc_togo_elements.append(LineString([(i, i), (i + 1, i + 1)]))
+            gc_shp_elements.append(ShpLineString([(i, i), (i + 1, i + 1)]))
+        else:
+            gc_togo_elements.append(
+                Polygon([(i, i), (i + 1, i), (i + 1, i + 1), (i, i + 1), (i, i)])
+            )
+            gc_shp_elements.append(
+                ShpPolygon([(i, i), (i + 1, i), (i + 1, i + 1), (i, i + 1), (i, i)])
+            )
+
+    bench_case(
+        "GeometryCollection from mixed elements (n=50)",
+        lambda: GeometryCollection(gc_togo_elements),
+        lambda: ShpGeometryCollection(gc_shp_elements),
+        iters=500,
+    )
+
     togo_wins = sum(1 for r in BENCH_RESULTS if r["winner"] == "togo")
     shp_wins = sum(1 for r in BENCH_RESULTS if r["winner"] == "shapely")
     ties = sum(1 for r in BENCH_RESULTS if r["winner"] == "tie")
@@ -920,6 +990,13 @@ def main():
     print(f"  togo wins: {togo_wins}")
     print(f"  shapely wins: {shp_wins}")
     print(f"  ties: {ties}")
+
+    if shp_wins > 0:
+        print("\nCases where Shapely was faster:")
+        for r in BENCH_RESULTS:
+            if r["winner"] == "shapely":
+                print(f"  - {r['name']} ({r['speedup']:.2f}x)")
+
     print("\nNote: Results are rough microbenchmarks. Real-world performance can vary.")
 
 
