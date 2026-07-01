@@ -1136,15 +1136,12 @@ cdef class Geometry:
         try:
             for i in range(n):
                 obj = points[i]
-                try:
-                    # Fast path for tuple/list-like coordinate entries.
-                    pts[i].x = float(obj[0])
-                    pts[i].y = float(obj[1])
-                except TypeError:
-                    if isinstance(obj, Point):
-                        pts[i] = (<Point>obj)._get_c_point()
-                    else:
-                        raise
+                if isinstance(obj, Point):
+                    pts[i] = (<Point>obj)._get_c_point()
+                    continue
+                # Fast path for tuple/list-like coordinate entries.
+                pts[i].x = float(obj[0])
+                pts[i].y = float(obj[1])
             gptr = tg_geom_new_multipoint(pts, n)
         finally:
             free(pts)
