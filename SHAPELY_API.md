@@ -410,6 +410,16 @@ The same forwarding behavior applies to operations and line-reference helpers,
 so wrappers expose methods like `.difference()`, `.union()`, `.equals()`,
 `.covers()`, and `.project()` without manual conversion.
 
+The low-level `Ring` class also exposes `intersects()` directly:
+
+```python
+from togo import Ring, Point
+
+ring = Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+print(ring.intersects(Point(5, 5)))   # True
+print(ring.intersects(Point(20, 20))) # False
+```
+
 ## Geometric Operations
 
 ### Buffer
