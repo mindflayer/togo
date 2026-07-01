@@ -258,7 +258,6 @@ cdef extern from "tgx.h":
 
 from libc.limits cimport INT_MAX
 from libc.stdlib cimport malloc, free
-import copy as _copy
 import json as _json
 
 
@@ -374,6 +373,17 @@ cdef tuple _coerce_xy(object value, str arg_name):
         return (x, y)
     except Exception:
         raise TypeError(f"{arg_name} must contain point-like entries")
+
+
+cdef object _clone_geo_interface_payload(object value):
+    """Fast deep clone for GeoJSON-like payloads (dict/list/scalars)."""
+    if isinstance(value, list):
+        return [_clone_geo_interface_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {k: _clone_geo_interface_payload(v) for k, v in value.items()}
+    if isinstance(value, tuple):
+        return tuple(_clone_geo_interface_payload(item) for item in value)
+    return value
 
 
 cdef list _ring_points_as_tuples_from_ptr(const tg_ring *ring):
@@ -1106,11 +1116,30 @@ cdef class Geometry:
     @property
     def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
-        if self._cached_geo_interface is None:
-            geojson_str = self.to_geojson()
-            self._cached_geo_interface = _json.loads(geojson_str)
-        # Return a deep copy so callers can mutate without affecting subsequent reads.
-        return _copy.deepcopy(self._cached_geo_interface)
+        if self._cached_geo_interface is not None:
+            return _clone_geo_interface_payload(self._cached_geo_interface)
+
+        if self.geom == NULL:
+            return {}
+
+        cdef char buf[1024]
+        cdef char *p_buf = buf
+        cdef size_t n = tg_geom_geojson(self.geom, p_buf, sizeof(buf))
+        cdef bint allocated = False
+        if n >= sizeof(buf):
+            p_buf = <char *>malloc(n + 1)
+            if not p_buf:
+                raise MemoryError()
+            allocated = True
+            tg_geom_geojson(self.geom, p_buf, n + 1)
+
+        try:
+            res = _json.loads(p_buf.decode("utf-8"))
+            self._cached_geo_interface = res
+            return _clone_geo_interface_payload(res)
+        finally:
+            if allocated:
+                free(p_buf)
 
     # --- Factory methods ---
     @staticmethod
@@ -1138,10 +1167,16 @@ cdef class Geometry:
                 obj = points[i]
                 if isinstance(obj, Point):
                     pts[i] = (<Point>obj)._get_c_point()
-                    continue
-                # Fast path for tuple/list-like coordinate entries.
-                pts[i].x = float(obj[0])
-                pts[i].y = float(obj[1])
+                else:
+                    try:
+                        # Fast path for tuple/list-like coordinate entries.
+                        pts[i].x = float(obj[0])
+                        pts[i].y = float(obj[1])
+                    except (TypeError, IndexError, ValueError, KeyError):
+                        # Fallback to more robust coercion if fast path fails.
+                        x, y = _coerce_xy(obj, "points")
+                        pts[i].x = x
+                        pts[i].y = y
             gptr = tg_geom_new_multipoint(pts, n)
         finally:
             free(pts)
@@ -1256,6 +1291,8 @@ cdef class Geometry:
         cdef tg_geom *tmpg = NULL
         cdef tg_poly *tmp_poly = NULL
         cdef tg_point tmppt
+        cdef Geometry g_obj
+        cdef list coerced_geoms
         # two-pass allocation for temporary geoms created
         # from Points/tuples/Line/Ring/Poly
         for i in range(n):
@@ -1288,10 +1325,29 @@ cdef class Geometry:
                     "Failed to allocate temporary geoms for GeometryCollection"
                 )
         temp_count = 0
+        coerced_geoms = []
         for i in range(n):
             obj = geoms[i]
             if isinstance(obj, Geometry):
-                arr[i] = (<Geometry>obj)._get_c_geom()
+                g_obj = <Geometry>obj
+                if g_obj.geom != NULL and tg_geom_dims(g_obj.geom) > 2:
+                    g_obj = force_2d(g_obj)
+                    coerced_geoms.append(g_obj)
+                arr[i] = g_obj._get_c_geom()
+                if arr[i] == NULL:
+                    if temp_to_free != NULL:
+                        for j in range(temp_count):
+                            if temp_to_free[j] != NULL:
+                                tg_geom_free(temp_to_free[j])
+                        free(temp_to_free)
+                    free(arr)
+                    raise ValueError(f"geometry {i} is not initialized")
+            elif hasattr(obj, "as_geometry") or hasattr(obj, "wkb"):
+                g_obj = _coerce_geometry_or_raise(obj, "geoms", allow_point_tuple=False)
+                if g_obj.geom != NULL and tg_geom_dims(g_obj.geom) > 2:
+                    g_obj = force_2d(g_obj)
+                coerced_geoms.append(g_obj)
+                arr[i] = g_obj._get_c_geom()
                 if arr[i] == NULL:
                     if temp_to_free != NULL:
                         for j in range(temp_count):
@@ -1506,7 +1562,9 @@ cdef class Geometry:
                                 tg_geom_free(temp_to_free[j])
                         free(temp_to_free)
                     free(arr)
-                    raise ValueError("Failed to create temporary LineString geometry")
+                    raise ValueError(
+                        "Failed to create temporary LineString geometry"
+                    )
                 temp_to_free[temp_count] = tmpg
                 temp_count += 1
                 arr[i] = tmpg
@@ -1529,7 +1587,9 @@ cdef class Geometry:
                                 tg_geom_free(temp_to_free[j])
                         free(temp_to_free)
                     free(arr)
-                    raise ValueError("Failed to create temporary Polygon geometry from Ring")
+                    raise ValueError(
+                        "Failed to create temporary Polygon geometry from Ring"
+                    )
                 temp_to_free[temp_count] = tmpg
                 temp_count += 1
                 arr[i] = tmpg
@@ -1542,7 +1602,9 @@ cdef class Geometry:
                                 tg_geom_free(temp_to_free[j])
                         free(temp_to_free)
                     free(arr)
-                    raise ValueError("Failed to create temporary Polygon geometry")
+                    raise ValueError(
+                        "Failed to create temporary Polygon geometry"
+                    )
                 temp_to_free[temp_count] = tmpg
                 temp_count += 1
                 arr[i] = tmpg
@@ -1556,7 +1618,9 @@ cdef class Geometry:
                                 tg_geom_free(temp_to_free[j])
                         free(temp_to_free)
                     free(arr)
-                    raise ValueError("Failed to create temporary Point geometry")
+                    raise ValueError(
+                        "Failed to create temporary Point geometry"
+                    )
                 temp_to_free[temp_count] = tmpg2
                 temp_count += 1
                 arr[i] = tmpg2
@@ -2968,7 +3032,7 @@ cdef class Ring:
 
         Parameters:
         -----------
-        other : Geometry, Point, LineString, Polygon, or other geometry
+        other : Geometry, Point, Line, Ring, Poly, or other geometry
             The other geometry to find the nearest point to
 
         Returns:
@@ -2988,7 +3052,6 @@ cdef class Ring:
         if isinstance(other, Geometry):
             return self.as_geometry().nearest_points(other)
         elif hasattr(other, "as_geometry"):
-            # Assume it's another geometry type with as_geometry method
             return self.as_geometry().nearest_points(other.as_geometry())
         else:
             raise ValueError(f"other must be a Geometry object, got {type(other)}")
@@ -3002,7 +3065,7 @@ cdef class Ring:
 
         Parameters:
         -----------
-        other : Geometry, Point, LineString, Polygon, or other geometry
+        other : Geometry, Point, Line, Ring, Poly, or other geometry
             The other geometry to find the shortest line to
 
         Returns:
@@ -3045,7 +3108,7 @@ cdef class Ring:
         Returns:
         --------
         Geometry
-            A Polygon geometry representing the convex hull
+            A Polygon (or LineString for collinear points) representing the convex hull
         """
         return self.as_geometry().convex_hull
 
@@ -3106,6 +3169,41 @@ cdef class Ring:
 
         empty = tg_geom_new_geometrycollection_empty()
         return _geometry_from_ptr(empty)
+
+    def intersects(self, other) -> bool:
+        """Check if this polygon intersects another geometry (Shapely-compatible).
+
+        Parameters:
+        -----------
+        other : Geometry, Point, Line, Ring, Poly, or other geometry type
+            The other geometry to check intersection with
+
+        Returns:
+        --------
+        bool
+            True if the geometries intersect, False otherwise
+        """
+        cdef Geometry other_g = _coerce_geometry_or_raise(other, "other")
+        return self.as_geometry().intersects(other_g)
+
+    @property
+    def boundary(self):
+        """Return the polygon boundary as LineString or MultiLineString (Shapely-compatible).
+
+        Returns:
+        --------
+        Line or MultiLineString
+            Exterior ring as LineString, or exterior + holes as MultiLineString
+        """
+        ext = self.exterior
+        holes = self.interiors
+        pts = ext.points(as_tuples=True)
+        if len(holes) == 0:
+            return Line(pts)
+        lines = [pts]
+        for hole in holes:
+            lines.append(hole.points(as_tuples=True))
+        return MultiLineString(lines)
 
 
 cdef class Line:
@@ -3526,6 +3624,7 @@ cdef class Poly:
     cdef tg_poly *poly
     cdef bint owns_pointer
     cdef object _cached_geometry
+    cdef object _cached_geo_interface
 
     def __init__(self, exterior, holes=None):
         cdef int nholes = 0
@@ -3571,6 +3670,7 @@ cdef class Poly:
             raise ValueError("Failed to create Poly")
         self.owns_pointer = True
         self._cached_geometry = None
+        self._cached_geo_interface = None
 
     def __dealloc__(self):
         if self.poly and self.owns_pointer:
@@ -3746,16 +3846,30 @@ cdef class Poly:
     @property
     def __geo_interface__(self) -> dict:
         """Returns GeoJSON-like dict for Shapely compatibility"""
+        if self._cached_geo_interface is not None:
+            return _clone_geo_interface_payload(self._cached_geo_interface)
+
+        if self.poly == NULL:
+            return {}
+
         cdef int i
         cdef int nholes = tg_poly_num_holes(self.poly)
         ext_coords = _ring_points_as_tuples_from_ptr(tg_poly_exterior(self.poly))
         if nholes == 0:
-            return {"type": "Polygon", "coordinates": [ext_coords]}
+            self._cached_geo_interface = {
+                "type": "Polygon",
+                "coordinates": [ext_coords],
+            }
         else:
             hole_coords = []
             for i in range(nholes):
                 hole_coords.append(_ring_points_as_tuples_from_ptr(tg_poly_hole_at(self.poly, i)))
-            return {"type": "Polygon", "coordinates": [ext_coords] + hole_coords}
+            self._cached_geo_interface = {
+                "type": "Polygon",
+                "coordinates": [ext_coords] + hole_coords,
+            }
+
+        return _clone_geo_interface_payload(self._cached_geo_interface)
 
     def buffer(self, distance: float, quad_segs: int = 16,
                cap_style: int = 1, join_style: int = 1,
@@ -4519,8 +4633,8 @@ cdef Geometry _force_2d_polygon(Geometry geom):
         hole_npts = tg_ring_num_points(hole)
         hole_pts = tg_ring_points(hole)
         hole_coords = []
-        for i in range(hole_npts):
-            hole_coords.append((hole_pts[i].x, hole_pts[i].y))
+        for k in range(hole_npts):
+            hole_coords.append((hole_pts[k].x, hole_pts[k].y))
         holes.append(Ring(hole_coords))
 
     cdef Ring ext = Ring(ext_coords)
