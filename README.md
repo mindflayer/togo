@@ -12,8 +12,6 @@ The main goal is to offer a Pythonic, object-oriented, fast and memory-efficient
 See [SHAPELY_API.md](SHAPELY_API.md) for more details on Shapely compatibility.
 See the "Error Behavior vs Shapely" section in `SHAPELY_API.md` for overlay and predicate
 compatibility notes.
-See [CHANGELOG.md](./CHANGELOG.md) for version-by-version release notes.
-
 
 ## Installation
 

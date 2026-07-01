@@ -418,6 +418,11 @@ from togo import Ring, Point
 ring = Ring([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
 print(ring.intersects(Point(5, 5)))   # True
 print(ring.intersects(Point(20, 20))) # False
+
+# Ring also exposes a Shapely-style boundary property via its Polygon view
+boundary = ring.boundary
+print(boundary.geom_type)  # 'LineString'
+print(boundary.length)      # perimeter of the ring
 ```
 
 ## Geometric Operations
