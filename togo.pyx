@@ -4165,7 +4165,8 @@ class MultiPolygon(Geometry):
         if polys is None:
             tmp = Geometry.from_multipolygon([])
         else:
-            polys = list(polys)
+            if not isinstance(polys, list):
+                polys = list(polys)
             if all(isinstance(p, Poly) for p in polys):
                 tmp = Geometry.from_multipolygon(polys)
                 self._init_from_geometry(tmp)
