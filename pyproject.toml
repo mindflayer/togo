@@ -16,11 +16,25 @@ authors = [
 ]
 requires-python = ">=3.8"
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "Programming Language :: C",
-  "Operating System :: POSIX :: Linux",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "Topic :: Scientific/Engineering :: GIS"
+  "Intended Audience :: Science/Research",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: POSIX",
+  "Programming Language :: C",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: GIS",
+  "Topic :: Utilities"
 ]
 dynamic = ["license"]
 
@@ -41,5 +55,7 @@ max-line-length = 100
 #skip = ["*-musllinux_*"]
 build-verbosity = 1
 before-build = "bash tools/prepare_vendor.sh"
+
+[tool.cibuildwheel.linux]
 # Compute platform ID from CIBW_BUILD and point LD_LIBRARY_PATH at the right vendor dir for repair
 repair-wheel-command = "PLATFORM_ID=$(echo \"$CIBW_BUILD\" | cut -d- -f2-); LD_LIBRARY_PATH=/project/vendor/geos/${PLATFORM_ID}/lib auditwheel repair -w {dest_dir} {wheel}"
