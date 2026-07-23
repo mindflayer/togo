@@ -12,23 +12,22 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            cibw-skip: ""
-            cibw-archs: ""
+            cibw_skip: ""
+            cibw_archs: ""
           - os: macos-13
-            cibw-skip: "*-win32 *-win_amd64 *-musllinux_*"
-            cibw-archs: "x86_64"
+            cibw_skip: "*-win32 *-win_amd64 *-musllinux_*"
+            cibw_archs: "x86_64"
           - os: macos-14
-            cibw-skip: "*-win32 *-win_amd64 *-musllinux_*"
-            cibw-archs: "arm64"
+            cibw_skip: "*-win32 *-win_amd64 *-musllinux_*"
+            cibw_archs: "arm64"
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-      id-token: write  # This enables OIDC token creation
     env:
       # Keep this in sync with tools/prepare_vendor.sh default or override as needed
       GEOS_VERSION: '3.14.1'
-      CIBW_SKIP: ${{ matrix.cibw-skip }}
-      CIBW_ARCHS: ${{ matrix.cibw-archs }}
+      CIBW_SKIP: ${{ matrix.cibw_skip }}
+      CIBW_ARCHS: ${{ matrix.cibw_archs }}
 
     steps:
       - uses: actions/checkout@v3
@@ -39,7 +38,6 @@ jobs:
         id: cache-keys
         run: |
           echo "base_key=${{ runner.os }}-${{ runner.arch }}-geos-${{ env.GEOS_VERSION }}-$(python3 -c 'from hashlib import sha256; from pathlib import Path; print(sha256(Path("tools/prepare_vendor.sh").read_bytes()).hexdigest())')" >> "$GITHUB_OUTPUT"
-          echo "platform_id=$([[ '${{ runner.os }}' == 'macOS' ]] && echo 'macosx' || echo 'linux')" >> $GITHUB_OUTPUT
 
       - name: Restore GEOS vendor cache
         uses: actions/cache@v4
@@ -67,6 +65,25 @@ jobs:
           # Linux-specific repair command using auditwheel
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "PLATFORM_ID=$(echo \"$CIBW_BUILD\" | cut -d- -f2-); LD_LIBRARY_PATH=/project/vendor/geos/${PLATFORM_ID}/lib auditwheel repair -w {dest_dir} {wheel}"
           # macOS uses delocate automatically, no custom command needed
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheelhouse-${{ matrix.os }}-${{ matrix.cibw_archs || 'native' }}
+          path: ./wheelhouse/*.whl
+
+  publish_pypi:
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # This enables trusted publishing
+    steps:
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheelhouse-*
+          path: ./wheelhouse/
+          merge-multiple: true
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
