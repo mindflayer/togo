@@ -38,7 +38,7 @@ jobs:
       - name: Compute cache base key
         id: cache-keys
         run: |
-          echo "base_key=${{ runner.os }}-geos-${{ env.GEOS_VERSION }}-$(sha256sum tools/prepare_vendor.sh | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "base_key=${{ runner.os }}-${{ runner.arch }}-geos-${{ env.GEOS_VERSION }}-$(python3 -c 'from hashlib import sha256; from pathlib import Path; print(sha256(Path("tools/prepare_vendor.sh").read_bytes()).hexdigest())')" >> "$GITHUB_OUTPUT"
           echo "platform_id=$([[ '${{ runner.os }}' == 'macOS' ]] && echo 'macosx' || echo 'linux')" >> $GITHUB_OUTPUT
 
       - name: Restore GEOS vendor cache
@@ -63,6 +63,7 @@ jobs:
         env:
           # Ensure the GEOS_VERSION flows into the container for prepare_vendor.sh
           GEOS_VERSION: ${{ env.GEOS_VERSION }}
+          CIBW_BEFORE_ALL_MACOS: "printf '#!/bin/sh\nsysctl -n hw.ncpu\n' > /tmp/nproc && chmod +x /tmp/nproc && sudo mv /tmp/nproc /usr/local/bin/nproc"
           # Linux-specific repair command using auditwheel
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "PLATFORM_ID=$(echo \"$CIBW_BUILD\" | cut -d- -f2-); LD_LIBRARY_PATH=/project/vendor/geos/${PLATFORM_ID}/lib auditwheel repair -w {dest_dir} {wheel}"
           # macOS uses delocate automatically, no custom command needed
