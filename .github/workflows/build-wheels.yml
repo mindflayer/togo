@@ -14,7 +14,7 @@ jobs:
           - os: ubuntu-latest
             cibw_skip: ""
             cibw_archs: ""
-          - os: macos-13
+          - os: macos-latest
             cibw_skip: "*-win32 *-win_amd64 *-musllinux_*"
             cibw_archs: "x86_64"
           - os: macos-14
