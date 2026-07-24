@@ -55,6 +55,7 @@ max-line-length = 100
 #skip = ["*-musllinux_*"]
 build-verbosity = 1
 before-build = "bash tools/prepare_vendor.sh"
+test-command = "python -c \"import togo\""
 
 [tool.cibuildwheel.linux]
 # Compute platform ID from CIBW_BUILD and point LD_LIBRARY_PATH at the right vendor dir for repair

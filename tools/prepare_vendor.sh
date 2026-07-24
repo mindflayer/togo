@@ -43,7 +43,15 @@ tar -xzf "${TARBALL}"
 pushd "${GEOS_DIR}" >/dev/null
 mkdir -p build
 pushd build >/dev/null
-cmake .. -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+cmake_args=(
+  -DBUILD_SHARED_LIBS=OFF
+  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+)
+if [[ "$(uname -s)" == "Darwin" && -n "${CIBW_ARCHS:-}" ]]; then
+  cmake_args+=("-DCMAKE_OSX_ARCHITECTURES=${CIBW_ARCHS}")
+fi
+cmake .. "${cmake_args[@]}"
 make -j"$(nproc)"
 popd >/dev/null
 
