@@ -34,6 +34,17 @@ fi
 echo "Preparing GEOS ${GEOS_VERSION} for platform '${PLATFORM_ID}'..."
 mkdir -p "${INCLUDE_DIR}" "${LIB_DIR}"
 
+# Local macOS workflows may rely on Homebrew/system GEOS via geos-config.
+# If cmake is missing, skip vendoring when a system GEOS install is available.
+if ! command -v cmake >/dev/null 2>&1; then
+  if command -v geos-config >/dev/null 2>&1; then
+    echo "cmake not found; skipping vendored GEOS build and using system GEOS via geos-config."
+    exit 0
+  fi
+  echo "cmake not found and geos-config is unavailable. Install cmake or geos." >&2
+  exit 1
+fi
+
 # Download and unpack
 rm -rf "${GEOS_DIR}" "${TARBALL}"
 curl -fsSL -o "${TARBALL}" "${TARBALL_URL}"
@@ -52,7 +63,14 @@ if [[ "$(uname -s)" == "Darwin" && -n "${CIBW_ARCHS:-}" ]]; then
   cmake_args+=("-DCMAKE_OSX_ARCHITECTURES=${CIBW_ARCHS}")
 fi
 cmake .. "${cmake_args[@]}"
-make -j"$(nproc)"
+if command -v nproc >/dev/null 2>&1; then
+  JOBS="$(nproc)"
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  JOBS="$(sysctl -n hw.ncpu)"
+else
+  JOBS=1
+fi
+make -j"${JOBS}"
 popd >/dev/null
 
 # Copy artifacts

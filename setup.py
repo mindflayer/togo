@@ -1,4 +1,6 @@
 import os
+import shlex
+import subprocess
 import sys
 
 from setuptools import setup, Extension
@@ -45,18 +47,42 @@ geos_lib = os.path.join(repo_root, "vendor", "geos", plat_id, "lib")
 geos_c_a = os.path.join(geos_lib, "libgeos_c.a")
 geos_a = os.path.join(geos_lib, "libgeos.a")
 
-if sys.platform == "darwin":
-    whole_archive_flags = [
-        "-Wl,-force_load," + geos_c_a,
-        "-Wl,-force_load," + geos_a,
-    ]
+include_dirs = ["."]
+extra_link_args_final = list(extra_link_args)
+
+if os.path.exists(geos_c_a) and os.path.exists(geos_a) and os.path.exists(os.path.join(geos_include, "geos_c.h")):
+    include_dirs.append(geos_include)
+    if sys.platform == "darwin":
+        whole_archive_flags = [
+            "-Wl,-force_load," + geos_c_a,
+            "-Wl,-force_load," + geos_a,
+        ]
+    else:
+        whole_archive_flags = [
+            "-Wl,--whole-archive",
+            geos_c_a,
+            geos_a,
+            "-Wl,--no-whole-archive",
+        ]
+    extra_link_args_final = whole_archive_flags + extra_link_args_final
 else:
-    whole_archive_flags = [
-        "-Wl,--whole-archive",
-        geos_c_a,
-        geos_a,
-        "-Wl,--no-whole-archive",
-    ]
+    # Fallback for local development when vendored GEOS is not prepared.
+    # `geos-config` is provided by system/brew geos installs.
+    geos_config = os.environ.get("GEOS_CONFIG", "geos-config")
+    try:
+        cflags = subprocess.check_output([geos_config, "--cflags"], text=True).strip()
+        libs = subprocess.check_output([geos_config, "--clibs"], text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        raise RuntimeError(
+            "GEOS not found. Run 'bash tools/prepare_vendor.sh' (requires cmake) "
+            "or install geos so 'geos-config' is available."
+        )
+
+    for token in shlex.split(cflags):
+        if token.startswith("-I") and len(token) > 2:
+            include_dirs.append(token[2:])
+
+    extra_link_args_final = shlex.split(libs) + extra_link_args_final
 
 setup(
     ext_modules=cythonize(
@@ -64,13 +90,10 @@ setup(
             Extension(
                 "togo",
                 sources=["togo.pyx", "tg.c", "tgx.c"],
-                include_dirs=[
-                    ".",  # For tg.h and tgx.h
-                    geos_include,
-                ],
+                include_dirs=include_dirs,
                 # Link static archives as whole-archive to keep all needed RTTI/vtables
                 extra_compile_args=extra_compile_args,
-                extra_link_args=whole_archive_flags + extra_link_args,
+                extra_link_args=extra_link_args_final,
             )
         ]
     ),
