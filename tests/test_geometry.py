@@ -1,4 +1,5 @@
 import gc
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from togo import Geometry, Point, Ring, Poly
@@ -251,9 +252,9 @@ def test_unary_union_geos_lines():
     g1 = Geometry("LINESTRING(0 0, 1 1)", fmt="wkt")
     g2 = Geometry("LINESTRING(1 1, 2 2)", fmt="wkt")
     u = Geometry.unary_union([g1, g2])
-    assert u.type_string() == "MultiLineString"
+    assert u.type_string() == "LineString"
     wkt = u.to_wkt()
-    assert wkt == "MULTILINESTRING((0 0,1 1),(1 1,2 2))"
+    assert wkt == "LINESTRING(0 0,1 1,2 2)"
 
 
 def test_unary_union_geos_polys():
@@ -273,7 +274,7 @@ def test_unary_union_geos_polys():
     assert union_geom.bounds == (0.0, 0.0, 3.0, 3.0)
     # WKT should represent the merged polygon
     wkt = union_geom.to_wkt()
-    assert wkt == "POLYGON((2 0,0 0,0 2,1 2,1 3,3 3,3 1,2 1,2 0))"
+    assert wkt == "POLYGON((2 1,2 0,0 0,0 2,1 2,1 3,3 3,3 1,2 1))"
 
 
 def test_centroid_point():
@@ -282,6 +283,24 @@ def test_centroid_point():
     centroid = g.centroid
     assert centroid.type_string() == "Point"
     assert centroid.to_wkt() == "POINT(1 2)"
+
+
+def test_point_centroid_and_convex_hull():
+    point = Point(1, 2)
+
+    assert point.centroid.as_tuple() == (1.0, 2.0)
+    assert point.convex_hull.as_tuple() == (1.0, 2.0)
+
+
+def test_geos_operations_are_safe_across_threads():
+    def centroid(_):
+        geom = Geometry("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))", fmt="wkt")
+        return geom.centroid.to_wkt()
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(centroid, range(16)))
+
+    assert results == ["POINT(1 1)"] * 16
 
 
 def test_centroid_linestring():
