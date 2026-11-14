@@ -5,7 +5,7 @@ from tests.geometries import TOGO, BENIN, GRAN_BUENOS_AIRES_AREA
 
 def test_togo():
     togo = Geometry(TOGO)
-    assert togo.memsize == 6080
+    assert togo.memsize == 6088
     assert not togo.is_empty
     assert not togo.has_z
     assert togo.dims == 2
@@ -24,7 +24,7 @@ def test_togo():
 
 def test_benin():
     benin = Geometry(BENIN, fmt="geojson")
-    assert benin.memsize == 6688
+    assert benin.memsize == 6696
     assert not benin.is_empty
     assert not benin.has_z
     assert benin.dims == 2
@@ -43,7 +43,7 @@ def test_benin():
 
 def test_buenos_aires():
     b_aires = Geometry(GRAN_BUENOS_AIRES_AREA, fmt="wkt")
-    assert b_aires.memsize == 456
+    assert b_aires.memsize == 464
     assert not b_aires.is_empty
     assert b_aires.has_z
     assert b_aires.dims == 3

@@ -29,7 +29,7 @@ jobs:
       contents: read
     env:
       # Keep this in sync with tools/prepare_vendor.sh default or override as needed
-      GEOS_VERSION: '3.14.1'
+      GEOS_VERSION: '3.15.0'
       CIBW_SKIP: ${{ matrix.cibw_skip }}
       CIBW_ARCHS: ${{ matrix.cibw_archs }}
 
