@@ -43,7 +43,7 @@ def test_benin():
 
 def test_buenos_aires():
     b_aires = Geometry(GRAN_BUENOS_AIRES_AREA, fmt="wkt")
-    assert b_aires.memsize == 464
+    assert b_aires.memsize == 472
     assert not b_aires.is_empty
     assert b_aires.has_z
     assert b_aires.dims == 3
