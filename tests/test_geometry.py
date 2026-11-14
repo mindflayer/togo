@@ -289,7 +289,9 @@ def test_point_centroid_and_convex_hull():
     point = Point(1, 2)
 
     assert point.centroid.as_tuple() == (1.0, 2.0)
-    assert point.convex_hull.as_tuple() == (1.0, 2.0)
+    hull = point.convex_hull
+    assert hull.geom_type == "Point"
+    assert (hull.x, hull.y) == (1.0, 2.0)
 
 
 def test_geos_operations_are_safe_across_threads():
