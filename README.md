@@ -423,7 +423,7 @@ expanded = poly.buffer(2.0)    # Expand outward by 2 units
 shrunk = poly.buffer(-1.0)     # Shrink inward by 1 unit
 
 # Via Geometry object with advanced parameters
-geom = Geometry("POLYGON((0 0, 20 0, 20 20, 0 20, 0 0))")
+geom = Geometry("POLYGON((0 0, 20 0, 20 20, 0 20, 0 0))", fmt="wkt")
 buffered = geom.buffer(
     distance=3.0,
     quad_segs=16,           # Segments per quadrant (higher = smoother)
