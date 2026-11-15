@@ -48,6 +48,16 @@ class TestNearestPoints:
         assert abs(np[1].x - 1.0) < 0.01
         assert abs(np[1].y - 1.0) < 0.01
 
+    def test_nearest_points_line_to_point_multisegment(self):
+        """Test the native line-to-point path on a multi-segment line."""
+        line = LineString([(0, 0), (3, 0), (3, 4)])
+        point = Point(2, 1)
+
+        nearest_on_line, nearest_on_point = line.nearest_points(point)
+
+        assert (nearest_on_line.x, nearest_on_line.y) == pytest.approx((2.0, 0.0))
+        assert (nearest_on_point.x, nearest_on_point.y) == pytest.approx((2.0, 1.0))
+
     def test_nearest_points_point_to_polygon(self):
         """Test nearest_points between a point and a polygon"""
         point = Point(0, 0)

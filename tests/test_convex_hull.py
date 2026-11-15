@@ -70,6 +70,27 @@ class TestGeometryConvexHull:
             pt = Point(x, y).as_geometry()
             assert hull.contains(pt) or hull.touches(pt)
 
+    def test_geometry_convex_hull_multipoint_fractional_coordinates(self):
+        points = [(-1.5, 0.25), (2.5, 0.5), (1.0, 3.75), (0.0, 1.0)]
+        hull = MultiPoint(points).convex_hull
+        assert hull.geom_type == "Polygon"
+        for x, y in points:
+            point = Point(x, y).as_geometry()
+            assert hull.contains(point) or hull.touches(point)
+
+    def test_geometry_convex_hull_large_multipoint(self):
+        points = [(float(i), float((i * 17) % 31)) for i in range(100)]
+        hull = MultiPoint(points).convex_hull
+        assert hull.geom_type == "Polygon"
+        for x, y in points:
+            point = Point(x, y).as_geometry()
+            assert hull.contains(point) or hull.touches(point)
+
+    def test_geometry_convex_hull_collinear_multipoint(self):
+        hull = MultiPoint([(0.5, 0.5), (1.5, 1.5), (2.5, 2.5)]).convex_hull
+        assert hull.geom_type == "LineString"
+        assert hull.coords == [(0.5, 0.5), (2.5, 2.5)]
+
 
 class TestPointConvexHull:
     """Test Point.convex_hull method"""

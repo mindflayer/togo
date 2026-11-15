@@ -85,8 +85,23 @@ class TestGeometryCentroid:
         centroid = geom.centroid
         assert centroid is not None
         assert centroid.geom_type == "Point"
-        wkt = centroid.to_wkt()
-        assert "POINT" in wkt
+        assert centroid.x == 5.0
+        assert centroid.y == 5.0
+
+    def test_geometry_centroid_multilinestring(self):
+        geom = Geometry("MULTILINESTRING((0 0, 2 0), (10 0, 10 6))", fmt="wkt")
+        centroid = geom.centroid
+        assert centroid.x == 7.75
+        assert centroid.y == 2.25
+
+    def test_geometry_centroid_multipolygon(self):
+        geom = Geometry(
+            "MULTIPOLYGON(((0 0, 1 0, 1 1, 0 1, 0 0)), ((3 0, 6 0, 6 3, 3 3, 3 0)))",
+            fmt="wkt",
+        )
+        centroid = geom.centroid
+        assert centroid.x == 4.1
+        assert centroid.y == 1.4
 
 
 class TestPointCentroid:
