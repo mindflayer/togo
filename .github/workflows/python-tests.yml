@@ -42,7 +42,7 @@ jobs:
     - name: Compute cache base key
       id: cache-keys
       run: |
-        echo "base_key=${{ runner.os }}-geos-${{ env.GEOS_VERSION }}-$(sha256sum tools/prepare_vendor.sh | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+        echo "base_key=${{ matrix.os }}-geos-${{ env.GEOS_VERSION }}-$(sha256sum tools/prepare_vendor.sh | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
     - name: Restore GEOS vendor cache
       uses: actions/cache@v4
