@@ -34,6 +34,8 @@ try:
         LineString,
         Polygon,
         MultiPoint,
+        MultiLineString,
+        MultiPolygon,
         GeometryCollection,
         Ring,
         from_wkt,
@@ -71,6 +73,8 @@ try:
             LineString as ShpLineString,
             Polygon as ShpPolygon,
             MultiPoint as ShpMultiPoint,
+            MultiLineString as ShpMultiLineString,
+            MultiPolygon as ShpMultiPolygon,
             GeometryCollection as ShpGeometryCollection,
             shape as shp_shape,
         )
@@ -85,6 +89,8 @@ try:
             LineString as ShpLineString,
             Polygon as ShpPolygon,
             MultiPoint as ShpMultiPoint,
+            MultiLineString as ShpMultiLineString,
+            MultiPolygon as ShpMultiPolygon,
             GeometryCollection as ShpGeometryCollection,
             mapping as shp_mapping,
         )
@@ -367,6 +373,14 @@ def main():
         lambda: shp_line.length,
         iters=2000,
     )
+    project_point = Point(117.5, 6.25)
+    shp_project_point = ShpPoint(117.5, 6.25)
+    bench_case(
+        "project (200-vertex linestring)",
+        lambda: togo_line.project(project_point),
+        lambda: shp_line.project(shp_project_point),
+        iters=1000,
+    )
 
     # Ring area/perimeter via exterior
     ring = Ring(ring_pts)
@@ -536,6 +550,44 @@ def main():
         lambda: shp_centroid_big_poly.centroid,
         iters=500,
     )
+    centroid_multipoint = MultiPoint([(i, (i * 17) % 31) for i in range(100)])
+    shp_centroid_multipoint = ShpMultiPoint([(i, (i * 17) % 31) for i in range(100)])
+    centroid_multiline = MultiLineString(
+        [[(i, i % 7), (i + 2, (i + 2) % 7)] for i in range(50)]
+    )
+    shp_centroid_multiline = ShpMultiLineString(
+        [[(i, i % 7), (i + 2, (i + 2) % 7)] for i in range(50)]
+    )
+    centroid_multipolygon = MultiPolygon(
+        [
+            Polygon([(i * 3, 0), (i * 3 + 2, 0), (i * 3 + 2, 2), (i * 3, 2)])
+            for i in range(25)
+        ]
+    )
+    shp_centroid_multipolygon = ShpMultiPolygon(
+        [
+            ShpPolygon([(i * 3, 0), (i * 3 + 2, 0), (i * 3 + 2, 2), (i * 3, 2)])
+            for i in range(25)
+        ]
+    )
+    bench_case(
+        "centroid (MultiPoint, n=100)",
+        lambda: centroid_multipoint.centroid,
+        lambda: shp_centroid_multipoint.centroid,
+        iters=1000,
+    )
+    bench_case(
+        "centroid (MultiLineString, n=50)",
+        lambda: centroid_multiline.centroid,
+        lambda: shp_centroid_multiline.centroid,
+        iters=500,
+    )
+    bench_case(
+        "centroid (MultiPolygon, n=25)",
+        lambda: centroid_multipolygon.centroid,
+        lambda: shp_centroid_multipolygon.centroid,
+        iters=500,
+    )
     bench_case(
         "centroid x/y access (polygon - square)",
         lambda: (centroid_poly.centroid.x, centroid_poly.centroid.y),
@@ -565,6 +617,12 @@ def main():
 
     convex_big_poly = from_geojson(TOGO_JSON)
     shp_convex_big_poly = shp_from_geojson(TOGO_JSON)
+    convex_multipoint_points = [(float(i), float((i * 17) % 31)) for i in range(100)]
+    convex_multipoint = MultiPoint(convex_multipoint_points)
+    shp_convex_multipoint = ShpMultiPoint(convex_multipoint_points)
+    convex_collinear_points = [(float(i), float(2 * i + 1)) for i in range(100)]
+    convex_collinear_multipoint = MultiPoint(convex_collinear_points)
+    shp_convex_collinear_multipoint = ShpMultiPoint(convex_collinear_points)
 
     bench_case(
         "convex_hull (point)",
@@ -592,6 +650,18 @@ def main():
         lambda: convex_big_poly.convex_hull,
         lambda: shp_convex_big_poly.convex_hull,
         iters=500,
+    )
+    bench_case(
+        "convex_hull (MultiPoint, n=100)",
+        lambda: convex_multipoint.convex_hull,
+        lambda: shp_convex_multipoint.convex_hull,
+        iters=1000,
+    )
+    bench_case(
+        "convex_hull (collinear MultiPoint, n=100)",
+        lambda: convex_collinear_multipoint.convex_hull,
+        lambda: shp_convex_collinear_multipoint.convex_hull,
+        iters=1000,
     )
 
     # Intersection operations

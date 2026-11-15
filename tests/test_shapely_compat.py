@@ -130,6 +130,16 @@ class TestLineStringProject:
         dist = line.project(pt.as_geometry())
         assert dist == pytest.approx(5.0, abs=1e-9)
 
+    def test_project_multisegment_line(self):
+        """Projection distance includes the lengths of preceding segments."""
+        line = LineString([(0, 0), (3, 0), (3, 4)])
+        assert line.project(Point(3, 2)) == pytest.approx(5.0, abs=1e-9)
+
+    def test_project_uses_nearest_segment(self):
+        """Projection selects the closest segment, not the first segment."""
+        line = LineString([(0, 0), (3, 0), (3, 4)])
+        assert line.project(Point(2, 1)) == pytest.approx(2.0, abs=1e-9)
+
     def test_project_accepts_point_directly(self):
         """project() accepts a Point wrapper object directly."""
         line = LineString([(0, 0), (10, 0)])

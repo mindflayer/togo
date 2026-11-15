@@ -722,8 +722,10 @@ control flow, while null/uninitialized geometry bugs are surfaced earlier and mo
    Shapely does not have. Use `.as_geometry()` when you need to pass a wrapper object to
    a function that specifically requires a `Geometry` instance.
 
-2. **GEOS dependency**: Buffer, simplify, centroid, convex_hull, intersection, union, difference, unary_union,
-   nearest_points, shortest_line, and project all require the bundled `libgeos`.
+2. **GEOS dependency**: Buffer, simplify, intersection, union, difference, unary_union, and general
+   nearest_points/shortest_line operations require the bundled `libgeos`. Centroid uses TG directly for
+   Point, LineString, Polygon, MultiPoint, MultiLineString, and MultiPolygon; convex_hull uses TG directly
+   for Point, MultiPoint, and supported LineString/Polygon inputs. Other cases use GEOS.
 
 ## Performance
 
@@ -925,8 +927,8 @@ The `transform` function works with:
 | `geom.bounds` | `geom.bounds` | ✅ |
 | `geom.area` | `geom.area` | ✅ |
 | `geom.length` | `geom.length` | ✅ |
-| `geom.centroid` | `geom.centroid` | ✅ via GEOS |
-| `geom.convex_hull` | `geom.convex_hull` | ✅ via GEOS |
+| `geom.centroid` | `geom.centroid` | ✅ native for Point/LineString/Polygon and multi-types; GEOS otherwise |
+| `geom.convex_hull` | `geom.convex_hull` | ✅ native for Point, MultiPoint, and supported LineString/Polygon inputs; GEOS otherwise |
 | `geom.boundary` | `poly.boundary` | ✅ on Polygon/Poly |
 | `geom.geoms` | `geom.geoms` | ✅ on multi-geometries and GeometryCollection |
 | `len(geom)` (collections only) | `len(geom)` | ✅ on Multi* and GeometryCollection; TypeError otherwise |
@@ -956,16 +958,16 @@ The `transform` function works with:
 | `geom.intersection(other)` | `geom.intersection(other)` | ✅ via GEOS; accepts wrappers |
 | `geom.union(other)` | `geom.union(other)` | ✅ via GEOS; accepts wrappers |
 | `geom.difference(other)` | `geom.difference(other)` | ✅ via GEOS; accepts wrappers |
-| `line.project(point, normalized=False)` | `line.project(point, normalized=False)` | ✅ via GEOS |
+| `line.project(point, normalized=False)` | `line.project(point, normalized=False)` | ✅ native for LineString/Point; GEOS otherwise |
 | `geom.project(point, normalized=False)` | `geom.project(point, normalized=False)` | ✅ for LineString/MultiLineString geometries |
 | `unary_union(geoms)` | `unary_union(geoms)` | ✅ Module-level; via GEOS |
 | `union(g1, g2)` | `union(g1, g2)` | ✅ Module-level; via GEOS |
 | `difference(g1, g2)` | `difference(g1, g2)` | ✅ Module-level; via GEOS |
 | `force_2d(geom)` | `force_2d(geom)` | ✅ Module-level; drops Z/M ordinates |
 | `transform(fn, geom)` | `transform(fn, geom)` | ✅ |
-| `nearest_points(g1, g2)` | `nearest_points(g1, g2)` | ✅ via GEOS |
-| `shortest_line(g1, g2)` | `shortest_line(g1, g2)` | ✅ via GEOS |
-| `convex_hull(geom)` | `convex_hull(geom)` | ✅ via GEOS |
+| `nearest_points(g1, g2)` | `nearest_points(g1, g2)` | ✅ native for Point/Point and Point/LineString; GEOS otherwise |
+| `shortest_line(g1, g2)` | `shortest_line(g1, g2)` | ✅ native for Point/Point and Point/LineString; GEOS otherwise |
+| `convex_hull(geom)` | `convex_hull(geom)` | ✅ native for Point/MultiPoint and supported LineString/Polygon inputs; GEOS otherwise |
 | `intersection(g1, g2)` | `intersection(g1, g2)` | ✅ via GEOS |
 
 ## Conclusion

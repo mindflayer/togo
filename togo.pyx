@@ -157,6 +157,9 @@ cdef extern from "tg.h":
     )
     double tg_line_length(const tg_line *line)
 
+cdef extern from "stdlib.h":
+    void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *))
+
     # --- Poly functions ---
     tg_poly *tg_poly_new(
         const tg_ring *exterior, const tg_ring *const holes[], int nholes
@@ -257,7 +260,7 @@ cdef extern from "tgx.h":
 
 
 from libc.limits cimport INT_MAX
-from libc.math cimport floor, sqrt
+from libc.math cimport floor, isfinite, sqrt
 from libc.stdlib cimport malloc, free
 import json as _json
 import threading as _threading
@@ -287,6 +290,80 @@ cdef GEOSContextHandle_t _get_geos_context() except? NULL:
             return NULL
         _geos_context_local.context = holder
     return (<_ThreadGEOSContext>holder).handle
+
+
+cdef double _line_project(
+    const tg_line *line, tg_point point, double *total_length
+) noexcept:
+    cdef int n = tg_line_num_points(line)
+    cdef const tg_point *points = tg_line_points(line)
+    cdef int i
+    cdef double dx, dy, length_squared, segment_length, fraction
+    cdef double px, py, distance_squared, best_distance_squared = -1.0
+    cdef double distance_along = 0.0, best_distance_along = 0.0
+
+    for i in range(1, n):
+        dx = points[i].x - points[i - 1].x
+        dy = points[i].y - points[i - 1].y
+        length_squared = dx * dx + dy * dy
+        segment_length = sqrt(length_squared)
+        if length_squared == 0.0:
+            fraction = 0.0
+        else:
+            fraction = (
+                (point.x - points[i - 1].x) * dx
+                + (point.y - points[i - 1].y) * dy
+            ) / length_squared
+            if fraction < 0.0:
+                fraction = 0.0
+            elif fraction > 1.0:
+                fraction = 1.0
+
+        px = point.x - (points[i - 1].x + fraction * dx)
+        py = point.y - (points[i - 1].y + fraction * dy)
+        distance_squared = px * px + py * py
+        if best_distance_squared < 0.0 or distance_squared < best_distance_squared:
+            best_distance_squared = distance_squared
+            best_distance_along = distance_along + fraction * segment_length
+        distance_along += segment_length
+    total_length[0] = distance_along
+    return best_distance_along
+
+
+cdef void _line_nearest_point(
+    const tg_line *line, tg_point point, double *nearest_x, double *nearest_y
+) noexcept:
+    cdef int n = tg_line_num_points(line)
+    cdef const tg_point *points = tg_line_points(line)
+    cdef int i
+    cdef double dx, dy, length_squared, fraction
+    cdef double px, py, distance_squared, best_distance_squared = -1.0
+    cdef double x, y
+
+    for i in range(1, n):
+        dx = points[i].x - points[i - 1].x
+        dy = points[i].y - points[i - 1].y
+        length_squared = dx * dx + dy * dy
+        if length_squared == 0.0:
+            fraction = 0.0
+        else:
+            fraction = (
+                (point.x - points[i - 1].x) * dx
+                + (point.y - points[i - 1].y) * dy
+            ) / length_squared
+            if fraction < 0.0:
+                fraction = 0.0
+            elif fraction > 1.0:
+                fraction = 1.0
+        x = points[i - 1].x + fraction * dx
+        y = points[i - 1].y + fraction * dy
+        px = point.x - x
+        py = point.y - y
+        distance_squared = px * px + py * py
+        if best_distance_squared < 0.0 or distance_squared < best_distance_squared:
+            best_distance_squared = distance_squared
+            nearest_x[0] = x
+            nearest_y[0] = y
 
 
 cdef bint _line_centroid(const tg_line *line, double *x, double *y) noexcept:
@@ -342,7 +419,9 @@ cdef bint _ring_centroid(
     return True
 
 
-cdef bint _poly_centroid(const tg_poly *poly, double *x, double *y) noexcept:
+cdef bint _poly_centroid(
+    const tg_poly *poly, double *x, double *y, double *area_out
+) noexcept:
     cdef int n_holes = tg_poly_num_holes(poly)
     cdef int i
     cdef double cx, cy, area, total_area = 0.0, xsum = 0.0, ysum = 0.0
@@ -361,6 +440,7 @@ cdef bint _poly_centroid(const tg_poly *poly, double *x, double *y) noexcept:
         return False
     x[0] = xsum / total_area
     y[0] = ysum / total_area
+    area_out[0] = total_area
     return True
 
 
@@ -590,6 +670,132 @@ cdef tg_geom *_convex_hull_small(const tg_point *points, int n) except? NULL:
     if result == NULL:
         raise MemoryError("Failed to create convex hull geometry")
     return result
+
+
+cdef int _compare_tg_points(const void *left, const void *right) noexcept:
+    cdef const tg_point *a = <const tg_point *>left
+    cdef const tg_point *b = <const tg_point *>right
+    if a.x < b.x:
+        return -1
+    if a.x > b.x:
+        return 1
+    if a.y < b.y:
+        return -1
+    if a.y > b.y:
+        return 1
+    return 0
+
+
+cdef tg_geom *_convex_hull_points(const tg_point *points, int n) except NULL:
+    cdef tg_point *sorted_points = NULL
+    cdef tg_point *hull = NULL
+    cdef tg_line *line = NULL
+    cdef tg_ring *ring = NULL
+    cdef tg_poly *poly = NULL
+    cdef tg_geom *result = NULL
+    cdef int i, unique_count = 0, hull_count = 0, lower_count
+    cdef double cross
+    cdef size_t count
+
+    if n <= 0:
+        raise ValueError("Cannot calculate a convex hull without points")
+    count = <size_t>n
+    if count > ((<size_t>-1) // sizeof(tg_point)) or (
+        count > (((<size_t>-1) // sizeof(tg_point)) - 1) // 2
+    ):
+        raise OverflowError("Too many points for convex hull")
+    sorted_points = <tg_point *>malloc(count * sizeof(tg_point))
+    hull = <tg_point *>malloc((count * 2 + 1) * sizeof(tg_point))
+    if sorted_points == NULL or hull == NULL:
+        free(sorted_points)
+        free(hull)
+        raise MemoryError("Failed to allocate convex hull workspace")
+
+    try:
+        for i in range(n):
+            sorted_points[i] = points[i]
+        qsort(sorted_points, count, sizeof(tg_point), _compare_tg_points)
+
+        for i in range(n):
+            if (
+                unique_count == 0
+                or sorted_points[i].x != sorted_points[unique_count - 1].x
+                or sorted_points[i].y != sorted_points[unique_count - 1].y
+            ):
+                sorted_points[unique_count] = sorted_points[i]
+                unique_count += 1
+
+        if unique_count == 1:
+            result = tg_geom_new_point(sorted_points[0])
+            if result == NULL:
+                raise MemoryError("Failed to create convex hull Point")
+            return result
+        if unique_count == 2:
+            line = tg_line_new(sorted_points, 2)
+            if line == NULL:
+                raise MemoryError("Failed to create convex hull LineString")
+            result = tg_geom_new_linestring(line)
+            tg_line_free(line)
+            if result == NULL:
+                raise MemoryError("Failed to create convex hull geometry")
+            return result
+
+        for i in range(unique_count):
+            while hull_count >= 2:
+                cross = (
+                    (hull[hull_count - 1].x - hull[hull_count - 2].x)
+                    * (sorted_points[i].y - hull[hull_count - 2].y)
+                    - (hull[hull_count - 1].y - hull[hull_count - 2].y)
+                    * (sorted_points[i].x - hull[hull_count - 2].x)
+                )
+                if cross > 0.0:
+                    break
+                hull_count -= 1
+            hull[hull_count] = sorted_points[i]
+            hull_count += 1
+
+        lower_count = hull_count
+        for i in range(unique_count - 2, -1, -1):
+            while hull_count > lower_count:
+                cross = (
+                    (hull[hull_count - 1].x - hull[hull_count - 2].x)
+                    * (sorted_points[i].y - hull[hull_count - 2].y)
+                    - (hull[hull_count - 1].y - hull[hull_count - 2].y)
+                    * (sorted_points[i].x - hull[hull_count - 2].x)
+                )
+                if cross > 0.0:
+                    break
+                hull_count -= 1
+            hull[hull_count] = sorted_points[i]
+            hull_count += 1
+        hull_count -= 1
+
+        if hull_count == 2:
+            line = tg_line_new(hull, 2)
+            if line == NULL:
+                raise MemoryError("Failed to create convex hull LineString")
+            result = tg_geom_new_linestring(line)
+            tg_line_free(line)
+            if result == NULL:
+                raise MemoryError("Failed to create convex hull geometry")
+            return result
+
+        hull[hull_count] = hull[0]
+        ring = tg_ring_new(hull, hull_count + 1)
+        if ring == NULL:
+            raise MemoryError("Failed to create convex hull Polygon ring")
+        poly = tg_poly_new(ring, NULL, 0)
+        tg_ring_free(ring)
+        if poly == NULL:
+            raise MemoryError("Failed to create convex hull Polygon")
+        result = tg_geom_new_polygon(poly)
+        tg_poly_free(poly)
+        if result == NULL:
+            raise MemoryError("Failed to create convex hull geometry")
+        return result
+    finally:
+        free(sorted_points)
+        free(hull)
 
 
 cdef Geometry _geometry_from_ptr(tg_geom *ptr):
@@ -2163,8 +2369,11 @@ cdef class Geometry:
             If the centroid calculation fails
         """
         cdef tg_point point
-        cdef double x, y
-        cdef int geom_type
+        cdef const tg_line *component_line
+        cdef const tg_poly *component_poly
+        cdef double x, y, weight, component_weight
+        cdef double xsum = 0.0, ysum = 0.0, total_weight = 0.0
+        cdef int geom_type, i, count
         self._ensure_initialized("this")
         geom_type = tg_geom_typeof(self.geom)
         if geom_type == 1 and not tg_geom_is_empty(self.geom):
@@ -2172,8 +2381,41 @@ cdef class Geometry:
             return Point(point.x, point.y)
         elif geom_type == 2 and _line_centroid(tg_geom_line(self.geom), &x, &y):
             return Point(x, y)
-        elif geom_type == 3 and _poly_centroid(tg_geom_poly(self.geom), &x, &y):
+        elif geom_type == 3 and _poly_centroid(
+            tg_geom_poly(self.geom), &x, &y, &weight
+        ):
             return Point(x, y)
+        elif geom_type == 4:
+            count = tg_geom_num_points(self.geom)
+            for i in range(count):
+                point = tg_geom_point_at(self.geom, i)
+                xsum += point.x
+                ysum += point.y
+            if count > 0:
+                return Point(xsum / count, ysum / count)
+        elif geom_type == 5:
+            count = tg_geom_num_lines(self.geom)
+            for i in range(count):
+                component_line = tg_geom_line_at(self.geom, i)
+                if _line_centroid(component_line, &x, &y):
+                    component_weight = tg_line_length(component_line)
+                    xsum += x * component_weight
+                    ysum += y * component_weight
+                    total_weight += component_weight
+            if total_weight > 0.0:
+                return Point(xsum / total_weight, ysum / total_weight)
+        elif geom_type == 6:
+            count = tg_geom_num_polys(self.geom)
+            for i in range(count):
+                component_poly = tg_geom_poly_at(self.geom, i)
+                if _poly_centroid(
+                    component_poly, &x, &y, &component_weight
+                ):
+                    xsum += x * component_weight
+                    ysum += y * component_weight
+                    total_weight += component_weight
+            if total_weight > 0.0:
+                return Point(xsum / total_weight, ysum / total_weight)
 
         cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
@@ -2237,12 +2479,35 @@ cdef class Geometry:
         cdef const tg_point *points
         cdef tg_geom *cloned
         cdef tg_geom *small_hull
-        cdef int geom_type
+        cdef tg_point *point_array
+        cdef int geom_type, point_count, i
         self._ensure_initialized("this")
         geom_type = tg_geom_typeof(self.geom)
         if geom_type == 1 and not tg_geom_is_empty(self.geom):
             point = tg_geom_point(self.geom)
             return Point(point.x, point.y)
+        if geom_type == 4:
+            point_count = tg_geom_num_points(self.geom)
+            if point_count > 0:
+                if (<size_t>point_count) > ((<size_t>-1) // sizeof(tg_point)):
+                    raise OverflowError("Too many MultiPoint coordinates for convex hull")
+                point_array = <tg_point *>malloc(
+                    (<size_t>point_count) * sizeof(tg_point)
+                )
+                if point_array == NULL:
+                    raise MemoryError("Failed to allocate MultiPoint convex hull points")
+                try:
+                    for i in range(point_count):
+                        point_array[i] = tg_geom_point_at(self.geom, i)
+                        if not isfinite(point_array[i].x) or not isfinite(point_array[i].y):
+                            break
+                    if i == point_count - 1 and isfinite(point_array[i].x) and isfinite(
+                        point_array[i].y
+                    ):
+                        small_hull = _convex_hull_points(point_array, point_count)
+                        return _geometry_from_ptr_concrete(small_hull)
+                finally:
+                    free(point_array)
         if geom_type == 2:
             line = tg_geom_line(self.geom)
             if tg_line_num_points(line) == 2:
@@ -2620,6 +2885,21 @@ cdef class Geometry:
 
         point_geom = _coerce_geometry_or_raise(point, "point")
 
+        if (
+            t == 2
+            and tg_geom_typeof(point_geom.geom) == 1
+            and tg_geom_is_empty(point_geom.geom) == 0
+            and tg_line_num_points(tg_geom_line(self.geom)) >= 2
+        ):
+            result = _line_project(
+                tg_geom_line(self.geom), tg_geom_point(point_geom.geom), &total_len
+            )
+            if normalized:
+                if total_len <= 0.0:
+                    return 0.0
+                return max(0.0, min(1.0, result / total_len))
+            return result
+
         ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
@@ -2650,14 +2930,12 @@ cdef class Geometry:
 
     cdef tuple _get_nearest_point_coords(self, Geometry other):
         """
-        Private helper method to extract nearest point coordinates using GEOS.
+        Extract the nearest point coordinates, using native TG paths where available.
 
         Returns a tuple of (x1, y1, x2, y2) representing the two nearest points
         between this geometry and the other geometry.
 
-        This method handles all GEOS initialization, conversion, calculation,
-        and cleanup, reducing code duplication between nearest_points() and
-        shortest_line().
+        This method is shared by nearest_points() and shortest_line().
 
         Parameters:
         -----------
@@ -2673,30 +2951,73 @@ cdef class Geometry:
         Raises:
         -------
         RuntimeError
-            If GEOS operations fail
+            If the GEOS fallback fails
         """
-        cdef GEOSContextHandle_t ctx = _get_geos_context()
+        cdef GEOSContextHandle_t ctx
+        cdef int self_type, other_type
+        cdef tg_point self_point, other_point
+        cdef double nearest_x, nearest_y
+        cdef GEOSGeometry *g1_geos
+        cdef GEOSGeometry *g2_geos
+        cdef GEOSCoordSequence *coords
+        cdef double x1, y1, x2, y2
+        cdef int ret
+
+        self_type = tg_geom_typeof(self.geom)
+        other_type = tg_geom_typeof(other.geom)
+        if (
+            self_type == 1
+            and other_type == 1
+            and tg_geom_is_empty(self.geom) == 0
+            and tg_geom_is_empty(other.geom) == 0
+        ):
+            self_point = tg_geom_point(self.geom)
+            other_point = tg_geom_point(other.geom)
+            return (self_point.x, self_point.y, other_point.x, other_point.y)
+        if (
+            self_type == 2
+            and other_type == 1
+            and tg_geom_is_empty(other.geom) == 0
+            and tg_line_num_points(tg_geom_line(self.geom)) >= 2
+        ):
+            other_point = tg_geom_point(other.geom)
+            _line_nearest_point(
+                tg_geom_line(self.geom), other_point, &nearest_x, &nearest_y
+            )
+            return (nearest_x, nearest_y, other_point.x, other_point.y)
+        if (
+            self_type == 1
+            and other_type == 2
+            and tg_geom_is_empty(self.geom) == 0
+            and tg_line_num_points(tg_geom_line(other.geom)) >= 2
+        ):
+            self_point = tg_geom_point(self.geom)
+            _line_nearest_point(
+                tg_geom_line(other.geom), self_point, &nearest_x, &nearest_y
+            )
+            return (self_point.x, self_point.y, nearest_x, nearest_y)
+
+        ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
-        cdef GEOSGeometry *g1_geos = tg_geom_to_geos(ctx, self.geom)
+        g1_geos = tg_geom_to_geos(ctx, self.geom)
         if g1_geos == NULL:
             raise RuntimeError("Failed to convert first TG geometry to GEOS")
 
-        cdef GEOSGeometry *g2_geos = tg_geom_to_geos(ctx, other.geom)
+        g2_geos = tg_geom_to_geos(ctx, other.geom)
         if g2_geos == NULL:
             GEOSGeom_destroy_r(ctx, g1_geos)
             raise RuntimeError("Failed to convert second TG geometry to GEOS")
 
-        cdef GEOSCoordSequence *coords = GEOSNearestPoints_r(ctx, g1_geos, g2_geos)
+        coords = GEOSNearestPoints_r(ctx, g1_geos, g2_geos)
         if coords == NULL:
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
             raise RuntimeError("GEOSNearestPoints failed")
 
         # Extract the two coordinates directly (GEOS always returns exactly 2 points)
-        cdef double x1, y1, x2, y2
-        cdef int ret = GEOSCoordSeq_getXY_r(ctx, coords, 0, &x1, &y1)
+        ret = GEOSCoordSeq_getXY_r(ctx, coords, 0, &x1, &y1)
         if ret != 1:
             GEOSCoordSeq_destroy_r(ctx, coords)
             GEOSGeom_destroy_r(ctx, g2_geos)
@@ -3982,41 +4303,7 @@ cdef class Line:
         float
             The distance along the line from its start to the projected point
         """
-        cdef GEOSContextHandle_t ctx
-        cdef GEOSGeometry *g_line
-        cdef GEOSGeometry *g_point
-        cdef double result
-        cdef Geometry line_geom
-        cdef Geometry point_geom
-        cdef double total_len
-
-        line_geom = self.as_geometry()
-        point_geom = _coerce_geometry_or_raise(point, "point")
-
-        ctx = _get_geos_context()
-        if ctx == NULL:
-            raise RuntimeError("Failed to initialize GEOS context")
-
-        g_line = tg_geom_to_geos(ctx, line_geom._get_c_geom())
-        if g_line == NULL:
-            raise RuntimeError("Failed to convert line to GEOS")
-
-        g_point = tg_geom_to_geos(ctx, point_geom._get_c_geom())
-        if g_point == NULL:
-            GEOSGeom_destroy_r(ctx, g_line)
-            raise RuntimeError("Failed to convert point to GEOS")
-
-        result = GEOSProject_r(ctx, g_line, g_point)
-        GEOSGeom_destroy_r(ctx, g_point)
-        GEOSGeom_destroy_r(ctx, g_line)
-        if result < 0:
-            raise RuntimeError("GEOSProject failed")
-        if normalized:
-            total_len = tg_line_length(self.line)
-            if total_len <= 0.0:
-                return 0.0
-            return max(0.0, min(1.0, result / total_len))
-        return result
+        return self.as_geometry().project(point, normalized)
 
 
 cdef class Poly:
