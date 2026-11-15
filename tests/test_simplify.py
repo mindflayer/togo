@@ -51,6 +51,13 @@ class TestGeometrySimplify:
         # Should return a geometry (may be different type with preserve_topology=False)
         assert simplified.geom_type in ["LineString", "MultiLineString"]
 
+    def test_geometry_simplify_linestring_matches_douglas_peucker(self):
+        geom = Geometry("LINESTRING(0 0, 1 1, 2 0, 3 1, 4 0)", fmt="wkt")
+
+        simplified = geom.simplify(1.0, preserve_topology=False)
+
+        assert simplified.to_wkt() == "LINESTRING(0 0,4 0)"
+
     def test_geometry_simplify_zero_tolerance(self):
         """Test simplify with zero tolerance"""
         geom = Geometry("LINESTRING(0 0, 1 1, 2 0, 3 1, 4 0)", fmt="wkt")

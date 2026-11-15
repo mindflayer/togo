@@ -257,8 +257,339 @@ cdef extern from "tgx.h":
 
 
 from libc.limits cimport INT_MAX
+from libc.math cimport floor, sqrt
 from libc.stdlib cimport malloc, free
 import json as _json
+import threading as _threading
+
+
+cdef class _ThreadGEOSContext:
+    cdef GEOSContextHandle_t handle
+
+    def __cinit__(self):
+        self.handle = GEOS_init_r()
+
+    def __dealloc__(self):
+        if self.handle != NULL:
+            GEOS_finish_r(self.handle)
+
+
+cdef object _geos_context_local = _threading.local()
+
+
+cdef GEOSContextHandle_t _get_geos_context() except? NULL:
+    cdef object holder
+    try:
+        holder = _geos_context_local.context
+    except AttributeError:
+        holder = _ThreadGEOSContext()
+        if (<_ThreadGEOSContext>holder).handle == NULL:
+            return NULL
+        _geos_context_local.context = holder
+    return (<_ThreadGEOSContext>holder).handle
+
+
+cdef bint _line_centroid(const tg_line *line, double *x, double *y) noexcept:
+    cdef int n = tg_line_num_points(line)
+    cdef const tg_point *points = tg_line_points(line)
+    cdef double dx, dy, length, x0, y0
+    cdef double total = 0.0, xsum = 0.0, ysum = 0.0
+    cdef int i
+    if n == 0:
+        return False
+    x0 = points[0].x
+    y0 = points[0].y
+    for i in range(1, n):
+        dx = points[i].x - points[i - 1].x
+        dy = points[i].y - points[i - 1].y
+        length = sqrt(dx * dx + dy * dy)
+        total += length
+        xsum += ((points[i].x + points[i - 1].x) * 0.5 - x0) * length
+        ysum += ((points[i].y + points[i - 1].y) * 0.5 - y0) * length
+    if total == 0.0:
+        return False
+    x[0] = x0 + xsum / total
+    y[0] = y0 + ysum / total
+    return True
+
+
+cdef bint _ring_centroid(
+    const tg_ring *ring, double *x, double *y, double *area
+) noexcept:
+    cdef int n = tg_ring_num_points(ring)
+    cdef const tg_point *points = tg_ring_points(ring)
+    cdef double cross, cross_sum = 0.0, xsum = 0.0, ysum = 0.0
+    cdef double x1, y1, x2, y2, x0, y0
+    cdef int i
+    if n == 0:
+        return False
+    x0 = points[0].x
+    y0 = points[0].y
+    for i in range(1, n):
+        x1 = points[i - 1].x - x0
+        y1 = points[i - 1].y - y0
+        x2 = points[i].x - x0
+        y2 = points[i].y - y0
+        cross = x1 * y2 - x2 * y1
+        cross_sum += cross
+        xsum += (x1 + x2) * cross
+        ysum += (y1 + y2) * cross
+    if cross_sum == 0.0:
+        return False
+    x[0] = x0 + xsum / (3.0 * cross_sum)
+    y[0] = y0 + ysum / (3.0 * cross_sum)
+    area[0] = abs(cross_sum) * 0.5
+    return True
+
+
+cdef bint _poly_centroid(const tg_poly *poly, double *x, double *y) noexcept:
+    cdef int n_holes = tg_poly_num_holes(poly)
+    cdef int i
+    cdef double cx, cy, area, total_area = 0.0, xsum = 0.0, ysum = 0.0
+    if not _ring_centroid(tg_poly_exterior(poly), &cx, &cy, &area):
+        return False
+    total_area = area
+    xsum = cx * area
+    ysum = cy * area
+    for i in range(n_holes):
+        if not _ring_centroid(tg_poly_hole_at(poly, i), &cx, &cy, &area):
+            continue
+        total_area -= area
+        xsum -= cx * area
+        ysum -= cy * area
+    if total_area <= 0.0:
+        return False
+    x[0] = xsum / total_area
+    y[0] = ysum / total_area
+    return True
+
+
+cdef tg_geom *_simplify_line(const tg_line *line, double tolerance) except NULL:
+    cdef int n = tg_line_num_points(line)
+    cdef const tg_point *points = tg_line_points(line)
+    cdef unsigned char *keep = NULL
+    cdef int *starts = NULL
+    cdef int *ends = NULL
+    cdef tg_point *simplified_points = NULL
+    cdef tg_line *simplified_line = NULL
+    cdef tg_geom *result = NULL
+    cdef int stack_size = 0
+    cdef int start, end, index, output_count = 0
+    cdef int i
+    cdef double tolerance_squared = tolerance * tolerance
+    cdef double dx, dy, length_squared, projection, px, py, distance_squared
+    cdef double max_distance_squared
+
+    if n <= 2:
+        result = tg_geom_new_linestring(line)
+        if result == NULL:
+            raise MemoryError("Failed to clone LineString during simplify")
+        return result
+    if (<size_t>n) > ((<size_t>-1) // sizeof(int)) or (
+        <size_t>n
+    ) > ((<size_t>-1) // sizeof(tg_point)):
+        raise OverflowError("LineString has too many points to simplify")
+
+    keep = <unsigned char *>malloc(<size_t>n * sizeof(unsigned char))
+    starts = <int *>malloc(<size_t>n * sizeof(int))
+    ends = <int *>malloc(<size_t>n * sizeof(int))
+    if keep == NULL or starts == NULL or ends == NULL:
+        free(keep)
+        free(starts)
+        free(ends)
+        raise MemoryError("Failed to allocate LineString simplify workspace")
+
+    for i in range(n):
+        keep[i] = 0
+    keep[0] = 1
+    keep[n - 1] = 1
+    starts[stack_size] = 0
+    ends[stack_size] = n - 1
+    stack_size += 1
+
+    while stack_size > 0:
+        stack_size -= 1
+        start = starts[stack_size]
+        end = ends[stack_size]
+        dx = points[end].x - points[start].x
+        dy = points[end].y - points[start].y
+        length_squared = dx * dx + dy * dy
+        max_distance_squared = -1.0
+        index = -1
+        for i in range(start + 1, end):
+            if length_squared == 0.0:
+                px = points[i].x - points[start].x
+                py = points[i].y - points[start].y
+                distance_squared = px * px + py * py
+            else:
+                projection = (
+                    (points[i].x - points[start].x) * dx
+                    + (points[i].y - points[start].y) * dy
+                ) / length_squared
+                if projection < 0.0:
+                    projection = 0.0
+                elif projection > 1.0:
+                    projection = 1.0
+                px = points[i].x - (points[start].x + projection * dx)
+                py = points[i].y - (points[start].y + projection * dy)
+                distance_squared = px * px + py * py
+            if distance_squared > max_distance_squared:
+                max_distance_squared = distance_squared
+                index = i
+        if index >= 0 and max_distance_squared > tolerance_squared:
+            keep[index] = 1
+            starts[stack_size] = start
+            ends[stack_size] = index
+            starts[stack_size + 1] = index
+            ends[stack_size + 1] = end
+            stack_size += 2
+
+    for i in range(n):
+        if keep[i]:
+            output_count += 1
+    simplified_points = <tg_point *>malloc(<size_t>output_count * sizeof(tg_point))
+    if simplified_points == NULL:
+        free(keep)
+        free(starts)
+        free(ends)
+        raise MemoryError("Failed to allocate simplified LineString")
+    output_count = 0
+    for i in range(n):
+        if keep[i]:
+            simplified_points[output_count] = points[i]
+            output_count += 1
+    simplified_line = tg_line_new(simplified_points, output_count)
+    free(simplified_points)
+    free(keep)
+    free(starts)
+    free(ends)
+    if simplified_line == NULL:
+        raise MemoryError("Failed to create simplified LineString")
+    result = tg_geom_new_linestring(simplified_line)
+    tg_line_free(simplified_line)
+    if result == NULL:
+        raise MemoryError("Failed to create simplified geometry")
+    return result
+
+
+cdef tg_geom *_convex_hull_small(const tg_point *points, int n) except? NULL:
+    cdef tg_point sorted_points[64]
+    cdef tg_point hull[130]
+    cdef tg_line *line = NULL
+    cdef tg_ring *ring = NULL
+    cdef tg_poly *poly = NULL
+    cdef tg_geom *result = NULL
+    cdef tg_point point
+    cdef int i, j, unique_count = 0, hull_count = 0, lower_count
+    cdef double x, y, cross
+
+    if n < 1 or n > 64:
+        return NULL
+    for i in range(n):
+        x = points[i].x
+        y = points[i].y
+        if (
+            x < -33554432.0
+            or x > 33554432.0
+            or y < -33554432.0
+            or y > 33554432.0
+            or floor(x) != x
+            or floor(y) != y
+        ):
+            return NULL
+        sorted_points[i] = points[i]
+
+    for i in range(1, n):
+        point = sorted_points[i]
+        j = i
+        while j > 0 and (
+            sorted_points[j - 1].x > point.x
+            or (
+                sorted_points[j - 1].x == point.x
+                and sorted_points[j - 1].y > point.y
+            )
+        ):
+            sorted_points[j] = sorted_points[j - 1]
+            j -= 1
+        sorted_points[j] = point
+
+    for i in range(n):
+        if (
+            unique_count == 0
+            or sorted_points[i].x != sorted_points[unique_count - 1].x
+            or sorted_points[i].y != sorted_points[unique_count - 1].y
+        ):
+            sorted_points[unique_count] = sorted_points[i]
+            unique_count += 1
+
+    if unique_count == 1:
+        result = tg_geom_new_point(sorted_points[0])
+        if result == NULL:
+            raise MemoryError("Failed to create convex hull Point")
+        return result
+    if unique_count == 2:
+        line = tg_line_new(sorted_points, 2)
+        if line == NULL:
+            raise MemoryError("Failed to create convex hull LineString")
+        result = tg_geom_new_linestring(line)
+        tg_line_free(line)
+        if result == NULL:
+            raise MemoryError("Failed to create convex hull geometry")
+        return result
+
+    for i in range(unique_count):
+        while hull_count >= 2:
+            cross = (
+                (hull[hull_count - 1].x - hull[hull_count - 2].x)
+                * (sorted_points[i].y - hull[hull_count - 2].y)
+                - (hull[hull_count - 1].y - hull[hull_count - 2].y)
+                * (sorted_points[i].x - hull[hull_count - 2].x)
+            )
+            if cross > 0.0:
+                break
+            hull_count -= 1
+        hull[hull_count] = sorted_points[i]
+        hull_count += 1
+
+    lower_count = hull_count
+    for i in range(unique_count - 2, -1, -1):
+        while hull_count > lower_count:
+            cross = (
+                (hull[hull_count - 1].x - hull[hull_count - 2].x)
+                * (sorted_points[i].y - hull[hull_count - 2].y)
+                - (hull[hull_count - 1].y - hull[hull_count - 2].y)
+                * (sorted_points[i].x - hull[hull_count - 2].x)
+            )
+            if cross > 0.0:
+                break
+            hull_count -= 1
+        hull[hull_count] = sorted_points[i]
+        hull_count += 1
+    hull_count -= 1
+
+    if hull_count == 2:
+        line = tg_line_new(hull, 2)
+        if line == NULL:
+            raise MemoryError("Failed to create convex hull LineString")
+        result = tg_geom_new_linestring(line)
+        tg_line_free(line)
+        if result == NULL:
+            raise MemoryError("Failed to create convex hull geometry")
+        return result
+
+    hull[hull_count] = hull[0]
+    ring = tg_ring_new(hull, hull_count + 1)
+    if ring == NULL:
+        raise MemoryError("Failed to create convex hull Polygon ring")
+    poly = tg_poly_new(ring, NULL, 0)
+    tg_ring_free(ring)
+    if poly == NULL:
+        raise MemoryError("Failed to create convex hull Polygon")
+    result = tg_geom_new_polygon(poly)
+    tg_poly_free(poly)
+    if result == NULL:
+        raise MemoryError("Failed to create convex hull geometry")
+    return result
 
 
 cdef Geometry _geometry_from_ptr(tg_geom *ptr):
@@ -546,18 +877,16 @@ cdef class Geometry:
         if self.geom == NULL:
             return False
 
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
         if g_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert TG geometry to GEOS")
 
         cdef char result = GEOSisValid_r(ctx, g_geos)
         GEOSGeom_destroy_r(ctx, g_geos)
-        GEOS_finish_r(ctx)
 
         return result == 1
 
@@ -1633,7 +1962,7 @@ cdef class Geometry:
         free(arr)
         if not gptr:
             raise ValueError("Failed to create GeometryCollection for unary_union")
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
             tg_geom_free(gptr)
             raise RuntimeError("Failed to initialize GEOS context")
@@ -1648,7 +1977,6 @@ cdef class Geometry:
             g_union = GEOSUnaryUnion_r(ctx, g_geos)
             if g_union == NULL:
                 GEOSGeom_destroy_r(ctx, g_geos)
-                GEOS_finish_r(ctx)
                 tg_geom_free(gptr)
                 raise RuntimeError("GEOSUnaryUnion failed")
         else:
@@ -1662,7 +1990,6 @@ cdef class Geometry:
                 if g_next == NULL:
                     if g_accum != NULL:
                         GEOSGeom_destroy_r(ctx, g_accum)
-                    GEOS_finish_r(ctx)
                     tg_geom_free(gptr)
                     raise RuntimeError(
                         "Failed to convert TG geometry to GEOS in unary_union fallback"
@@ -1674,7 +2001,6 @@ cdef class Geometry:
                     GEOSGeom_destroy_r(ctx, g_next)
                     GEOSGeom_destroy_r(ctx, g_accum)
                     if g_tmp_union == NULL:
-                        GEOS_finish_r(ctx)
                         tg_geom_free(gptr)
                         raise RuntimeError("GEOSUnion failed in unary_union fallback")
                     g_accum = g_tmp_union
@@ -1683,7 +2009,6 @@ cdef class Geometry:
         GEOSGeom_destroy_r(ctx, g_union)
         if g_geos != NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
-        GEOS_finish_r(ctx)
         tg_geom_free(gptr)
         if g_tg == NULL:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
@@ -1732,13 +2057,12 @@ cdef class Geometry:
         if not mitre_limit > 0.0:
             raise ValueError("mitre_limit must be > 0.0")
 
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
         if g_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert TG geometry to GEOS")
 
         cdef GEOSGeometry *g_buffered = GEOSBufferWithStyle_r(
@@ -1746,13 +2070,11 @@ cdef class Geometry:
         )
         if g_buffered == NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError(f"GEOSBuffer failed with distance {distance}")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_buffered)
         GEOSGeom_destroy_r(ctx, g_buffered)
         GEOSGeom_destroy_r(ctx, g_geos)
-        GEOS_finish_r(ctx)
         if g_tg == NULL:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
         if tg_geom_error(g_tg) != NULL:
@@ -1784,13 +2106,18 @@ cdef class Geometry:
         if tolerance < 0:
             raise ValueError("tolerance must be >= 0")
 
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        self._ensure_initialized("this")
+        if not preserve_topology and tg_geom_typeof(self.geom) == 2:
+            return _geometry_from_ptr_concrete(
+                _simplify_line(tg_geom_line(self.geom), tolerance)
+            )
+
+        cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
         if g_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert TG geometry to GEOS")
 
         cdef GEOSGeometry *g_simplified
@@ -1801,7 +2128,6 @@ cdef class Geometry:
 
         if g_simplified == NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError(
                 f"Simplification failed with tolerance {tolerance}"
                 f" (preserve_topology={preserve_topology})"
@@ -1810,7 +2136,6 @@ cdef class Geometry:
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_simplified)
         GEOSGeom_destroy_r(ctx, g_simplified)
         GEOSGeom_destroy_r(ctx, g_geos)
-        GEOS_finish_r(ctx)
         if g_tg == NULL:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
         if tg_geom_error(g_tg) != NULL:
@@ -1837,27 +2162,35 @@ cdef class Geometry:
         RuntimeError
             If the centroid calculation fails
         """
+        cdef tg_point point
+        cdef double x, y
+        cdef int geom_type
         self._ensure_initialized("this")
+        geom_type = tg_geom_typeof(self.geom)
+        if geom_type == 1 and not tg_geom_is_empty(self.geom):
+            point = tg_geom_point(self.geom)
+            return Point(point.x, point.y)
+        elif geom_type == 2 and _line_centroid(tg_geom_line(self.geom), &x, &y):
+            return Point(x, y)
+        elif geom_type == 3 and _poly_centroid(tg_geom_poly(self.geom), &x, &y):
+            return Point(x, y)
 
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
         if g_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert TG geometry to GEOS")
 
         cdef GEOSGeometry *g_centroid = GEOSGetCentroid_r(ctx, g_geos)
         if g_centroid == NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("GEOSGetCentroid failed")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_centroid)
         GEOSGeom_destroy_r(ctx, g_centroid)
         GEOSGeom_destroy_r(ctx, g_geos)
-        GEOS_finish_r(ctx)
         if g_tg == NULL:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
         if tg_geom_error(g_tg) != NULL:
@@ -1897,27 +2230,67 @@ cdef class Geometry:
         >>> print(hull.to_wkt())
         POLYGON((0 0,2 0,2 2,0 2,0 0))
         """
+        cdef tg_point point
+        cdef const tg_line *line
+        cdef const tg_poly *poly
+        cdef const tg_ring *exterior
+        cdef const tg_point *points
+        cdef tg_geom *cloned
+        cdef tg_geom *small_hull
+        cdef int geom_type
         self._ensure_initialized("this")
+        geom_type = tg_geom_typeof(self.geom)
+        if geom_type == 1 and not tg_geom_is_empty(self.geom):
+            point = tg_geom_point(self.geom)
+            return Point(point.x, point.y)
+        if geom_type == 2:
+            line = tg_geom_line(self.geom)
+            if tg_line_num_points(line) == 2:
+                points = tg_line_points(line)
+                if points[0].x != points[1].x or points[0].y != points[1].y:
+                    cloned = tg_geom_clone(self.geom)
+                    if cloned == NULL:
+                        raise MemoryError("Failed to clone LineString in convex_hull")
+                    return _geometry_from_ptr_concrete(cloned)
+        elif geom_type == 3:
+            poly = tg_geom_poly(self.geom)
+            if tg_poly_num_holes(poly) == 0:
+                exterior = tg_poly_exterior(poly)
+                if tg_ring_convex(exterior):
+                    cloned = tg_geom_clone(self.geom)
+                    if cloned == NULL:
+                        raise MemoryError("Failed to clone Polygon in convex_hull")
+                    return _geometry_from_ptr_concrete(cloned)
+        if geom_type == 2 and tg_line_num_points(line) > 2:
+            small_hull = _convex_hull_small(
+                tg_line_points(line), tg_line_num_points(line)
+            )
+            if small_hull != NULL:
+                return _geometry_from_ptr_concrete(small_hull)
+        elif geom_type == 3 and tg_poly_num_holes(poly) == 0:
+            exterior = tg_poly_exterior(poly)
+            small_hull = _convex_hull_small(
+                tg_ring_points(exterior), tg_ring_num_points(exterior)
+            )
+            if small_hull != NULL:
+                return _geometry_from_ptr_concrete(small_hull)
 
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, self.geom)
         if g_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert TG geometry to GEOS")
 
         cdef GEOSGeometry *g_hull = GEOSConvexHull_r(ctx, g_geos)
         if g_hull == NULL:
             GEOSGeom_destroy_r(ctx, g_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("GEOSConvexHull failed")
 
         cdef tg_geom *g_tg = tg_geom_from_geos(ctx, g_hull)
         GEOSGeom_destroy_r(ctx, g_hull)
         GEOSGeom_destroy_r(ctx, g_geos)
-        GEOS_finish_r(ctx)
         if g_tg == NULL:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
         if tg_geom_error(g_tg) != NULL:
@@ -1968,6 +2341,7 @@ cdef class Geometry:
         cdef GEOSGeometry *g_intersection
         cdef tg_geom *g_tg
         cdef tg_geom *empty
+        cdef tg_geom *fast_result
         cdef Geometry other_geom
         cdef Geometry lhs_geom
         cdef Geometry rhs_geom
@@ -1997,33 +2371,45 @@ cdef class Geometry:
             empty = tg_geom_new_geometrycollection_empty()
             return _geometry_from_ptr_concrete(empty)
 
-        ctx = GEOS_init_r()
+        if tg_geom_equals(lhs_geom.geom, rhs_geom.geom):
+            fast_result = tg_geom_clone(lhs_geom.geom)
+            if fast_result == NULL:
+                raise MemoryError("Failed to clone geometry in intersection")
+            return _geometry_from_ptr_concrete(fast_result)
+        if tg_geom_covers(lhs_geom.geom, rhs_geom.geom):
+            fast_result = tg_geom_clone(rhs_geom.geom)
+            if fast_result == NULL:
+                raise MemoryError("Failed to clone geometry in intersection")
+            return _geometry_from_ptr_concrete(fast_result)
+        if tg_geom_covers(rhs_geom.geom, lhs_geom.geom):
+            fast_result = tg_geom_clone(lhs_geom.geom)
+            if fast_result == NULL:
+                raise MemoryError("Failed to clone geometry in intersection")
+            return _geometry_from_ptr_concrete(fast_result)
+
+        ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         g1_geos = tg_geom_to_geos(ctx, lhs_geom.geom)
         if g1_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert first geometry to GEOS")
 
         g2_geos = tg_geom_to_geos(ctx, rhs_geom.geom)
         if g2_geos == NULL:
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert second geometry to GEOS")
 
         g_intersection = GEOSIntersection_r(ctx, g1_geos, g2_geos)
         if g_intersection == NULL:
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("GEOSIntersection failed")
 
         g_tg = tg_geom_from_geos(ctx, g_intersection)
         GEOSGeom_destroy_r(ctx, g_intersection)
         GEOSGeom_destroy_r(ctx, g2_geos)
         GEOSGeom_destroy_r(ctx, g1_geos)
-        GEOS_finish_r(ctx)
         if g_tg == NULL:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
         if tg_geom_error(g_tg) != NULL:
@@ -2041,6 +2427,8 @@ cdef class Geometry:
         cdef tg_geom *g_tg
         cdef tg_geom *empty
         cdef tg_geom *cloned
+        cdef tg_geom *fast_result
+        cdef const tg_poly *disjoint_polys[2]
         cdef Geometry other_geom
         cdef Geometry lhs_geom
         cdef Geometry rhs_geom
@@ -2075,33 +2463,56 @@ cdef class Geometry:
                 raise MemoryError("Failed to clone geometry in union")
             return _geometry_from_ptr_concrete(cloned)
 
-        ctx = GEOS_init_r()
+        if tg_geom_equals(lhs_geom.geom, rhs_geom.geom):
+            fast_result = tg_geom_clone(lhs_geom.geom)
+            if fast_result == NULL:
+                raise MemoryError("Failed to clone geometry in union")
+            return _geometry_from_ptr_concrete(fast_result)
+        if tg_geom_covers(lhs_geom.geom, rhs_geom.geom):
+            fast_result = tg_geom_clone(lhs_geom.geom)
+            if fast_result == NULL:
+                raise MemoryError("Failed to clone geometry in union")
+            return _geometry_from_ptr_concrete(fast_result)
+        if tg_geom_covers(rhs_geom.geom, lhs_geom.geom):
+            fast_result = tg_geom_clone(rhs_geom.geom)
+            if fast_result == NULL:
+                raise MemoryError("Failed to clone geometry in union")
+            return _geometry_from_ptr_concrete(fast_result)
+        if (
+            tg_geom_typeof(lhs_geom.geom) == 3
+            and tg_geom_typeof(rhs_geom.geom) == 3
+            and tg_geom_disjoint(lhs_geom.geom, rhs_geom.geom)
+        ):
+            disjoint_polys[0] = tg_geom_poly(lhs_geom.geom)
+            disjoint_polys[1] = tg_geom_poly(rhs_geom.geom)
+            fast_result = tg_geom_new_multipolygon(disjoint_polys, 2)
+            if fast_result == NULL:
+                raise MemoryError("Failed to create MultiPolygon in union")
+            return _geometry_from_ptr_concrete(fast_result)
+
+        ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         g1_geos = tg_geom_to_geos(ctx, lhs_geom.geom)
         if g1_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert first geometry to GEOS")
 
         g2_geos = tg_geom_to_geos(ctx, rhs_geom.geom)
         if g2_geos == NULL:
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert second geometry to GEOS")
 
         g_union = GEOSUnion_r(ctx, g1_geos, g2_geos)
         if g_union == NULL:
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("GEOSUnion failed")
 
         g_tg = tg_geom_from_geos(ctx, g_union)
         GEOSGeom_destroy_r(ctx, g_union)
         GEOSGeom_destroy_r(ctx, g2_geos)
         GEOSGeom_destroy_r(ctx, g1_geos)
-        GEOS_finish_r(ctx)
         if g_tg == NULL:
             raise RuntimeError("Failed to convert GEOS geometry to TG")
         if tg_geom_error(g_tg) != NULL:
@@ -2152,27 +2563,29 @@ cdef class Geometry:
             if cloned == NULL:
                 raise MemoryError("Failed to clone geometry in difference")
             return _geometry_from_ptr_concrete(cloned)
+        if tg_geom_disjoint(lhs_geom.geom, rhs_geom.geom):
+            cloned = tg_geom_clone(lhs_geom.geom)
+            if cloned == NULL:
+                raise MemoryError("Failed to clone geometry in difference")
+            return _geometry_from_ptr_concrete(cloned)
 
-        ctx = GEOS_init_r()
+        ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         g1_geos = tg_geom_to_geos(ctx, lhs_geom.geom)
         if g1_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert first geometry to GEOS")
 
         g2_geos = tg_geom_to_geos(ctx, rhs_geom.geom)
         if g2_geos == NULL:
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert second geometry to GEOS")
 
         g_difference = GEOSDifference_r(ctx, g1_geos, g2_geos)
         if g_difference == NULL:
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("GEOSDifference failed")
 
         g_tg = tg_geom_from_geos(ctx, g_difference)
@@ -2180,13 +2593,11 @@ cdef class Geometry:
             GEOSGeom_destroy_r(ctx, g_difference)
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert GEOS geometry to TG")
 
         GEOSGeom_destroy_r(ctx, g_difference)
         GEOSGeom_destroy_r(ctx, g2_geos)
         GEOSGeom_destroy_r(ctx, g1_geos)
-        GEOS_finish_r(ctx)
 
         return _geometry_from_ptr_concrete(g_tg)
 
@@ -2209,25 +2620,22 @@ cdef class Geometry:
 
         point_geom = _coerce_geometry_or_raise(point, "point")
 
-        ctx = GEOS_init_r()
+        ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         g_line = tg_geom_to_geos(ctx, self.geom)
         if g_line == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert line geometry to GEOS")
 
         g_point = tg_geom_to_geos(ctx, point_geom._get_c_geom())
         if g_point == NULL:
             GEOSGeom_destroy_r(ctx, g_line)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert point geometry to GEOS")
 
         result = GEOSProject_r(ctx, g_line, g_point)
         GEOSGeom_destroy_r(ctx, g_point)
         GEOSGeom_destroy_r(ctx, g_line)
-        GEOS_finish_r(ctx)
 
         if result < 0:
             raise RuntimeError("GEOSProject failed")
@@ -2267,26 +2675,23 @@ cdef class Geometry:
         RuntimeError
             If GEOS operations fail
         """
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         cdef GEOSGeometry *g1_geos = tg_geom_to_geos(ctx, self.geom)
         if g1_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert first TG geometry to GEOS")
 
         cdef GEOSGeometry *g2_geos = tg_geom_to_geos(ctx, other.geom)
         if g2_geos == NULL:
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert second TG geometry to GEOS")
 
         cdef GEOSCoordSequence *coords = GEOSNearestPoints_r(ctx, g1_geos, g2_geos)
         if coords == NULL:
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("GEOSNearestPoints failed")
 
         # Extract the two coordinates directly (GEOS always returns exactly 2 points)
@@ -2296,7 +2701,6 @@ cdef class Geometry:
             GEOSCoordSeq_destroy_r(ctx, coords)
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to get first coordinate")
 
         ret = GEOSCoordSeq_getXY_r(ctx, coords, 1, &x2, &y2)
@@ -2304,14 +2708,12 @@ cdef class Geometry:
             GEOSCoordSeq_destroy_r(ctx, coords)
             GEOSGeom_destroy_r(ctx, g2_geos)
             GEOSGeom_destroy_r(ctx, g1_geos)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to get second coordinate")
 
         # Clean up GEOS resources
         GEOSCoordSeq_destroy_r(ctx, coords)
         GEOSGeom_destroy_r(ctx, g2_geos)
         GEOSGeom_destroy_r(ctx, g1_geos)
-        GEOS_finish_r(ctx)
 
         return (x1, y1, x2, y2)
 
@@ -2642,7 +3044,7 @@ cdef class Point:
         Geometry
             A Point geometry representing the centroid
         """
-        return self.as_geometry().centroid
+        return Point(self.pt.x, self.pt.y)
 
     @property
     def convex_hull(self) -> Geometry:
@@ -2654,7 +3056,7 @@ cdef class Point:
         Geometry
             A Point geometry representing the convex hull
         """
-        return self.as_geometry().convex_hull
+        return Point(self.pt.x, self.pt.y)
 
     def intersection(self, other) -> Geometry:
         """
@@ -3591,25 +3993,22 @@ cdef class Line:
         line_geom = self.as_geometry()
         point_geom = _coerce_geometry_or_raise(point, "point")
 
-        ctx = GEOS_init_r()
+        ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         g_line = tg_geom_to_geos(ctx, line_geom._get_c_geom())
         if g_line == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert line to GEOS")
 
         g_point = tg_geom_to_geos(ctx, point_geom._get_c_geom())
         if g_point == NULL:
             GEOSGeom_destroy_r(ctx, g_line)
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert point to GEOS")
 
         result = GEOSProject_r(ctx, g_line, g_point)
         GEOSGeom_destroy_r(ctx, g_point)
         GEOSGeom_destroy_r(ctx, g_line)
-        GEOS_finish_r(ctx)
         if result < 0:
             raise RuntimeError("GEOSProject failed")
         if normalized:
@@ -3624,6 +4023,7 @@ cdef class Poly:
     cdef tg_poly *poly
     cdef bint owns_pointer
     cdef object _cached_geometry
+    cdef object _cached_exterior
     cdef object _cached_geo_interface
 
     def __init__(self, exterior, holes=None):
@@ -3670,6 +4070,7 @@ cdef class Poly:
             raise ValueError("Failed to create Poly")
         self.owns_pointer = True
         self._cached_geometry = None
+        self._cached_exterior = None
         self._cached_geo_interface = None
 
     def __dealloc__(self):
@@ -3725,10 +4126,19 @@ cdef class Poly:
         # Delegate missing Shapely-style methods/properties to the Geometry view.
         return getattr(self.as_geometry(), name)
 
+    def _get_cached_exterior(self, ring_type):
+        cdef const tg_ring *ext
+        if self._cached_exterior is None:
+            ext = tg_poly_exterior(self.poly)
+            if ring_type is Ring:
+                self._cached_exterior = Ring.from_ptr(<tg_ring *>ext)
+            else:
+                self._cached_exterior = ring_type(_ring_points_as_tuples_from_ptr(ext))
+        return self._cached_exterior
+
     @property
     def exterior(self) -> Ring:
-        cdef const tg_ring *ext = tg_poly_exterior(self.poly)
-        return Ring.from_ptr(<tg_ring *>ext)
+        return <Ring>self._get_cached_exterior(Ring)
 
     def num_holes(self) -> int:
         return tg_poly_num_holes(self.poly)
@@ -3744,6 +4154,7 @@ cdef class Poly:
         poly.poly = cloned
         poly.owns_pointer = True
         poly._cached_geometry = None
+        poly._cached_exterior = None
         poly._cached_geo_interface = None
         return poly
 
@@ -3808,24 +4219,21 @@ cdef class Poly:
         A polygon is valid if it satisfies geometric constraints,
         such as proper ring orientation and no self-intersections.
         """
-        cdef GEOSContextHandle_t ctx = GEOS_init_r()
+        cdef GEOSContextHandle_t ctx = _get_geos_context()
         if ctx == NULL:
             raise RuntimeError("Failed to initialize GEOS context")
 
         cdef tg_geom *g_tg = tg_geom_new_polygon(self.poly)
         if not g_tg:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to create geometry from polygon")
 
         cdef GEOSGeometry *g_geos = tg_geom_to_geos(ctx, g_tg)
         tg_geom_free(g_tg)
         if g_geos == NULL:
-            GEOS_finish_r(ctx)
             raise RuntimeError("Failed to convert TG geometry to GEOS")
 
         cdef char result = GEOSisValid_r(ctx, g_geos)
         GEOSGeom_destroy_r(ctx, g_geos)
-        GEOS_finish_r(ctx)
 
         return result == 1
 
@@ -4261,7 +4669,7 @@ class Polygon(Poly):
     @property
     def exterior(self) -> LinearRing:
         """Return the exterior as a LinearRing (also a LineString)."""
-        return LinearRing(super().exterior.points(as_tuples=True))
+        return self._get_cached_exterior(LinearRing)
 
 
 class MultiPolygon(Geometry):
