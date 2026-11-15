@@ -25,6 +25,8 @@ class TestGeometryCentroid:
         centroid = geom.centroid
         assert centroid is not None
         assert centroid.geom_type == "Point"
+        assert centroid.x == 7.5
+        assert centroid.y == 2.5
         # Centroid should be somewhere in the middle
         wkt = centroid.to_wkt()
         assert "POINT" in wkt
@@ -54,14 +56,28 @@ class TestGeometryCentroid:
     def test_geometry_centroid_polygon_with_hole(self):
         """Test centroid of polygon with hole"""
         geom = Geometry(
-            "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0), (2 2, 8 2, 8 8, 2 8, 2 2))",
+            "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0), (2 2, 6 2, 6 4, 2 4, 2 2))",
             fmt="wkt",
         )
         centroid = geom.centroid
         assert centroid is not None
         assert centroid.geom_type == "Point"
+        assert abs(centroid.x - 468 / 92) < 1e-9
+        assert abs(centroid.y - 476 / 92) < 1e-9
         wkt = centroid.to_wkt()
         assert "POINT" in wkt
+
+    def test_geometry_centroid_large_coordinates(self):
+        """Test centroid stability when coordinates have a large offset."""
+        geom = Geometry(
+            "POLYGON((1000000000 1000000000, 1000000010 1000000000, "
+            "1000000010 1000000010, 1000000000 1000000010, "
+            "1000000000 1000000000))",
+            fmt="wkt",
+        )
+        centroid = geom.centroid
+        assert centroid.x == 1000000005
+        assert centroid.y == 1000000005
 
     def test_geometry_centroid_multipoint(self):
         """Test centroid of multipoint"""

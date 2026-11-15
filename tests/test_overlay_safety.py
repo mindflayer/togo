@@ -13,6 +13,18 @@ def test_union_polygon_polygon_returns_geometry():
     assert result.area == pytest.approx(7.0)
 
 
+def test_union_of_disjoint_polygons_returns_multipolygon():
+    from togo import Polygon
+
+    left = Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])
+    right = Polygon([(5, 0), (6, 0), (6, 1), (5, 1), (5, 0)])
+
+    result = left.union(right)
+
+    assert result.geom_type == "MultiPolygon"
+    assert result.area == pytest.approx(5.0)
+
+
 def test_union_invalid_inputs_return_empty_geometry():
     from togo import Point, union
 
@@ -115,6 +127,47 @@ def test_polygon_line_intersection_still_returns_segment():
 
     assert result.geom_type == "LineString"
     assert result.length == pytest.approx(2.0)
+
+
+def test_tgx_roundtrips_multipart_geometry_components():
+    from togo import (
+        GeometryCollection,
+        LineString,
+        MultiLineString,
+        MultiPoint,
+        MultiPolygon,
+        Point,
+        Polygon,
+    )
+
+    points = MultiPoint([(0, 0), (1, 2), (3, 4)]).intersection(
+        MultiPoint([(1, 2), (4, 5)])
+    )
+    assert points.geom_type == "Point"
+    assert (points.x, points.y) == (1.0, 2.0)
+
+    lines = MultiLineString([[(-1, 1), (2, 1)], [(-1, 3), (2, 3)]]).intersection(
+        Polygon([(0, 0), (1, 0), (1, 4), (0, 4), (0, 0)])
+    )
+    assert lines.geom_type == "MultiLineString"
+    assert lines.to_wkt() == "MULTILINESTRING((0 1,1 1),(0 3,1 3))"
+
+    polygons = MultiPolygon(
+        [
+            Polygon([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)]),
+            Polygon([(4, 0), (6, 0), (6, 2), (4, 2), (4, 0)]),
+        ]
+    ).intersection(Polygon([(1, -1), (5, -1), (5, 3), (1, 3), (1, -1)]))
+    assert polygons.geom_type == "MultiPolygon"
+    assert polygons.area == pytest.approx(4.0)
+
+    collection = GeometryCollection(
+        [Point(0, 1), LineString([(-1, 2), (2, 2)])]
+    ).intersection(Polygon([(0, 0), (1, 0), (1, 3), (0, 3), (0, 0)]))
+    assert collection.geom_type == "GeometryCollection"
+    assert collection.num_geometries == 2
+    assert collection[0].to_wkt() == "POINT(0 1)"
+    assert collection[1].to_wkt() == "LINESTRING(0 2,1 2)"
 
 
 def test_operation_outputs_expose_expected_compatibility_types():
